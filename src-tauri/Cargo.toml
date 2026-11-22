@@ -1,0 +1,34 @@
+[package]
+name = "civicflow"
+version = "0.1.2"
+description = "CivicFlow — volunteer coordination with explainable staffing"
+authors = ["CivicFlow"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "civicflow_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-process = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-wdio-webdriver = "1"
+keyring = "3"
+getrandom = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+civicflow-core = { path = "core" }
+# 2.6.1+ builds ini::ParseOption without the fields rust-ini now requires,
+# which breaks the Linux desktop build; hold until upstream catches up.
+tauri-plugin-deep-link = "=2.6.0"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
