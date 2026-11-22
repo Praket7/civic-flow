@@ -163,4 +163,7 @@ jobs:
         run: pnpm check:licenses
       - name: Desktop shell compiles
         working-directory: src-tauri
-        run: cargo check
+        run: cargo check --locked
+      - name: Native hosted-auth boundary tests
+        working-directory: src-tauri
+        run: cargo test --locked --lib hosted_identity_tests
