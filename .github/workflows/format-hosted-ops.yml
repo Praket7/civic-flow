@@ -38,7 +38,7 @@ jobs:
             src/pwa/health.ts src/pwa/health.test.ts src/pwa/coordinator.tsx \
             src/lib/sync/provider.tsx README.md docs/RELEASE-CHECKLIST.md \
             package.json vercel.json .github/workflows/backup-cloud.yml \
-            .github/workflows/hosted-auth-smoke.yml .github/workflows/ci.yml
+            .github/workflows/hosted-auth-smoke.yml
           node scripts/i18n-extract.mjs
       - name: Commit generated formatting
         run: |
@@ -50,7 +50,7 @@ jobs:
             src/pwa/health.ts src/pwa/health.test.ts src/pwa/coordinator.tsx \
             src/lib/sync/provider.tsx README.md docs/RELEASE-CHECKLIST.md \
             package.json vercel.json .github/workflows/backup-cloud.yml \
-            .github/workflows/hosted-auth-smoke.yml .github/workflows/ci.yml \
+            .github/workflows/hosted-auth-smoke.yml \
             src/lib/i18n/strings.json
           if git diff --cached --quiet; then
             exit 0
