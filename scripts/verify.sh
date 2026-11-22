@@ -14,6 +14,8 @@ pnpm check:generated
 pnpm docs:check
 pnpm test
 pnpm test:sql
+pnpm test:hosted
+pnpm test:ops
 pnpm build:web
 pnpm check:third-party
 pnpm check:licenses
