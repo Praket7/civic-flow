@@ -10,8 +10,14 @@ checks and packaging steps that CI cannot prove.
 - The Node version in `.node-version`, pnpm 12.9.1, stable Rust, and the platform's Tauri
   prerequisites.
 - `pnpm install --frozen-lockfile` completes without changing the lockfile.
-- The signing and updater secrets are configured for the repository, or the release is explicitly
-  marked unsigned in its notes.
+- The signing and updater secrets are configured for this repository. Unsigned test builds may
+  be distributed as such, but a functioning auto-updater requires a valid signed feed.
+- Verify that the updater endpoint points to `Praket7/civic-flow` and that the embedded public
+  key matches the signing private key configured for its releases. A successful build does not
+  prove that an update can be authenticated.
+- Earlier `civicflow2` installers still point to the original repository's feed. Test upgrades
+  from a prior `civic-flow` release separately; do not assume those older binaries will
+  discover the new feed without an explicitly tested transition.
 
 ## Version and automated gate
 
