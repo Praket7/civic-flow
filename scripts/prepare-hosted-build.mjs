@@ -61,7 +61,13 @@ export async function promoteHostedPwa(dist) {
   await writeFile(judgeDemoPath, demoHtml, "utf8");
   const judgeScreenshots = path.join(dist, "judge", "screenshots");
   await mkdir(judgeScreenshots, { recursive: true });
-  for (const name of ["mission-control", "autoroster", "schedule", "volunteer-home", "volunteer-schedule"]) {
+  for (const name of [
+    "mission-control",
+    "autoroster",
+    "schedule",
+    "volunteer-home",
+    "volunteer-schedule",
+  ]) {
     const source = fileURLToPath(new URL(`../docs/screenshots/${name}.png`, import.meta.url));
     await copyFile(source, path.join(judgeScreenshots, `${name}.png`));
   }
