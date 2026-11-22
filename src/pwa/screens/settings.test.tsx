@@ -49,14 +49,14 @@ describe("volunteer sign-out and offline work", () => {
     const signOut = vi.fn().mockResolvedValue(undefined);
     renderWithPending(2, signOut);
 
-    fireEvent.click(screen.getByRole("button", { name: "Sign out", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: /^Sign out$/ }));
     expect(signOut).not.toHaveBeenCalled();
     expect(screen.getByText(/2 changes waiting to sync/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Stay signed in" }));
     expect(signOut).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Sign out", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: /^Sign out$/ }));
     fireEvent.click(screen.getByRole("button", { name: "Sign out with unsent changes" }));
     expect(signOut).toHaveBeenCalledOnce();
   });
@@ -65,7 +65,7 @@ describe("volunteer sign-out and offline work", () => {
     const signOut = vi.fn().mockResolvedValue(undefined);
     renderWithPending(0, signOut);
 
-    fireEvent.click(screen.getByRole("button", { name: "Sign out", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: /^Sign out$/ }));
     expect(signOut).toHaveBeenCalledOnce();
     expect(screen.queryByText(/changes waiting to sync/i)).not.toBeInTheDocument();
   });
