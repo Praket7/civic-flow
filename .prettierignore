@@ -12,3 +12,9 @@ README.md
 # Generated from the lockfiles by scripts/generate-third-party.mjs.
 THIRD_PARTY_NOTICES.md
 src/data/thirdParty.json
+
+# The independent judging page deliberately embeds its small stylesheet.
+public/judge/index.html
+
+# Local competition gate documentation is maintained for judge verification.
+docs/FBLA-STAGE1-JUDGING.md

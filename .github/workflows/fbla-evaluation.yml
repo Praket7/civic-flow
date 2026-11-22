@@ -1,0 +1,80 @@
+name: FBLA evaluation installers (unsigned, internal QA only)
+
+on:
+  push:
+    branches: ["feat/fbla-stage1-*"]
+  workflow_dispatch:
+
+# This workflow never tags, drafts, or publishes a GitHub release.
+# Ad-hoc macOS and unsigned Windows binaries are for internal smoke tests only.
+permissions:
+  contents: read
+
+concurrency:
+  group: fbla-evaluation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    name: Internal installer · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            bundles: dmg
+            artifact: fbla-eval-macos-unsigned
+          - os: windows-latest
+            bundles: nsis
+            artifact: fbla-eval-windows-unsigned
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri/core -> target
+            src-tauri -> target
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:demo
+      - run: pnpm test:hosted
+      - run: pnpm build:web
+      - name: Build platform-specific unsigned evaluation installer
+        run: pnpm tauri build --bundles ${{ matrix.bundles }}
+      - name: Gather checksums and build metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p eval
+          while IFS= read -r -d '' file; do
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "$file"
+            else
+              shasum -a 256 "$file"
+            fi
+          done < <(find "src-tauri/target/release/bundle/${{ matrix.bundles }}" -type f \
+            \( -name '*.dmg' -o -name '*.exe' \) -print0) > eval/SHA256SUMS.txt
+          test -s eval/SHA256SUMS.txt
+          printf 'commit=%s\nplatform=%s\nstatus=UNSIGNED_INTERNAL_QA_ONLY\n' \
+            "$GITHUB_SHA" "${{ matrix.os }}" > eval/BUILD-INFO.txt
+      - name: Archive unsigned build for local smoke testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}-${{ github.sha }}
+          path: |
+            src-tauri/target/release/bundle/${{ matrix.bundles }}/**
+            eval/SHA256SUMS.txt
+            eval/BUILD-INFO.txt
+          if-no-files-found: error
+          retention-days: 14

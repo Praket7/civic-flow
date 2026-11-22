@@ -337,4 +337,9 @@ const routeConfig = [
 
 // The Tauri asset protocol does not rewrite deep links to index.html, so the
 // desktop build uses hash history.
-export const router = isTauri() ? createHashRouter(routeConfig) : createBrowserRouter(routeConfig);
+// The explicitly labeled judging sample is isolated from the hosted PWA.
+// Hash navigation keeps its internal links beneath /judge/demo/.
+const judgingDemo =
+  typeof window !== "undefined" && /^\/judge\/demo\/?$/.test(window.location.pathname);
+export const router =
+  isTauri() || judgingDemo ? createHashRouter(routeConfig) : createBrowserRouter(routeConfig);

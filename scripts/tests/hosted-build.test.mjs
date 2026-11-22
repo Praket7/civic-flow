@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 import { assertHostedConfiguration, promoteHostedPwa } from "../prepare-hosted-build.mjs";
 
 test("hosted publishing refuses missing or placeholder project keys", () => {
@@ -55,6 +56,11 @@ test("hosted publishing replaces only the built index, keeping desktop sources i
     await promoteHostedPwa(dir);
     assert.equal(await readFile(path.join(dir, "index.html"), "utf8"), hosted);
     assert.equal(await readFile(path.join(dir, "pwa.html"), "utf8"), hosted);
+    assert.equal(await readFile(path.join(dir, "judge", "demo", "index.html"), "utf8"), demo);
+    assert.ok(
+      (await readFile(path.join(dir, "judge", "screenshots", "autoroster.png"))).byteLength >
+        100_000,
+    );
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -70,5 +76,38 @@ test("hosted publishing leaves index untouched when PWA bundle is not verified",
     assert.equal(await readFile(path.join(dir, "index.html"), "utf8"), demo);
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("public judging page points at the isolated sample and labels its data", async () => {
+  const html = await readFile(new URL("../../public/judge/index.html", import.meta.url), "utf8");
+  assert.match(html, /\/judge\/demo\/#\/welcome/);
+  assert.match(html, /sample data/i);
+  assert.match(html, /offline/i);
+});
+
+test("volunteer service worker leaves judging pages outside its PWA shell cache", async () => {
+  const source = await readFile(new URL("../../public/sw.js", import.meta.url), "utf8");
+  const listeners = new Map();
+  const sw = {
+    location: { origin: "https://civicflow.example.org" },
+    addEventListener: (type, handler) => listeners.set(type, handler),
+  };
+  runInNewContext(source, { self: sw, URL });
+  const handleFetch = listeners.get("fetch");
+  assert.equal(typeof handleFetch, "function");
+  for (const route of ["/judge", "/judge/", "/judge/demo/", "/judge/screenshots/autoroster.png"]) {
+    let intercepted = false;
+    handleFetch({
+      request: {
+        method: "GET",
+        url: "https://civicflow.example.org" + route,
+        mode: "navigate",
+      },
+      respondWith: () => {
+        intercepted = true;
+      },
+    });
+    assert.equal(intercepted, false, route + " must bypass the PWA service worker");
   }
 });

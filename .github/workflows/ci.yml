@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "feat/fbla-stage1-*"]
   pull_request:
-    branches: [main]
+    branches: [main, "hardening/auth-and-release-gates-2026-11-22"]
 
 # A new PR commit supersedes its earlier validation run. Keep main-branch
 # checks uninterrupted so release evidence remains tied to the exact SHA.
@@ -71,6 +71,8 @@ jobs:
           VITE_SUPABASE_ANON_KEY: sb_publishable_ci_only_dummy_key
         run: |
           pnpm build:hosted
+          node scripts/check-judge-build.mjs
+          node scripts/audit-judge-flow.mjs
           node -e "const fs = require('node:fs'); const html = fs.readFileSync('dist/index.html','utf8'); if (!html.includes('CivicFlow Volunteer') || !/assets\/pwa-/.test(html)) process.exit(1);"
 
   secrets:

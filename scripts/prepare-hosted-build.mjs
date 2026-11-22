@@ -6,7 +6,7 @@
  * The public hosted build serves ONLY the Supabase-backed PWA at /.
  * Never publish the local browser-preview entrypoint on the main domain.
  */
-import { readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -54,6 +54,24 @@ export async function promoteHostedPwa(dist) {
   if (/src="\/assets\/main-[^"]+\.js"/.test(pwaHtml)) {
     throw new Error("PWA unexpectedly imports the browser demo entrypoint.");
   }
+  // Preserve the full interactive sample under an explicitly labeled route.
+  // This is browser-local fixture data, not the hosted organization database.
+  const judgeDemoPath = path.join(dist, "judge", "demo", "index.html");
+  await mkdir(path.dirname(judgeDemoPath), { recursive: true });
+  await writeFile(judgeDemoPath, demoHtml, "utf8");
+  const judgeScreenshots = path.join(dist, "judge", "screenshots");
+  await mkdir(judgeScreenshots, { recursive: true });
+  for (const name of [
+    "mission-control",
+    "autoroster",
+    "schedule",
+    "volunteer-home",
+    "volunteer-schedule",
+  ]) {
+    const source = fileURLToPath(new URL(`../docs/screenshots/${name}.png`, import.meta.url));
+    await copyFile(source, path.join(judgeScreenshots, `${name}.png`));
+  }
+
   // The built entry document is replaced only AFTER all validation succeeds.
   // The source index.html and Tauri's build:web output are never modified.
   await writeFile(index, pwaHtml, "utf8");
