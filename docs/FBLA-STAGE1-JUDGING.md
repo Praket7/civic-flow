@@ -29,6 +29,7 @@ pnpm build:web
 # Do not use service-role or private credentials in browser code.
 pnpm build:hosted
 node scripts/check-judge-build.mjs
+node scripts/audit-judge-flow.mjs # headless Chrome, clean profile, offline sample routes
 ```
 
 The hosted build first preserves the sample entrypoint at
