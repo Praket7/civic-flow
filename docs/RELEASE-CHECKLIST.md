@@ -4,6 +4,24 @@ Use this for every tagged release. The release workflow re-runs verification on 
 commit, and `.github/workflows/ci.yml` covers changes on `main`. This checklist covers the manual
 checks and packaging steps that CI cannot prove.
 
+## Public web gate
+
+Do not confuse the three distribution targets:
+
+- `index.html` is a demonstration backed by browser-local storage. The production
+  build must refuse to create or sign in local accounts, visibly identify sample
+  records, and never invite real-person data entry.
+- `pwa.html` is the real shared-workspace volunteer client. Before hosting it,
+  verify an actual Supabase signup, email confirmation, membership assignment,
+  registration, sync/retry, device revocation, and notification flow on the final
+  HTTPS origin. A configured anonymous/public key is not proof of these workflows.
+- The Tauri desktop app uses encrypted local SQLite. Verify fresh installs,
+  existing encrypted database upgrades, signed distribution, and backups separately.
+
+**Do not promote the full coordinator browser preview as a production SaaS.**
+Its repository still uses `localStorage`. Add a server-backed coordinator data
+implementation and real multiuser authorization tests before that release target.
+
 ## Prerequisites
 
 - A clean checkout of the exact commit to release, with no untracked secrets.
