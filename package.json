@@ -13,6 +13,7 @@
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "check:copy": "node scripts/check-copy.mjs",
+    "check:demo": "node scripts/check-demo-consistency.mjs",
     "test": "vitest run",
     "test:sql": "node --test supabase/tests/*.test.mjs",
     "test:watch": "vitest",
