@@ -13,6 +13,7 @@ import { useCloud } from "../lib/sync/provider";
 import { Button, Card, PageTitle, Pill, relativeTime } from "./ui";
 import styles from "./pwa.module.css";
 import { messageOf } from "../lib/errors";
+import { reminderDispatchIsRecent, verifiedBackupIsRecent } from "./health";
 
 interface DeviceRow {
   replicaId: string;
@@ -162,7 +163,8 @@ export function CoordinatorApp() {
   }
 
   const backupAge = health?.lastBackup?.ageHours;
-  const backupHealthy = typeof backupAge === "number" && backupAge < 36;
+  const backupHealthy = verifiedBackupIsRecent(health?.lastBackup, health?.serverTime);
+  const reminderHealthy = reminderDispatchIsRecent(health?.lastJob, health?.serverTime);
   const now = health ? Date.parse(health.serverTime) : 0;
   const staleDevices = (health?.devices ?? []).filter(
     (device) =>
@@ -256,15 +258,21 @@ export function CoordinatorApp() {
         {health?.lastBackup ? (
           <>
             <p className={styles.body}>
-              Last verified backup{" "}
+              Last reported backup{" "}
               {health.lastBackup.finishedAt
                 ? relativeTime(health.lastBackup.finishedAt)
                 : "has not finished"}
               {typeof backupAge === "number" ? ` (${Math.round(backupAge)} hours ago)` : ""}.
             </p>
             <Pill tone={backupHealthy ? "good" : "bad"}>
-              {backupHealthy ? "Within the 36-hour window" : "Overdue"}
+              {backupHealthy ? "Recent verified backup" : "Not verified or overdue"}
             </Pill>
+            {!health.lastBackup.verifiedAt ? (
+              <p className={styles.cautionBody}>
+                A database snapshot was reported, but no verification timestamp was recorded. Check
+                an isolated restore before relying on it.
+              </p>
+            ) : null}
           </>
         ) : (
           <>
@@ -280,6 +288,15 @@ export function CoordinatorApp() {
 
       <Card>
         <h2 className={styles.cardTitle}>Last server job</h2>
+        <Pill tone={reminderHealthy ? "good" : "bad"}>
+          {reminderHealthy ? "Recent reminder dispatch" : "Reminder dispatch not confirmed"}
+        </Pill>
+        {!reminderHealthy ? (
+          <p className={styles.cautionBody}>
+            No successful reminder run is recorded in the last 45 minutes. Check the scheduled
+            workflow and delivery logs before relying on reminders.
+          </p>
+        ) : null}
         {health?.lastJob ? (
           <>
             <p className={styles.body}>
