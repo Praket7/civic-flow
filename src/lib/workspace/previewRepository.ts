@@ -5,6 +5,7 @@
  */
 
 import rawSessionSeed from "../../../shared/session-seed.json";
+import { isTauri } from "../platform";
 import { csvText, downloadCsv } from "../csv";
 import rawWorkspace from "../../../shared/demo-workspace.json";
 import type {
@@ -1326,6 +1327,9 @@ export const previewRepository: WorkspaceRepository = {
     };
   },
   async signIn(email, password, _remember): Promise<AuthSession> {
+    if (import.meta.env.PROD && !isTauri()) {
+      throw new Error("This browser build is a demo, not a hosted account system.");
+    }
     const clean = email.trim().toLowerCase();
     const account = previewAccounts.find((row) => row.email.toLowerCase() === clean);
     const stored = account ? previewPasswords()[account.id] : undefined;
@@ -1342,6 +1346,9 @@ export const previewRepository: WorkspaceRepository = {
     };
   },
   async createAccount(name, email, password): Promise<AuthSession> {
+    if (import.meta.env.PROD && !isTauri()) {
+      throw new Error("This browser build is a demo. Account creation is not available here.");
+    }
     const clean = email.trim().toLowerCase();
     const display = name.trim().replace(/\s+/g, " ");
     if (display.length < 2) throw new Error("Enter the name to show on this account.");
@@ -1382,6 +1389,9 @@ export const previewRepository: WorkspaceRepository = {
     };
   },
   async signInWithHosted({ name, email }): Promise<AuthSession> {
+    if (import.meta.env.PROD && !isTauri()) {
+      throw new Error("Hosted accounts cannot be adopted into the browser demo.");
+    }
     const clean = email.trim().toLowerCase();
     const existing = previewAccounts.find((row) => row.email.toLowerCase() === clean);
     if (existing) {
