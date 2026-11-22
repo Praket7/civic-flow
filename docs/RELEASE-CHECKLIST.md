@@ -51,7 +51,7 @@ A release tag must point to a merged `main` commit. Artifacts are published
 to a **draft GitHub release** first, so GitHub's public `latest` feed and
 existing auto-updaters do not expose binaries before verification.
 Complete checksums, provenance, the real clean-install matrix and a signed
-updater round trip *before* manually publishing the draft. Configuring
+updater round trip _before_ manually publishing the draft. Configuring
 secrets and getting a green build is not evidence that existing user data
 upgrades correctly.
 

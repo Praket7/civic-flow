@@ -60,8 +60,9 @@ export function SettingsScreen() {
         {confirmSignOut ? (
           <div className={styles.conflictCard} role="alert">
             <p className={styles.body}>
-              You still have {status.pending} change{status.pending === 1 ? "" : "s"} waiting to sync.
-              Signing out will not send or erase them. Sign in again on this device to recover them.
+              You still have {status.pending} change{status.pending === 1 ? "" : "s"} waiting to
+              sync. Signing out will not send or erase them. Sign in again on this device to recover
+              them.
             </p>
             <div className={styles.rowActions}>
               <Button variant="ghost" onClick={() => setConfirmSignOut(false)}>
