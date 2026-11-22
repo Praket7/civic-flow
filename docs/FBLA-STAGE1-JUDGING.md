@@ -114,3 +114,41 @@ until directly observed on the target platforms.
 - [Vercel Git deployment and preview guidance](https://vercel.com/docs/git)
 - [Research on operator comprehension in scheduling](https://www.alphaxiv.org/abs/2610.18679)
 - [Empirical CI improvement research](https://scispace.com/papers/what-helped-and-what-did-not-an-evaluation-of-the-strategies-54pegccr9i)
+
+## Archived issue ledger — release blockers still open operationally
+
+This section consolidates the former GitHub issue trackers. **The tasks below have not been
+verified just because a CI job is green or an issue is closed.** Preserve these acceptance
+requirements before putting real volunteer information into production or distributing a
+trusted desktop release.
+
+- **#1 — database migration history and authorization:** The original audit found 18
+  source migrations versus seven versions in the managed Supabase migration history.
+  Reconcile SQL on an isolated restored clone before any production \`db push\`. Test real
+  coordinator, volunteer, revoked-user and cross-organization sessions.
+- **#2 — encrypted workspace upgrades:** SQLCipher was upgraded to patched dependencies
+  and the security audit is green, but legacy encrypted files still require actual
+  cross-version upgrade tests on the target desktop operating systems.
+- **#4 — hosted coordinator boundaries:** The public browser demo uses fictitious,
+  browser-local data. The real hosted PWA has narrower coordinator functionality;
+  server-backed write operations, multi-user concurrency and full production web QA
+  still require independent evidence. Keep the judging demo on its own hostname.
+- **#5 — branch protection and trusted installers:** An administrator must configure
+  GitHub's required-check/review rules for \`main\`. Apple notarization, Windows
+  signing, Tauri updater keys, clean-install, backup and compatibility testing have
+  not been established by the internal unsigned evaluation builds.
+- **#6 — backup and reminder operations:** Prove an encrypted off-site database backup
+  can be restored in isolation. Confirm a newly successful reminder scheduler run
+  and notification delivery; a historic run does not establish current health.
+- **#8 — prejudging acceptance:** Verify the real submission URL in a clean private
+  browser and on a second device, including \`/judge/\`, \`/judge/demo/\`, and
+  the documented sample flows. Confirm the current NYS FBLA asset requirements.
+
+Related archived tracker URLs: [#1](https://github.com/Praket7/civic-flow/issues/1),
+[#2](https://github.com/Praket7/civic-flow/issues/2),
+[#4](https://github.com/Praket7/civic-flow/issues/4),
+[#5](https://github.com/Praket7/civic-flow/issues/5),
+[#6](https://github.com/Praket7/civic-flow/issues/6),
+[#8](https://github.com/Praket7/civic-flow/issues/8).
+
+**Archiving an issue tracker is not a claim that its outstanding work is complete.**
