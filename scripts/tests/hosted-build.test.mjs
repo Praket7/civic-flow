@@ -56,10 +56,7 @@ test("hosted publishing replaces only the built index, keeping desktop sources i
     await promoteHostedPwa(dir);
     assert.equal(await readFile(path.join(dir, "index.html"), "utf8"), hosted);
     assert.equal(await readFile(path.join(dir, "pwa.html"), "utf8"), hosted);
-    assert.equal(
-      await readFile(path.join(dir, "judge", "demo", "index.html"), "utf8"),
-      demo,
-    );
+    assert.equal(await readFile(path.join(dir, "judge", "demo", "index.html"), "utf8"), demo);
     assert.ok(
       (await readFile(path.join(dir, "judge", "screenshots", "autoroster.png"))).byteLength >
         100_000,
@@ -100,7 +97,12 @@ test("volunteer service worker leaves judging pages outside its PWA shell cache"
   runInNewContext(source, { self: sw, URL });
   const handleFetch = listeners.get("fetch");
   assert.equal(typeof handleFetch, "function");
-  for (const route of ["/judge", "/judge/", "/judge/demo/", "/judge/screenshots/autoroster.png"]) {
+  for (const route of [
+    "/judge",
+    "/judge/",
+    "/judge/demo/",
+    "/judge/screenshots/autoroster.png",
+  ]) {
     let intercepted = false;
     handleFetch({
       request: {

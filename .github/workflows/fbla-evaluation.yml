@@ -2,7 +2,7 @@ name: FBLA evaluation installers (unsigned, internal QA only)
 
 on:
   push:
-    branches: ['feat/fbla-stage1-*']
+    branches: ["feat/fbla-stage1-*"]
   workflow_dispatch:
 
 # This workflow never tags, drafts, or publishes a GitHub release.
