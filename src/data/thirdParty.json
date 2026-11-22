@@ -2167,7 +2167,7 @@
       "name": "reqwest",
       "version": "0.13.5",
       "license": "MIT OR Apache-2.0",
-      "direct": false
+      "direct": true
     },
     {
       "name": "rfd",
