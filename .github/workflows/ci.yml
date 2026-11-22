@@ -43,12 +43,22 @@ jobs:
       - run: pnpm test
       - run: pnpm test:sql
       - run: pnpm build:web
+      - name: Enforce entrypoint bundle budgets
+        run: node scripts/check-bundle-budget.mjs
       - name: Print audit
         run: node scripts/audit-print.mjs
       - name: Accessibility-tree audit
         run: node scripts/audit-accessibility-tree.mjs
-      - name: 200% zoom audit
-        run: node scripts/audit-zoom.mjs
+      - name: 200% zoom audit and core screen captures
+        run: node scripts/audit-zoom.mjs --screenshots ui-review
+      - name: Upload core visual review snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-core-screenshots
+          path: ui-review/*.png
+          retention-days: 14
+          if-no-files-found: ignore
       - name: Contrast audit
         run: node scripts/audit-contrast.mjs
 
