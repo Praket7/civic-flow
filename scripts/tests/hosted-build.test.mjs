@@ -55,6 +55,8 @@ test("hosted publishing replaces only the built index, keeping desktop sources i
     await promoteHostedPwa(dir);
     assert.equal(await readFile(path.join(dir, "index.html"), "utf8"), hosted);
     assert.equal(await readFile(path.join(dir, "pwa.html"), "utf8"), hosted);
+    assert.equal(await readFile(path.join(dir, "judge", "demo", "index.html"), "utf8"), demo);
+    assert.ok((await readFile(path.join(dir, "judge", "screenshots", "autoroster.png"))).byteLength > 100_000);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -71,4 +73,12 @@ test("hosted publishing leaves index untouched when PWA bundle is not verified",
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+
+test("public judging page points at the isolated sample and labels its data", async () => {
+  const html = await readFile(new URL("../../public/judge/index.html", import.meta.url), "utf8");
+  assert.match(html, /\/judge\/demo\/#\/welcome/);
+  assert.match(html, /sample data/i);
+  assert.match(html, /offline/i);
 });
