@@ -8,7 +8,7 @@
  */
 import fs from "node:fs/promises";
 
-const DEMO_NOW = "2026-10-13T07:45:00-04:00";
+const DEMO_NOW = "2026-10-13T08:45:00-04:00";
 const ORG = {
   id: "org-rivergate-kitchen",
   name: "Rivergate Kitchen",
@@ -892,7 +892,7 @@ const workspace = {
       volunteerId: "vol-maya",
       name: "Maya Chen",
       action: "Checked in",
-      detail: "Community Food Distribution",
+      detail: "Pantry Setup",
       tone: "green",
       at: "2026-10-13T08:14:00-04:00",
     },
