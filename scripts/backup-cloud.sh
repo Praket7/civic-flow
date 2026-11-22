@@ -42,7 +42,7 @@ key="${CIVICFLOW_BACKUP_S3_URI%/}/civicflow-${timestamp}.pgdump.age"
 # outside public, which is why auth/storage/sync are included explicitly.
 pg_dump --dbname "$CIVICFLOW_DATABASE_URL" \
   --format=custom --no-owner --no-acl \
-  --schema=public --schema=auth --schema=storage --schema=sync \
+  --schema=public --schema=private --schema=auth --schema=storage --schema=sync \
   | age --recipient "$CIVICFLOW_BACKUP_AGE_RECIPIENT" \
   | aws s3 cp - "$key" --sse AES256 --no-progress --only-show-errors
 
