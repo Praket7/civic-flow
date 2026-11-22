@@ -51,8 +51,7 @@ export function LaunchPage() {
       <main className={styles.stage}>
         <section className={styles.copy} aria-labelledby="launch-title">
           <p className={styles.kicker}>
-            Sample workspace · {workspace.organization.city},{" "}
-            {workspace.organization.state}
+            Sample workspace · {workspace.organization.city}, {workspace.organization.state}
           </p>
           <h1 className={styles.headline} id="launch-title">
             The volunteer desk is open.
