@@ -66,9 +66,13 @@ const invoked = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPa
 if (invoked) {
   try {
     assertHostedConfiguration();
-    const dist = path.resolve(process.argv[2] || "dist");
-    const out = await promoteHostedPwa(dist);
-    console.log("Hosted release ready: the Supabase-backed PWA is the root entrypoint (" + out + ").");
+    if (process.argv.includes("--check-config")) {
+      console.log("Hosted public Supabase configuration is valid.");
+    } else {
+      const dist = path.resolve("dist");
+      const out = await promoteHostedPwa(dist);
+      console.log("Hosted release ready: the Supabase-backed PWA is the root entrypoint (" + out + ").");
+    }
   } catch (error) {
     console.error("Hosted release blocked:", error.message);
     process.exitCode = 1;
