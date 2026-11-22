@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "now": "2026-10-13T07:45:00-04:00",
+  "now": "2026-10-13T08:45:00-04:00",
   "organization": {
     "id": "org-rivergate-kitchen",
     "name": "Rivergate Kitchen",
@@ -7955,7 +7955,7 @@
       "volunteerId": "vol-maya",
       "name": "Maya Chen",
       "action": "Checked in",
-      "detail": "Community Food Distribution",
+      "detail": "Pantry Setup",
       "tone": "green",
       "at": "2026-10-13T08:14:00-04:00"
     },
