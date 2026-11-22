@@ -57,9 +57,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p eval
-          find "src-tauri/target/release/bundle/${{ matrix.bundles }}" -type f \
-            \( -name '*.dmg' -o -name '*.exe' \) -print0 \
-            | xargs -0 -r sha256sum > eval/SHA256SUMS.txt
+          while IFS= read -r -d '' file; do
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "$file"
+            else
+              shasum -a 256 "$file"
+            fi
+          done < <(find "src-tauri/target/release/bundle/${{ matrix.bundles }}" -type f \
+            \( -name '*.dmg' -o -name '*.exe' \) -print0) > eval/SHA256SUMS.txt
           test -s eval/SHA256SUMS.txt
           printf 'commit=%s\nplatform=%s\nstatus=UNSIGNED_INTERNAL_QA_ONLY\n' \
             "$GITHUB_SHA" "${{ matrix.os }}" > eval/BUILD-INFO.txt
