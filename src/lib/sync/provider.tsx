@@ -31,7 +31,6 @@ import {
 import { SyncEngine, type SyncStatus } from "./engine";
 import { DexieSyncStore, queueCommand } from "./localStore";
 import { createSupabaseTransport } from "./transport";
-import { isTauri } from "../platform";
 import { buildVolunteerView, type Row, type VolunteerView } from "./views";
 import type { ConflictRow } from "./db";
 import type { CommandType } from "./protocol";
@@ -321,17 +320,9 @@ export function CloudProvider({ children }: { children: ReactNode }) {
         }
         const remembered = await readWorkspace();
         const chosen = active.find((entry) => entry.organizationId === remembered) ?? active[0];
-        // A phone is the volunteer experience; the desktop is also where a
-        // coordinator watches the shared workspace, so it opens the role it was
-        // given instead of turning the page away.
-        if (chosen.role !== "volunteer" && !isTauri()) {
-          setWorkspace(chosen);
-          setPhase("ready");
-          setError(
-            "This app is the volunteer experience. Coordinators use the CivicFlow desktop app for rosters and reports.",
-          );
-          return;
-        }
+        // The hosted browser supports a limited but real coordinator console.
+        // openWorkspace keeps coordinator data on the server and does not pull
+        // the volunteer offline replica or impersonate a volunteer.
         await openWorkspace(chosen, next.user.id);
       } catch (caught) {
         setPhase("error");
