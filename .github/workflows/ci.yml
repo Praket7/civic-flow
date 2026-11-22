@@ -31,6 +31,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
+      - name: Show Stage 1 browser smoke formatter patch (temporary)
+        run: |
+          pnpm exec prettier --write scripts/audit-judge-flow.mjs
+          git diff -- scripts/audit-judge-flow.mjs
       - run: pnpm format
       - run: pnpm check:copy
       - run: pnpm check:demo
