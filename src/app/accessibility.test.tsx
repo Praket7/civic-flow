@@ -66,6 +66,14 @@ describe("route accessibility", () => {
           { timeout: 5000 },
         );
         await settleQueries(queryClient);
+        // A deferred route must finish rendering before its accessibility
+        // tree is tested; otherwise the audit would only inspect a spinner.
+        await waitFor(
+          () => {
+            expect(container.querySelector("[data-route-loading]")).toBeNull();
+          },
+          { timeout: 5000 },
+        );
 
         // The hosted workspace is an iframe around the volunteer client, a
         // separate document jsdom cannot frame-scan. The framed client has its
