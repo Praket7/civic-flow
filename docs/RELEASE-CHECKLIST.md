@@ -173,30 +173,30 @@ issues remain available at [#1](https://github.com/Praket7/civic-flow/issues/1),
 [#8](https://github.com/Praket7/civic-flow/issues/8).
 
 - [ ] **Database migration reconciliation (#1):** Compare the 18 local migration files with
-      the seven managed-history versions in an isolated clone. Neither matching filenames
-      nor tests prove the existing SQL matches; do not run blind production `db push`.
+  the seven managed-history versions in an isolated clone. Neither matching filenames
+  nor tests prove the existing SQL matches; do not run blind production `db push`.
 - [ ] **Real authenticated authorization (#1, #4):** Test actual sessions for coordinators,
-      volunteers, revoked members and two organizations, including simultaneous last-seat
-      registration, real sync, logout/recovery and notification rules.
+  volunteers, revoked members and two organizations, including simultaneous last-seat
+  registration, real sync, logout/recovery and notification rules.
 - [ ] **Legacy encrypted data (#2, #5):** Reopen pre-upgrade SQLCipher databases on both
-      supported desktop OSes and test updater migration, not only new installations.
-      The vulnerable SQLCipher dependency was patched and audited; upgrade compatibility
-      has not yet been demonstrated.
+  supported desktop OSes and test updater migration, not only new installations.
+  The vulnerable SQLCipher dependency was patched and audited; upgrade compatibility
+  has not yet been demonstrated.
 - [ ] **Repository controls (#5):** An administrator must enable protected main/required
-      checks and review rules. Merging on an unprotected branch is not that proof.
+  checks and review rules. Merging on an unprotected branch is not that proof.
 - [ ] **Trusted desktop release (#5, #8):** Configure Apple notarization, Windows
-      code-signing and Tauri signing/updater secrets in protected GitHub Actions,
-      verify clean installs, signed updates, backup/restore, checksums and OS warnings.
-      Internal unsigned evaluation artifacts are not publicly trusted installers.
+  code-signing and Tauri signing/updater secrets in protected GitHub Actions,
+  verify clean installs, signed updates, backup/restore, checksums and OS warnings.
+  Internal unsigned evaluation artifacts are not publicly trusted installers.
 - [ ] **Durability and reminders (#6):** Complete a real encrypted off-site backup and
-      isolated restore test. The Free-tier managed service must not be assumed to
-      provide daily backups. Verify a newly successful reminder-dispatch job and
-      delivery to an explicitly consented test device; historical runs are not evidence
-      that the current schedule is healthy.
+  isolated restore test. The Free-tier managed service must not be assumed to
+  provide daily backups. Verify a newly successful reminder-dispatch job and
+  delivery to an explicitly consented test device; historical runs are not evidence
+  that the current schedule is healthy.
 - [ ] **Judging site (#4, #8):** Verify the actual deployment origin, not only CI's
-      localhost server. The public `/judge/` and `/judge/demo/` must be reachable
-      without authentication, must use fictitious data only, and must be hosted on a
-      dedicated judging origin separate from any production data-bearing PWA. The
-      browser sample is not equivalent to a complete hosted coordinator backend.
+  localhost server. The public `/judge/` and `/judge/demo/` must be reachable
+  without authentication, must use fictitious data only, and must be hosted on a
+  dedicated judging origin separate from any production data-bearing PWA. The
+  browser sample is not equivalent to a complete hosted coordinator backend.
 
 **Closing GitHub issues to consolidate tracking does not waive any of these gates.**
