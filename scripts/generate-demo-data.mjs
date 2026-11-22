@@ -8,7 +8,7 @@
  */
 import fs from "node:fs/promises";
 
-const DEMO_NOW = "2026-10-13T08:45:00-04:00";
+const DEMO_NOW = "2026-10-13T07:45:00-04:00";
 const ORG = {
   id: "org-rivergate-kitchen",
   name: "Rivergate Kitchen",
@@ -894,7 +894,7 @@ const workspace = {
       action: "Checked in",
       detail: "Pantry Setup",
       tone: "green",
-      at: "2026-10-13T08:14:00-04:00",
+      at: "2026-10-13T07:44:00-04:00",
     },
     {
       id: "act-2",
@@ -903,7 +903,7 @@ const workspace = {
       action: "Promoted from waitlist",
       detail: "Community Food Distribution",
       tone: "cobalt",
-      at: "2026-10-13T07:56:00-04:00",
+      at: "2026-10-13T07:36:00-04:00",
     },
     {
       id: "act-3",
@@ -932,7 +932,7 @@ const workspace = {
       title: "Jordan Lee promoted",
       body: "Moved off the waitlist for Saturday's distribution.",
       priority: "normal",
-      createdAt: "2026-10-13T07:56:00-04:00",
+      createdAt: "2026-10-13T07:36:00-04:00",
       readAt: null,
       href: "/coordinator/schedule",
     },
