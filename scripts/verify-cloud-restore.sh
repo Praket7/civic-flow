@@ -30,6 +30,9 @@ db = parsed.path.removeprefix("/")
 if (
     parsed.scheme not in ("postgres", "postgresql")
     or parsed.hostname not in ("localhost", "127.0.0.1", "::1")
+    or parsed.query
+    or parsed.params
+    or parsed.fragment
     or not db.startswith("civicflow_restore_")
     or len(db) < len("civicflow_restore_") + 1
 ):
