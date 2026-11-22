@@ -37,6 +37,27 @@ implementation and real multiuser authorization tests before that release target
   from a prior `civic-flow` release separately; do not assume those older binaries will
   discover the new feed without an explicitly tested transition.
 
+## Signing and publication gate
+
+The tagged release workflow now **fails closed** if required updater,
+macOS signing/notarization, Windows signing, or Supabase shared-workspace
+credentials are missing. Configure the GitHub Actions secrets
+`TAURI_SIGNING_PRIVATE_KEY`, `VITE_SUPABASE_ANON_KEY`,
+`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`,
+`WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD`,
+and either a complete Apple ID or App Store Connect API notarization set.
+
+A release tag must point to a merged `main` commit. Artifacts are published
+to a **draft GitHub release** first, so GitHub's public `latest` feed and
+existing auto-updaters do not expose binaries before verification.
+Complete checksums, provenance, the real clean-install matrix and a signed
+updater round trip *before* manually publishing the draft. Configuring
+secrets and getting a green build is not evidence that existing user data
+upgrades correctly.
+
+Do not advise visitors to bypass Gatekeeper or SmartScreen for an untrusted
+installer. Investigate and correct missing signatures or notarization.
+
 ## Version and automated gate
 
 1. Bump the version in all four manifests together: `package.json`, `src-tauri/tauri.conf.json`,
