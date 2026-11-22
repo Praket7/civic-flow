@@ -66,22 +66,29 @@ For an exit-gate-by-exit-gate review, see the [public release readiness audit](d
 
 ## Web surfaces and data boundaries
 
-The public browser build of `index.html` is a **local demonstration**, not a hosted
-coordinator service. It uses sample data and stores preview changes in that browser.
-Production browser builds disable the preview's sign-in and create-account forms so
-visitors are not asked for passwords for accounts that cannot synchronize. Do not
-enter actual volunteer, donor, or organization information in the browser demo.
+**Build targets are intentionally different.** The native Tauri build runs
+`pnpm build:web`, keeping `index.html` as the local demonstration and
+`pwa.html` as the separately embedded real Supabase client. The browser
+preview cannot sign in to local browser-only accounts in production and must
+not hold real volunteer information.
 
-The separate `/pwa.html` document is the volunteer shared-workspace client. It
-uses Supabase authentication and database authorization and requires a configured
-publishable/anonymous key. Public use of this PWA needs a real-user sign-up, sync,
-permission, and recovery test on the deployed HTTPS origin. The native Tauri desktop
-app is a third surface: its local records live in encrypted SQLite, and its optional
-shared workspace connects to Supabase when online.
+For an independently hosted website, `pnpm build:hosted` first validates
+the **publishable/anon** `VITE_SUPABASE_ANON_KEY` (never a service-role key),
+builds the same source, then replaces the compiled root `dist/index.html`
+with the real `pwa.html` entrypoint. `vercel.json` uses this dedicated
+hosted build. It fails rather than silently deploying a localStorage demo
+when configuration is absent. The original source files and Tauri build
+remain unchanged.
 
-A passing Vite build or browser preview test does **not** mean the coordinator
-browser interface is multiuser or ready to accept public accounts. That requires
-an explicitly implemented and tested server-backed coordinator repository.
+The hosted PWA supports authenticated volunteers and a narrower coordinator
+view with live workspace health, reminder history, and RLS-scoped upcoming
+shifts. **This is not the full desktop coordinator interface.** Browser
+AutoRoster editing, full service-hour approval and full reporting still need
+server-backed UI development and real multi-account acceptance testing.
+
+The preview is never a substitute for an organization database. A successful
+`build:hosted` proves the correct entrypoint was compiled, not that
+production authentication, SMTP, backups or permissions were tested.
 
 ## Development
 
@@ -92,10 +99,38 @@ pnpm install --frozen-lockfile
 pnpm dev              # browser preview at http://localhost:5173
 pnpm tauri dev        # native desktop window
 pnpm verify           # local quality gate
+pnpm test:hosted      # fail-closed production entrypoint tests
+pnpm test:ops         # encrypted backup / restore script syntax
 pnpm tauri build      # installers for this platform
 ```
 
 The seeded demo workspace is available from the welcome screen and needs no account or network.
+
+### Production operations before live enrollment
+
+The Supabase Free plan does not automatically preserve daily project
+backups. `scripts/backup-cloud.sh` streams a custom PostgreSQL dump
+through **age encryption** directly into a private S3 bucket and requires
+bucket-level public-access blocking. Its manual
+`.github/workflows/backup-cloud.yml` workflow is deliberately restricted
+to `main` and a GitHub `backup-production` environment: enable required
+environment reviewers and protect `main` before configuring
+`CIVICFLOW_DATABASE_URL`, `CIVICFLOW_BACKUP_AGE_RECIPIENT`,
+`CIVICFLOW_BACKUP_S3_URI`, and the OIDC
+`CIVICFLOW_BACKUP_ROLE_ARN`. An upload **is not a verified restore**.
+
+`scripts/verify-cloud-restore.sh` decrypts an archived object through a
+pipe to an explicitly authorized disposable **localhost**
+`civicflow_restore_*` PostgreSQL database. Keep the age private identity
+off the repository and GitHub logs. Rehearse a real restore and separately
+validate membership, authentication and application records before approving
+release. No test or workflow invents successful `backup_runs` records.
+
+`.github/workflows/hosted-auth-smoke.yml` is an opt-in, read-only test
+against three actual staging accounts in two organizations; provide the
+account credentials through the protected `hosted-staging` environment.
+Until it runs successfully, synthetic SQL role tests are not equivalent to
+a live hosted-account acceptance test.
 
 ## Testing and quality
 
