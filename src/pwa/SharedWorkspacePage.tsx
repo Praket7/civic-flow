@@ -4,7 +4,7 @@ import { ArrowLeft, CalendarDays, Cloud, CloudOff, Database } from "lucide-react
 import { Link } from "react-router-dom";
 import { isTauri } from "../lib/platform";
 import { cloudEmail, cloudSession, onCloudSessionChange } from "../lib/cloud/client";
-import { READY_MESSAGE, sendSession } from "../lib/cloud/bridge";
+import { READY_MESSAGE, sendSession, trustedPwaFrame } from "../lib/cloud/bridge";
 
 /**
  * The hosted workspace, opened from the desktop.
@@ -46,6 +46,7 @@ export function SharedWorkspacePage() {
 
     function receive(event: MessageEvent) {
       if (event.source !== frame.current?.contentWindow) return;
+      if (!trustedPwaFrame(frame.current)) return;
       const data = event.data as { type?: string } | null;
       if (data?.type === READY_MESSAGE) void read();
     }
