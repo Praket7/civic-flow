@@ -459,7 +459,7 @@ Applications* (1993), Chapter 9.
 | `regex` | 1.13.1 | MIT OR Apache-2.0 | no |
 | `regex-automata` | 0.4.18 | MIT OR Apache-2.0 | no |
 | `regex-syntax` | 0.8.11 | MIT OR Apache-2.0 | no |
-| `reqwest` | 0.13.5 | MIT OR Apache-2.0 | no |
+| `reqwest` | 0.13.5 | MIT OR Apache-2.0 | yes |
 | `rfd` | 0.16.1 | MIT | no |
 | `ring` | 0.17.14 | Apache-2.0 AND ISC | no |
 | `rusqlite` | 0.37.0 | MIT | no |
