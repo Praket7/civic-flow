@@ -43,6 +43,7 @@ jobs:
       - run: pnpm test
       - run: pnpm test:sql
       - run: pnpm test:hosted
+      - run: pnpm test:ops
       - run: pnpm build:web
       - name: Enforce entrypoint bundle budgets
         run: node scripts/check-bundle-budget.mjs
