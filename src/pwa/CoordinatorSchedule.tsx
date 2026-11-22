@@ -50,9 +50,6 @@ export function CoordinatorSchedule({
 
   useEffect(() => {
     let active = true;
-    setData(null);
-    setError(null);
-    setLoading(true);
 
     void (async () => {
       try {
@@ -117,7 +114,12 @@ export function CoordinatorSchedule({
         <Button
           variant="secondary"
           loading={loading}
-          onClick={() => setVersion((current) => current + 1)}
+          onClick={() => {
+            setData(null);
+            setError(null);
+            setLoading(true);
+            setVersion((current) => current + 1);
+          }}
         >
           <RefreshCw aria-hidden size={16} /> Refresh schedule
         </Button>
