@@ -1,0 +1,605 @@
+use std::collections::BTreeMap;
+
+use civicflow_core::error::CoreError;
+use civicflow_core::sync::protocol::{Change, CommandEnvelope, CommandType};
+use civicflow_core::sync::replica;
+use civicflow_core::Database;
+use serde_json::{json, Value};
+
+const ORG: &str = "11111111-1111-4111-8111-111111111111";
+const USER: &str = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2";
+const OTHER_USER: &str = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3";
+const SHIFT: &str = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2";
+const VOLUNTEER: &str = "cccccccc-cccc-4ccc-8ccc-ccccccccccc1";
+const VOLUNTEER_TWO: &str = "cccccccc-cccc-4ccc-8ccc-ccccccccccc2";
+const OP: &str = "10000000-0000-4000-8000-000000000001";
+const REPLICA: &str = "00000000-0000-4000-8000-0000000000a1";
+
+fn database() -> Database {
+    Database::in_memory().expect("in-memory database")
+}
+
+fn bootstrap(cursor: i64, revision: i64) -> Value {
+    json!({
+        "status": "ok",
+        "cursor": cursor,
+        "revision": revision,
+        "entities": {
+            "organization": [{
+                "id": ORG,
+                "name": "Rivergate Kitchen",
+                "row_version": 1
+            }],
+            "shift": [{
+                "id": SHIFT,
+                "organization_id": ORG,
+                "capacity": 4,
+                "starts_at": "2026-11-01T12:00:00+00:00",
+                "row_version": 1
+            }],
+            "volunteer": [{
+                "id": VOLUNTEER,
+                "organization_id": ORG,
+                "name": "Vera Volunteer",
+                "row_version": 1
+            }]
+        }
+    })
+}
+
+fn envelope(command: CommandType) -> CommandEnvelope {
+    CommandEnvelope {
+        operation_id: OP.into(),
+        replica_id: REPLICA.into(),
+        user_id: USER.into(),
+        organization_id: ORG.into(),
+        command,
+        membership_epoch: 3,
+        base_workspace_revision: 4,
+        entity_versions: Default::default(),
+        payload: json!({ "shiftId": SHIFT, "membershipEpoch": 3 }),
+        client_created_at: "2026-11-01T09:00:00.000Z".into(),
+    }
+}
+
+fn error_code(error: CoreError) -> String {
+    match error {
+        CoreError::Rule { code, .. } => code,
+        other => panic!("expected a rule error, got {other:?}"),
+    }
+}
+
+#[test]
+fn bootstrap_replaces_the_replica_and_sets_the_cursor() {
+    let database = database();
+    let conn = database.connection();
+    replica::configure(conn, ORG, USER, 3).expect("configure");
+
+    let status =
+        replica::apply_bootstrap(conn, ORG, USER, 3, &bootstrap(10, 4)).expect("bootstrap");
+    assert!(status.configured);
+    assert_eq!(status.cursor, 10);
+    assert_eq!(status.revision, 4);
+    assert_eq!(status.entities, 3);
+    assert_eq!(replica::read_cursor(conn, ORG).unwrap(), 10);
+    assert_eq!(replica::read_revision(conn, ORG).unwrap(), 4);
+
+    let shifts = replica::read_entities(conn, ORG, "shift", None).unwrap();
+    assert_eq!(shifts.len(), 1);
+    assert_eq!(shifts[0]["capacity"], 4);
+
+    // A second bootstrap replaces, not merges: a row the server no longer
+    // returns must disappear.
+    let mut second = bootstrap(20, 5);
+    second["entities"]["shift"] = json!([]);
+    replica::apply_bootstrap(conn, ORG, USER, 3, &second).expect("second bootstrap");
+    assert!(replica::read_entities(conn, ORG, "shift", None)
+        .unwrap()
+        .is_empty());
+    assert_eq!(replica::read_cursor(conn, ORG).unwrap(), 20);
+}
+
+#[test]
+fn a_report_reads_every_live_row_and_ignores_other_entities() {
+    let database = database();
+    let conn = database.connection();
+    replica::configure(conn, ORG, USER, 3).expect("configure");
+
+    let entities = json!({
+        "attendance": [{
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01",
+            "status": "completed"
+        }],
+        "credential": [{
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa02",
+            "valid_through": "2030-01-01"
+        }],
+        "credential_type": [{
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa03",
+            "name": "Food handler"
+        }],
+        "hour_entry": [
+            {
+                "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa04",
+                "minutes": 120,
+                "status": "verified",
+                "date": "2026-01-10"
+            },
+            {
+                "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa05",
+                "minutes": 60,
+                "status": "verified",
+                "date": "2026-01-11"
+            }
+        ],
+        "opportunity": [{
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa06",
+            "title": "Pantry"
+        }],
+        "registration": [{
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa07",
+            "status": "completed"
+        }],
+        "shift": [{ "id": SHIFT, "capacity": 4, "starts_at": "2026-01-10T12:00:00+00:00" }],
+        "volunteer": [
+            { "id": VOLUNTEER, "name": "Vera Volunteer" },
+            { "id": VOLUNTEER_TWO, "name": "Vince Volunteer" }
+        ],
+        "application": [{
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa08",
+            "stage": "review"
+        }]
+    });
+    let payroll = json!({
+        "status": "ok",
+        "cursor": 1,
+        "revision": 1,
+        "entities": entities
+    });
+    replica::apply_bootstrap(conn, ORG, USER, 3, &payroll).expect("bootstrap");
+
+    let report = replica::read_report_entities(conn, ORG).expect("report rows");
+    assert_eq!(report.as_object().expect("object").len(), 8);
+    assert_eq!(report["hour_entry"].as_array().expect("hours").len(), 2);
+    assert_eq!(report["volunteer"].as_array().expect("volunteers").len(), 2);
+    assert!(report.get("application").is_none());
+
+    // A deleted row is a tombstone: it stays in the table so a delayed insert
+    // cannot resurrect it, but a funder total must not read it either.
+    let changes = vec![Change {
+        sequence: 2,
+        entity: "volunteer".into(),
+        id: VOLUNTEER_TWO.into(),
+        operation: civicflow_core::sync::protocol::ChangeOperation::Delete,
+        row_version: None,
+        payload: None,
+    }];
+    replica::apply_changes(conn, ORG, &changes, 2, 2).expect("apply tombstone");
+
+    let report = replica::read_report_entities(conn, ORG).expect("report rows");
+    assert_eq!(report["volunteer"].as_array().expect("volunteers").len(), 1);
+}
+
+#[test]
+fn changes_apply_atomically_and_tombstones_hide_rows() {
+    let database = database();
+    let conn = database.connection();
+    replica::configure(conn, ORG, USER, 3).expect("configure");
+    replica::apply_bootstrap(conn, ORG, USER, 3, &bootstrap(10, 4)).expect("bootstrap");
+
+    let changes = vec![
+        Change {
+            sequence: 11,
+            entity: "shift".into(),
+            id: SHIFT.into(),
+            operation: civicflow_core::sync::protocol::ChangeOperation::Update,
+            row_version: Some(2),
+            payload: Some(json!({
+                "id": SHIFT,
+                "organization_id": ORG,
+                "capacity": 6,
+                "starts_at": "2026-11-01T12:00:00+00:00",
+                "row_version": 2
+            })),
+        },
+        Change {
+            sequence: 12,
+            entity: "volunteer".into(),
+            id: VOLUNTEER_TWO.into(),
+            operation: civicflow_core::sync::protocol::ChangeOperation::Insert,
+            row_version: Some(1),
+            payload: Some(json!({
+                "id": VOLUNTEER_TWO,
+                "organization_id": ORG,
+                "name": "Vince Volunteer",
+                "row_version": 1
+            })),
+        },
+        Change {
+            sequence: 13,
+            entity: "volunteer".into(),
+            id: VOLUNTEER_TWO.into(),
+            operation: civicflow_core::sync::protocol::ChangeOperation::Delete,
+            row_version: None,
+            payload: None,
+        },
+    ];
+
+    let status = replica::apply_changes(conn, ORG, &changes, 13, 5).expect("apply");
+    assert_eq!(status.cursor, 13);
+    assert_eq!(status.revision, 5);
+
+    let shifts = replica::read_entities(conn, ORG, "shift", None).unwrap();
+    assert_eq!(shifts[0]["capacity"], 6);
+    let volunteers = replica::read_entities(conn, ORG, "volunteer", None).unwrap();
+    assert_eq!(volunteers.len(), 1);
+
+    // A batch with no visible rows still moves the cursor. Otherwise a device
+    // would re-read the same invisible changes on every poll.
+    let status = replica::apply_changes(conn, ORG, &[], 20, 5).expect("empty batch");
+    assert_eq!(status.cursor, 20);
+
+    let stale = replica::apply_changes(conn, ORG, &changes, 19, 5).unwrap_err();
+    assert_eq!(error_code(stale), "STALE_CURSOR");
+    assert_eq!(replica::read_cursor(conn, ORG).unwrap(), 20);
+
+    // A malformed batch cannot advance the cursor past a change it contains.
+    let ahead = vec![Change {
+        sequence: 25,
+        entity: "shift".into(),
+        id: SHIFT.into(),
+        operation: civicflow_core::sync::protocol::ChangeOperation::Update,
+        row_version: Some(3),
+        payload: Some(json!({
+            "id": SHIFT,
+            "organization_id": ORG,
+            "capacity": 7,
+            "starts_at": "2026-11-01T12:00:00+00:00",
+            "row_version": 3
+        })),
+    }];
+    let skipped = replica::apply_changes(conn, ORG, &ahead, 20, 5).unwrap_err();
+    assert!(matches!(skipped, CoreError::Data(_)));
+    assert_eq!(replica::read_cursor(conn, ORG).unwrap(), 20);
+    assert_eq!(
+        replica::read_entities(conn, ORG, "shift", None).unwrap()[0]["capacity"],
+        6
+    );
+    assert_eq!(
+        replica::read_entities(conn, ORG, "shift", None).unwrap()[0]["capacity"],
+        6
+    );
+}
+
+#[test]
+fn a_failed_batch_leaves_the_cursor_and_rows_untouched() {
+    let database = database();
+    const OTHER_ORG: &str = "22222222-2222-4222-8222-222222222222";
+    let conn = database.connection();
+    replica::configure(conn, ORG, USER, 3).expect("configure");
+    replica::apply_bootstrap(conn, ORG, USER, 3, &bootstrap(10, 4)).expect("bootstrap");
+
+    // The first change is valid; the second belongs to another organization.
+    // Applying the first before discovering the second would leave the replica
+    // half updated and the cursor behind, so the whole batch must roll back.
+    let changes = vec![
+        Change {
+            sequence: 11,
+            entity: "shift".into(),
+            id: SHIFT.into(),
+            operation: civicflow_core::sync::protocol::ChangeOperation::Update,
+            row_version: Some(2),
+            payload: Some(json!({
+                "id": SHIFT,
+                "organization_id": ORG,
+                "capacity": 9,
+                "starts_at": "2026-11-01T12:00:00+00:00",
+                "row_version": 2
+            })),
+        },
+        Change {
+            sequence: 12,
+            entity: "shift".into(),
+            id: SHIFT.into(),
+            operation: civicflow_core::sync::protocol::ChangeOperation::Update,
+            row_version: Some(3),
+            payload: Some(json!({
+                "id": SHIFT,
+                "organization_id": OTHER_ORG,
+                "capacity": 10,
+                "starts_at": "2026-11-01T12:00:00+00:00",
+                "row_version": 3
+            })),
+        },
+    ];
+
+    let error = replica::apply_changes(conn, ORG, &changes, 12, 5).unwrap_err();
+    assert!(matches!(error, CoreError::Data(_)));
+    assert_eq!(replica::read_cursor(conn, ORG).unwrap(), 10);
+    assert_eq!(replica::read_revision(conn, ORG).unwrap(), 4);
+    let shifts = replica::read_entities(conn, ORG, "shift", None).unwrap();
+    assert_eq!(shifts[0]["capacity"], 4);
+}
+
+#[test]
+fn the_replica_survives_a_restart_without_a_network() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let path = directory.path().join("replica.db");
+    {
+        let database = Database::open(&path).expect("open workspace");
+        replica::configure(database.connection(), ORG, USER, 3).expect("configure");
+        replica::apply_bootstrap(database.connection(), ORG, USER, 3, &bootstrap(10, 4))
+            .expect("bootstrap");
+    }
+
+    // A new process opens the same encrypted-capable file. No server call is
+    // made here, which is the offline restart the shared workspace promises.
+    let database = Database::open(&path).expect("reopen workspace");
+    let status = replica::status(database.connection(), ORG).expect("status");
+    assert_eq!(status.cursor, 10);
+    assert_eq!(status.entities, 3);
+    let shifts = replica::read_entities(database.connection(), ORG, "shift", None).unwrap();
+    assert_eq!(shifts.len(), 1);
+    assert_eq!(shifts[0]["capacity"], 4);
+}
+
+#[test]
+fn a_bootstrap_from_another_organization_is_refused_atomically() {
+    let database = database();
+    const OTHER_ORG: &str = "22222222-2222-4222-8222-222222222222";
+    let conn = database.connection();
+    replica::configure(conn, ORG, USER, 3).expect("configure");
+    replica::apply_bootstrap(conn, ORG, USER, 3, &bootstrap(10, 4)).expect("bootstrap");
+
+    let mut foreign = bootstrap(20, 5);
+    foreign["entities"]["shift"][0]["organization_id"] = json!(OTHER_ORG);
+    let error = replica::apply_bootstrap(conn, ORG, USER, 3, &foreign).unwrap_err();
+    assert!(matches!(error, CoreError::Data(_)));
+
+    // The failed replacement changed nothing.
+    assert_eq!(replica::read_cursor(conn, ORG).unwrap(), 10);
+    assert_eq!(
+        replica::read_entities(conn, ORG, "shift", None)
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn a_queued_command_is_built_from_the_bound_workspace() {
+    let database = database();
+    let conn = database.connection();
+    replica::configure(conn, ORG, USER, 3).expect("configure");
+    replica::apply_bootstrap(conn, ORG, USER, 3, &bootstrap(10, 4)).expect("bootstrap");
+
+    let versions = BTreeMap::from([(format!("shift:{SHIFT}"), 2)]);
+    let first = replica::enqueue_command(
+        conn,
+        ORG,
+        CommandType::UpdateShift,
+        &json!({ "id": SHIFT, "capacity": 6 }),
+        &versions,
+        Some(4),
+    )
+    .expect("enqueue");
+    let second = replica::enqueue_command(
+        conn,
+        ORG,
+        CommandType::UpdateShift,
+        &json!({ "id": SHIFT, "capacity": 7 }),
+        &versions,
+        None,
+    )
+    .expect("enqueue");
+    assert_ne!(first, second);
+    assert_eq!(replica::pending_count(conn, USER, ORG).unwrap(), 2);
+
+    let ready = replica::next_ready(conn, USER, ORG, 0)
+        .unwrap()
+        .expect("first command");
+    assert_eq!(ready.user_id, USER);
+    assert_eq!(ready.organization_id, ORG);
+    assert_eq!(ready.envelope.membership_epoch, 3);
+    assert_eq!(ready.envelope.base_workspace_revision, 4);
+    assert_eq!(ready.envelope.payload["membershipEpoch"], 3);
+    assert_eq!(ready.envelope.entity_versions[&format!("shift:{SHIFT}")], 2);
+    assert_eq!(ready.envelope.operation_id, ready.operation_id);
+
+    // The next command falls back to the revision last pulled, and its
+    // sequence keeps the local causal order even after the first is sent.
+    replica::mark_sent(conn, first, &json!({ "status": "applied" })).expect("sent");
+    let ready = replica::next_ready(conn, USER, ORG, 0)
+        .unwrap()
+        .expect("second command");
+    assert_eq!(ready.envelope.base_workspace_revision, 4);
+    assert_eq!(ready.envelope.operation_id, ready.operation_id);
+    assert_ne!(ready.operation_id, String::new());
+}
+
+#[test]
+fn a_backed_off_command_blocks_later_commands() {
+    let database = database();
+    let conn = database.connection();
+    replica::configure(conn, ORG, USER, 3).expect("configure");
+
+    let first = replica::enqueue_command(
+        conn,
+        ORG,
+        CommandType::CreateShift,
+        &json!({ "id": SHIFT }),
+        &BTreeMap::new(),
+        None,
+    )
+    .expect("first");
+    let second = replica::enqueue_command(
+        conn,
+        ORG,
+        CommandType::UpdateShift,
+        &json!({ "id": SHIFT, "capacity": 6 }),
+        &BTreeMap::new(),
+        None,
+    )
+    .expect("second");
+    replica::mark_retry(conn, first, "serialization failure", 5_000).expect("retry");
+
+    assert!(replica::next_ready(conn, USER, ORG, 1_000)
+        .unwrap()
+        .is_none());
+    let ready = replica::next_ready(conn, USER, ORG, 5_000)
+        .unwrap()
+        .expect("the first command after backoff");
+    assert_eq!(ready.id, first);
+
+    replica::mark_sent(conn, first, &json!({ "status": "applied" })).expect("sent");
+    let ready = replica::next_ready(conn, USER, ORG, 5_000)
+        .unwrap()
+        .expect("the dependent command");
+    assert_eq!(ready.id, second);
+}
+
+#[test]
+fn conflicts_can_be_listed_and_closed() {
+    let database = database();
+    let conn = database.connection();
+    replica::configure(conn, ORG, USER, 3).expect("configure");
+
+    let id = replica::enqueue_command(
+        conn,
+        ORG,
+        CommandType::UpdateShift,
+        &json!({ "id": SHIFT, "capacity": 6 }),
+        &BTreeMap::new(),
+        None,
+    )
+    .expect("enqueue");
+    let conflict = json!({
+        "id": "30000000-0000-4000-8000-000000000001",
+        "organizationId": ORG,
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "command": "UPDATE_SHIFT",
+        "entity": SHIFT,
+        "code": "version_conflict",
+        "message": "Someone changed this shift after your copy was loaded.",
+        "classification": "field",
+        "localPayload": { "capacity": 6 },
+        "authoritative": { "capacity": 5 },
+        "createdAt": "2026-11-01T09:05:00.000Z"
+    });
+    replica::mark_refused(
+        conn,
+        id,
+        &json!({ "status": "version_conflict" }),
+        &conflict,
+    )
+    .expect("refused");
+
+    let open = replica::list_conflicts(conn, ORG).expect("list");
+    assert_eq!(open.len(), 1);
+    assert_eq!(open[0]["code"], "version_conflict");
+    assert_eq!(open[0]["classification"], "field");
+    assert_eq!(open[0]["localPayload"]["capacity"], 6);
+    assert_eq!(open[0]["authoritative"]["capacity"], 5);
+    assert_eq!(open[0]["status"], "open");
+
+    replica::resolve_conflict(
+        conn,
+        ORG,
+        "30000000-0000-4000-8000-000000000001",
+        "resolved",
+    )
+    .expect("resolve");
+    assert_eq!(replica::open_conflict_count(conn, ORG).unwrap(), 0);
+    let closed = replica::list_conflicts(conn, ORG).expect("closed list");
+    assert_eq!(closed[0]["status"], "resolved");
+    assert!(closed[0]["resolvedAt"].is_string());
+
+    let missing = replica::resolve_conflict(conn, ORG, "missing", "resolved").unwrap_err();
+    assert_eq!(error_code(missing), "NOT_FOUND");
+}
+
+#[test]
+fn switching_accounts_clears_the_previous_replica() {
+    let database = database();
+    let conn = database.connection();
+    replica::configure(conn, ORG, USER, 3).expect("configure");
+    replica::apply_bootstrap(conn, ORG, USER, 3, &bootstrap(10, 4)).expect("bootstrap");
+
+    let status = replica::configure(conn, ORG, OTHER_USER, 1).expect("switch");
+    assert_eq!(status.user_id.as_deref(), Some(OTHER_USER));
+    assert_eq!(status.cursor, 0);
+    assert_eq!(status.entities, 0);
+    assert!(replica::read_entities(conn, ORG, "shift", None)
+        .unwrap()
+        .is_empty());
+}
+
+#[test]
+fn outbox_survives_a_lost_upload_and_records_a_conflict() {
+    let database = database();
+    let conn = database.connection();
+    replica::configure(conn, ORG, USER, 3).expect("configure");
+
+    let queued = envelope(CommandType::UpdateShift);
+    let id = replica::enqueue(conn, USER, ORG, 1, &queued).expect("enqueue");
+    assert_eq!(replica::pending_count(conn, USER, ORG).unwrap(), 1);
+
+    let ready = replica::next_ready(conn, USER, ORG, 0)
+        .unwrap()
+        .expect("ready");
+    assert_eq!(ready.id, id);
+    assert_eq!(ready.command, CommandType::UpdateShift);
+    assert_eq!(ready.user_id, USER);
+
+    replica::mark_sending(conn, id, 1_000).expect("sending");
+    assert_eq!(
+        replica::recover_stale_sending(conn, 2_000, 3_000).unwrap(),
+        1
+    );
+    let ready = replica::next_ready(conn, USER, ORG, 3_000)
+        .unwrap()
+        .expect("retry");
+    replica::mark_retry(conn, ready.id, "network down", 4_000).expect("retry");
+    assert!(replica::next_ready(conn, USER, ORG, 3_500)
+        .unwrap()
+        .is_none());
+
+    let ready = replica::next_ready(conn, USER, ORG, 4_000)
+        .unwrap()
+        .expect("ready");
+    let conflict = json!({
+        "id": "30000000-0000-4000-8000-000000000001",
+        "organizationId": ORG,
+        "operationId": OP,
+        "command": "UPDATE_SHIFT",
+        "entity": SHIFT,
+        "code": "version_conflict",
+        "message": "Jordan changed this shift after your copy was loaded.",
+        "classification": "field",
+        "localPayload": { "capacity": 6 },
+        "authoritative": { "capacity": 5 },
+        "status": "open",
+        "createdAt": "2026-11-01T09:05:00.000Z"
+    });
+    replica::mark_refused(conn, ready.id, &json!({ "status": "conflict" }), &conflict)
+        .expect("refused");
+
+    assert_eq!(replica::pending_count(conn, USER, ORG).unwrap(), 0);
+    assert_eq!(replica::open_conflict_count(conn, ORG).unwrap(), 1);
+    assert!(replica::next_ready(conn, USER, ORG, 10_000)
+        .unwrap()
+        .is_none());
+}
+
+#[test]
+fn a_command_is_never_queued_for_another_account() {
+    let database = database();
+    let conn = database.connection();
+    replica::configure(conn, ORG, USER, 3).expect("configure");
+
+    let mut wrong = envelope(CommandType::UpdateShift);
+    wrong.user_id = OTHER_USER.into();
+    let error = replica::enqueue(conn, USER, ORG, 1, &wrong).unwrap_err();
+    assert!(matches!(error, CoreError::Validation(_)));
+    assert_eq!(replica::pending_count(conn, USER, ORG).unwrap(), 0);
+}
