@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# A new PR commit supersedes its earlier validation run. Keep main-branch
+# checks uninterrupted so release evidence remains tied to the exact SHA.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
