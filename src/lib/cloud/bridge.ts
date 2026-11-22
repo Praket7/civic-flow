@@ -8,15 +8,42 @@
  * session store avoids. Instead the desktop passes the session it already holds
  * in the operating system credential store.
  *
- * Both frames are same-origin, but a packaged app can serve from a custom
- * scheme whose origin serialises as `null`, and `postMessage` rejects `null` as
- * a target origin. So each side posts with `"*"` and proves identity the strong
- * way instead: `event.source` must be the exact window object expected. Another
- * origin can post a message, but it cannot be that window.
+ * The iframe must still display our bundled pwa.html when the desktop sends
+ * credentials. A WindowProxy remains the same after cross-origin navigation,
+ * so event.source alone is not a sufficient trust check.
  */
 
 export const SESSION_MESSAGE = "civicflow:session";
 export const READY_MESSAGE = "civicflow:ready";
+
+/**
+ * A framed WindowProxy survives navigation. Checking contentDocument ensures
+ * that an iframe redirected to another origin cannot obtain a cloud token,
+ * even if it sends a forged READY message through the same WindowProxy.
+ *
+ * The bundled app and pwa.html are same-origin; cross-origin contentDocument
+ * access returns null. Match the actual document against the fixed local PWA
+ * path, not against an attacker-controlled iframe src attribute.
+ */
+export function trustedPwaFrame(frame: HTMLIFrameElement | null): URL | null {
+  if (!frame?.contentWindow) return null;
+  try {
+    const documentUrl = frame.contentDocument?.URL;
+    if (!documentUrl) return null;
+    const expected = new URL("pwa.html", window.location.href);
+    const actual = new URL(documentUrl);
+    if (
+      actual.protocol !== expected.protocol ||
+      actual.host !== expected.host ||
+      actual.pathname !== expected.pathname
+    ) {
+      return null;
+    }
+    return actual;
+  } catch {
+    return null;
+  }
+}
 
 /** Only what a Supabase client needs to adopt a session; nothing else is sent. */
 export interface BridgedSession {
@@ -69,7 +96,11 @@ export function sendSession(
   session: { access_token: string; refresh_token: string } | null,
 ): void {
   const target = frame?.contentWindow;
-  if (!target) return;
+  const trustedUrl = trustedPwaFrame(frame);
+  if (!target || !trustedUrl) return;
+  // For an opaque packaged-app origin, postMessage cannot target "null".
+  // A wildcard is safe only after verifying the actual same-origin document.
+  const targetOrigin = trustedUrl.origin === "null" ? "*" : trustedUrl.origin;
   target.postMessage(
     {
       type: SESSION_MESSAGE,
@@ -77,6 +108,6 @@ export function sendSession(
         ? { accessToken: session.access_token, refreshToken: session.refresh_token }
         : null,
     },
-    "*",
+    targetOrigin,
   );
 }
