@@ -55,7 +55,15 @@ let socket;
 try {
   server = spawn(
     process.execPath,
-    [path.join(root, "node_modules/vite/bin/vite.js"), "preview", "--host", "127.0.0.1", "--port", String(port), "--strictPort"],
+    [
+      path.join(root, "node_modules/vite/bin/vite.js"),
+      "preview",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(port),
+      "--strictPort",
+    ],
     { cwd: root, stdio: process.env.CI ? "inherit" : "ignore" },
   );
   await until(async () => (await fetch(`${base}/judge/`)).ok, "hosted preview server");
@@ -86,7 +94,10 @@ try {
     ],
     { stdio: process.env.CI ? ["ignore", "ignore", "inherit"] : "ignore" },
   );
-  await until(async () => (await fetch(`http://127.0.0.1:${cdpPort}/json/version`)).ok, "Chromium DevTools");
+  await until(
+    async () => (await fetch(`http://127.0.0.1:${cdpPort}/json/version`)).ok,
+    "Chromium DevTools",
+  );
   const targets = await (await fetch(`http://127.0.0.1:${cdpPort}/json/list`)).json();
   const target = targets.find((row) => row.type === "page");
   assert.ok(target?.webSocketDebuggerUrl, "Chromium page target is available");
@@ -123,13 +134,10 @@ try {
     await until(() => evaluate('document.readyState === "complete"'), `navigation to ${url}`);
   }
   async function heading(expected) {
-    return until(
-      async () => {
-        const value = await evaluate('document.querySelector("h1")?.textContent?.trim() || ""');
-        return value.toLowerCase().includes(expected.toLowerCase()) ? value : false;
-      },
-      `heading contains "${expected}"`,
-    );
+    return until(async () => {
+      const value = await evaluate('document.querySelector("h1")?.textContent?.trim() || ""');
+      return value.toLowerCase().includes(expected.toLowerCase()) ? value : false;
+    }, `heading contains "${expected}"`);
   }
 
   await open("/judge/");
@@ -137,10 +145,15 @@ try {
   await open("/judge/demo/#/welcome");
   await heading("Service, organized");
   await until(
-    () => evaluate('Array.from(document.querySelectorAll("button")).some(b => (b.textContent || "").includes("Explore the demo"))'),
+    () =>
+      evaluate(
+        'Array.from(document.querySelectorAll("button")).some(b => (b.textContent || "").includes("Explore the demo"))',
+      ),
     "the sample workspace launch button",
   );
-  await evaluate('Array.from(document.querySelectorAll("button")).find(b => (b.textContent || "").includes("Explore the demo")).click()');
+  await evaluate(
+    'Array.from(document.querySelectorAll("button")).find(b => (b.textContent || "").includes("Explore the demo")).click()',
+  );
   await until(
     () => evaluate('window.location.hash.startsWith("#/coordinator/")'),
     "demo coordinator route",
@@ -157,12 +170,14 @@ try {
     await open(`/judge/demo/#${route}`);
     await heading(title);
     assert.equal(
-      await evaluate('window.location.pathname'),
+      await evaluate("window.location.pathname"),
       "/judge/demo/",
       "hash navigation must stay within the isolated judging app",
     );
   }
-  console.log("Judge browser flow passed: public review, sample launch, AutoRoster, schedule and reports.");
+  console.log(
+    "Judge browser flow passed: public review, sample launch, AutoRoster, schedule and reports.",
+  );
 } finally {
   socket?.close();
   chrome?.kill();

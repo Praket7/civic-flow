@@ -58,6 +58,23 @@ Use a clean browser profile with no CivicFlow storage or active session.
 - [ ] Reopen an older encrypted workspace and verify backup/restore with real fixtures.
 - [ ] Confirm the submitted judging URL works unauthenticated on a second device.
 
+## Use a dedicated judging origin
+
+**Do not cohost the judging sample on an active production nonprofit origin.**
+A URL path such as `/judge/demo/` separates navigation, but it does not
+provide browser security isolation: pages under one origin share access to
+cookies, localStorage, and IndexedDB unless otherwise restricted. Use a
+dedicated Vercel project and hostname for FBLA judging, distinct from any
+production deployment containing real volunteer sessions. Keep the site
+populated exclusively with fictitious demo data; never test real credentials
+on the judging origin.
+
+The hosted root on that dedicated project remains the real PWA *build
+entrypoint*, but it is not approved as a live organization service. The
+judging sample is for a controlled educational demonstration. A future
+production rollout should be separately validated and deployed on a
+different origin.
+
 ## Administrative gates still required
 
 The GitHub application can push code and open PRs, but this connector does not

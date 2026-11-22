@@ -163,10 +163,10 @@ CivicFlow is released under the [MIT License](LICENSE). The generated [third-par
 
 ## FBLA judging review
 
-A reviewed hosted deployment serves a **separate judging page** at `/judge/`. It links to
+A reviewed **dedicated judging hostname** serves a **separate judging page** at `/judge/`. It links to
 `/judge/demo/#/welcome`, the full coordinator UI running only against **browser-local sample
 data**. This is not a real hosted nonprofit workspace. The production root continues to serve
-the authenticated Supabase-backed PWA. The desktop release remains the complete offline app.
+the authenticated Supabase-backed PWA. Never host the judging sample on an active nonprofit\'s production origin; paths do not isolate browser storage. The desktop release remains the complete offline app.
 
 See [FBLA Stage 1 release and judging requirements](docs/FBLA-STAGE1-JUDGING.md) before
 publishing an installer or sharing a program URL for state prejudging.
