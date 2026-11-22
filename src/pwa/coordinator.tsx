@@ -14,6 +14,7 @@ import { Button, Card, PageTitle, Pill, relativeTime } from "./ui";
 import styles from "./pwa.module.css";
 import { messageOf } from "../lib/errors";
 import { reminderDispatchIsRecent, verifiedBackupIsRecent } from "./health";
+import { CoordinatorSchedule } from "./CoordinatorSchedule";
 
 interface DeviceRow {
   replicaId: string;
@@ -250,6 +251,12 @@ export function CoordinatorApp() {
           <strong>{health?.counts.pushSubscriptions ?? "—"}</strong>
         </Card>
       </div>
+
+      <CoordinatorSchedule
+        key={organizationId ?? "no-workspace"}
+        organizationId={workspace.organizationId}
+        timezone={workspace.organization.timezone}
+      />
 
       <Card>
         <h2 className={styles.cardTitle}>
