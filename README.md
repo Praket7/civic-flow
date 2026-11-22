@@ -62,6 +62,8 @@ SQLite workspace                          change log + commands
 - The shared workspace uses the server as the authority. Writes are queued locally, retried with stable operation IDs, and refused rather than silently merged when the server has newer data.
 - The volunteer PWA and the desktop's shared view use the same Rust planner and the same synchronized data model.
 
+For an exit-gate-by-exit-gate review, see the [public release readiness audit](docs/PUBLIC-RELEASE-READINESS.md). The current source is not approved for unrestricted public launch.
+
 ## Web surfaces and data boundaries
 
 The public browser build of `index.html` is a **local demonstration**, not a hosted
