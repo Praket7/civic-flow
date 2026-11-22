@@ -73,7 +73,6 @@ jobs:
           pnpm build:hosted
           node -e "const fs = require('node:fs'); const html = fs.readFileSync('dist/index.html','utf8'); if (!html.includes('CivicFlow Volunteer') || !/assets\/pwa-/.test(html)) process.exit(1);"
 
-
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
