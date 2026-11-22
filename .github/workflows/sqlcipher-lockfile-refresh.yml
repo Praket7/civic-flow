@@ -1,0 +1,54 @@
+name: One-time SQLCipher lockfile refresh
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sqlcipher-lockfile-refresh-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'hardening/auth-and-release-gates-2026-11-22'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Refresh both Cargo lockfiles for SQLCipher 4.20
+        run: |
+          cd src-tauri/core
+          cargo update --verbose
+          cd ..
+          cargo update --verbose
+          cargo metadata --format-version 1 --locked > /dev/null
+          cd core
+          cargo metadata --format-version 1 --locked > /dev/null
+      - name: Regenerate attribution inventory
+        run: pnpm third-party:update
+      - name: Commit exact resolved lockfiles and attribution
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src-tauri/Cargo.lock src-tauri/core/Cargo.lock THIRD_PARTY_NOTICES.md src/data/thirdParty.json
+          if git diff --cached --quiet; then
+            echo "Lockfiles already current"
+            exit 0
+          fi
+          git commit -m "fix(security): lock patched SQLCipher and regenerate notices"
+          git push origin "HEAD:${{ github.head_ref }}"
