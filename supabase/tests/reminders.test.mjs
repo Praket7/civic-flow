@@ -344,33 +344,27 @@ test("cross-organization broadcast read receipts are rejected", async () => {
     db,
     ids.ownerB,
     async () => {
-      const [row] = await query(
-        db,
-        "select public.mark_notification_read($1::uuid) as result",
-        [notification.id],
-      );
+      const [row] = await query(db, "select public.mark_notification_read($1::uuid) as result", [
+        notification.id,
+      ]);
       return row.result;
     },
     { commit: true },
   );
   assert.equal(attempt.status, "not_found");
 
-  const [unread] = await query(
-    db,
-    "select read_at from public.notifications where id = $1",
-    [notification.id],
-  );
+  const [unread] = await query(db, "select read_at from public.notifications where id = $1", [
+    notification.id,
+  ]);
   assert.equal(unread.read_at, null, "nonmembers must not change broadcast read state");
 
   const authorized = await asUser(
     db,
     ids.ownerA,
     async () => {
-      const [row] = await query(
-        db,
-        "select public.mark_notification_read($1::uuid) as result",
-        [notification.id],
-      );
+      const [row] = await query(db, "select public.mark_notification_read($1::uuid) as result", [
+        notification.id,
+      ]);
       return row.result;
     },
     { commit: true },

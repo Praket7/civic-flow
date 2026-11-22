@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { asAnon, asOwner, asUser, createDatabase, ids, query, seed, sendCommand } from "./harness.mjs";
+import {
+  asAnon,
+  asOwner,
+  asUser,
+  createDatabase,
+  ids,
+  query,
+  seed,
+  sendCommand,
+} from "./harness.mjs";
 
 let db;
 
