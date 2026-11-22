@@ -86,7 +86,6 @@ test("public judging page points at the isolated sample and labels its data", as
   assert.match(html, /offline/i);
 });
 
-
 test("volunteer service worker leaves judging pages outside its PWA shell cache", async () => {
   const source = await readFile(new URL("../../public/sw.js", import.meta.url), "utf8");
   const listeners = new Map();
@@ -97,12 +96,7 @@ test("volunteer service worker leaves judging pages outside its PWA shell cache"
   runInNewContext(source, { self: sw, URL });
   const handleFetch = listeners.get("fetch");
   assert.equal(typeof handleFetch, "function");
-  for (const route of [
-    "/judge",
-    "/judge/",
-    "/judge/demo/",
-    "/judge/screenshots/autoroster.png",
-  ]) {
+  for (const route of ["/judge", "/judge/", "/judge/demo/", "/judge/screenshots/autoroster.png"]) {
     let intercepted = false;
     handleFetch({
       request: {

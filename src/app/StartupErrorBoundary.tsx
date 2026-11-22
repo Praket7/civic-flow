@@ -6,10 +6,7 @@ import type { ReactNode } from "react";
  * or automatically delete encrypted/native records or browser-local fixtures.
  * Repairs and destructive resets require an explicit user action.
  */
-export class StartupErrorBoundary extends Component<
-  { children: ReactNode },
-  { failed: boolean }
-> {
+export class StartupErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
 
   static getDerivedStateFromError() {
@@ -47,9 +44,9 @@ export class StartupErrorBoundary extends Component<
           This workspace could not open.
         </h1>
         <p>
-          No automatic data reset was attempted. Reload the application to try again.
-          If the problem continues, keep the current workspace files and ask the
-          maintainer to review the error before restoring a backup.
+          No automatic data reset was attempted. Reload the application to try again. If the problem
+          continues, keep the current workspace files and ask the maintainer to review the error
+          before restoring a backup.
         </p>
         <button
           type="button"
