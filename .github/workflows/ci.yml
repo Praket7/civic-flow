@@ -114,6 +114,32 @@ jobs:
             wdio-logs/
           if-no-files-found: ignore
 
+  windows:
+    name: Windows desktop compilation
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri/core -> target
+            src-tauri -> target
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:web
+      - name: Check Windows desktop shell and encrypted core
+        working-directory: src-tauri
+        run: cargo check --locked --target x86_64-pc-windows-msvc
+
   rust:
     name: Rust checks
     runs-on: ubuntu-latest
