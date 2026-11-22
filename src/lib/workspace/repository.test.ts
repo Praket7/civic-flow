@@ -136,6 +136,28 @@ describe("workspace repository", () => {
     setRepositoryToken(null);
   });
 
+  it("does not accept real credentials in a production browser preview", async () => {
+    const savedPasswords = localStorage.getItem("civicflow.auth.passwords");
+    vi.stubEnv("PROD", true);
+    try {
+      await expect(
+        previewRepository.createAccount("Private Person", "private@example.org", "sample-secret"),
+      ).rejects.toThrow(/browser build is a demo/i);
+      await expect(
+        previewRepository.signIn("private@example.org", "sample-secret", true),
+      ).rejects.toThrow(/browser build is a demo/i);
+      await expect(
+        previewRepository.signInWithHosted({
+          name: "Private Person",
+          email: "private@example.org",
+        }),
+      ).rejects.toThrow(/cannot be adopted/i);
+      expect(localStorage.getItem("civicflow.auth.passwords")).toBe(savedPasswords);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("creates a preview identity that can sign in with its own password", async () => {
     const created = await previewRepository.createAccount(
       "  Alicia   Moreno ",

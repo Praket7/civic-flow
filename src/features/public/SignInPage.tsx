@@ -10,6 +10,7 @@ import { AuthPortrait } from "./AuthPortrait";
 import { GoogleSignIn } from "./GoogleSignIn";
 import styles from "./auth.module.css";
 import { messageOf } from "../../lib/errors";
+import { isTauri } from "../../lib/platform";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -80,6 +81,7 @@ export function SignInPage() {
   }
 
   // Signing in over an existing session would silently swap accounts.
+  if (import.meta.env.PROD && !isTauri()) return <Navigate to="/welcome" replace />;
   if (user && !busy && !leaving.current) return <Navigate to={accountHome(user)} replace />;
 
   return (

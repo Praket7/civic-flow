@@ -290,12 +290,108 @@ fn sign_in(
     auth::sign_in(database.connection(), &email, &password, remember).map_err(AppError::from)
 }
 
+/// An authenticated Supabase user must be proved again at the native boundary.
+/// The WebView may display a profile but cannot assert an identity to Rust.
+fn hosted_auth_error() -> AppError {
+    AppError {
+        code: "HOSTED_AUTH_UNVERIFIED".into(),
+        message: "The hosted account could not be verified. Sign in again.".into(),
+        field: None,
+        action: Some("RETRY_SIGN_IN".into()),
+    }
+}
+
+/// Only an email confirmed by the provider may be mapped to a local account.
+/// Access to the email inbox is a prerequisite for treating the address as an
+/// existing local account identity.
+fn verified_hosted_identity(user: &serde_json::Value) -> Result<(String, String), AppError> {
+    user.get("id")
+        .and_then(serde_json::Value::as_str)
+        .filter(|id| !id.is_empty())
+        .ok_or_else(hosted_auth_error)?;
+    user.get("email_confirmed_at")
+        .and_then(serde_json::Value::as_str)
+        .filter(|date| !date.is_empty())
+        .ok_or_else(hosted_auth_error)?;
+    let email = user
+        .get("email")
+        .and_then(serde_json::Value::as_str)
+        .filter(|email| !email.trim().is_empty())
+        .ok_or_else(hosted_auth_error)?;
+    let name = user
+        .get("user_metadata")
+        .and_then(|metadata| metadata.get("full_name").or_else(|| metadata.get("name")))
+        .and_then(serde_json::Value::as_str)
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or("CivicFlow member");
+    Ok((name.to_owned(), email.to_owned()))
+}
+
+#[cfg(test)]
+mod hosted_identity_tests {
+    use super::verified_hosted_identity;
+    use serde_json::json;
+
+    #[test]
+    fn confirmed_hosted_user_is_accepted() {
+        let user = json!({
+            "id": "provider-subject",
+            "email": "member@example.org",
+            "email_confirmed_at": "2026-11-22T00:00:00Z",
+            "user_metadata": { "full_name": "Maya Rivera" }
+        });
+        let (name, email) = verified_hosted_identity(&user).unwrap();
+        assert_eq!(name, "Maya Rivera");
+        assert_eq!(email, "member@example.org");
+    }
+
+    #[test]
+    fn unconfirmed_user_is_rejected_even_with_an_email() {
+        let user = json!({"id": "another-subject", "email": "member@example.org", "email_confirmed_at": null});
+        assert!(verified_hosted_identity(&user).is_err());
+    }
+
+    #[test]
+    fn missing_provider_subject_is_rejected() {
+        let user = json!({"email": "member@example.org", "email_confirmed_at": "2026-11-22T00:00:00Z"});
+        assert!(verified_hosted_identity(&user).is_err());
+    }
+}
+
 #[tauri::command]
-fn sign_in_with_hosted(
+async fn sign_in_with_hosted(
     state: State<'_, AppState>,
-    name: String,
-    email: String,
+    access_token: String,
+    anon_key: String,
 ) -> Result<AuthSession, AppError> {
+    if access_token.trim().is_empty() || anon_key.trim().is_empty() {
+        return Err(hosted_auth_error());
+    }
+
+    // Only the configured identity provider is contacted. No caller-supplied URL,
+    // email, or role is accepted, and redirects cannot leak bearer credentials.
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|_| hosted_auth_error())?;
+    let response = client
+        .get("https://imzdblvljdcbnxtwbmbw.supabase.co/auth/v1/user")
+        .header("apikey", anon_key)
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|_| hosted_auth_error())?;
+    if !response.status().is_success() {
+        return Err(hosted_auth_error());
+    }
+
+    let verified: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|_| hosted_auth_error())?;
+    let (name, email) = verified_hosted_identity(&verified)?;
+
     let database = state.database.lock().map_err(|_| lock_error())?;
     auth::sign_in_with_hosted(database.connection(), &name, &email).map_err(AppError::from)
 }

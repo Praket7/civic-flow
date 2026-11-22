@@ -1,0 +1,62 @@
+name: Encrypted offsite database backup
+
+# Intentionally manual until main is protected and backup-production has
+# required reviewers and branch restrictions. No privileged secrets run on PRs.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  encrypted-snapshot:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: backup-production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify backup configuration
+        env:
+          CIVICFLOW_DATABASE_URL: ${{ secrets.CIVICFLOW_DATABASE_URL }}
+          CIVICFLOW_BACKUP_AGE_RECIPIENT: ${{ secrets.CIVICFLOW_BACKUP_AGE_RECIPIENT }}
+          CIVICFLOW_BACKUP_S3_URI: ${{ secrets.CIVICFLOW_BACKUP_S3_URI }}
+          CIVICFLOW_BACKUP_ROLE_ARN: ${{ secrets.CIVICFLOW_BACKUP_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          for required in CIVICFLOW_DATABASE_URL CIVICFLOW_BACKUP_AGE_RECIPIENT CIVICFLOW_BACKUP_S3_URI CIVICFLOW_BACKUP_ROLE_ARN; do
+            if [ -z "${!required}" ]; then
+              echo "::error title=Backup not configured::Missing environment-scoped credential ${required}"
+              exit 1
+            fi
+          done
+      - name: Obtain short-lived offsite storage credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.CIVICFLOW_BACKUP_ROLE_ARN }}
+          aws-region: ${{ vars.CIVICFLOW_BACKUP_AWS_REGION || 'us-east-2' }}
+      - name: Install encryption and PostgreSQL 17 client
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y age
+          docker pull postgres:17
+          mkdir -p "$RUNNER_TEMP/backup-bin"
+          cat > "$RUNNER_TEMP/backup-bin/pg_dump" <<'WRAPPER'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec docker run --rm --network host --env CIVICFLOW_DATABASE_URL \
+            postgres:17 sh -c 'exec pg_dump --dbname "$CIVICFLOW_DATABASE_URL" "$@"' sh "$@"
+          WRAPPER
+          chmod 700 "$RUNNER_TEMP/backup-bin/pg_dump"
+          echo "$RUNNER_TEMP/backup-bin" >> "$GITHUB_PATH"
+      - name: Stream encrypted archive to private storage
+        env:
+          CIVICFLOW_DATABASE_URL: ${{ secrets.CIVICFLOW_DATABASE_URL }}
+          CIVICFLOW_BACKUP_AGE_RECIPIENT: ${{ secrets.CIVICFLOW_BACKUP_AGE_RECIPIENT }}
+          CIVICFLOW_BACKUP_S3_URI: ${{ secrets.CIVICFLOW_BACKUP_S3_URI }}
+        run: bash scripts/backup-cloud.sh

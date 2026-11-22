@@ -4,14 +4,63 @@ Use this for every tagged release. The release workflow re-runs verification on 
 commit, and `.github/workflows/ci.yml` covers changes on `main`. This checklist covers the manual
 checks and packaging steps that CI cannot prove.
 
+## Public web gate
+
+- `pnpm build:web` retains the source demo (`index.html`) and embedded
+  PWA (`pwa.html`) for Tauri and developer testing.
+- `pnpm build:hosted` refuses a missing or privileged Supabase key and
+  promotes the real RLS-backed volunteer/coordinator PWA as the web root.
+  `vercel.json` runs this build. Never publish `dist/` from plain
+  `build:web` as a real hosted organization service.
+- The web coordinator currently has live health and upcoming shifts; it
+  does **not** reproduce every desktop coordinator editing or reporting
+  screen. Verify the precise scope before inviting an organization.
+- Run `pnpm test:hosted` and `pnpm test:ops` before publishing web assets.
+  Confirm the deployed `/` serves the PWA entrypoint rather than
+  the localStorage preview.
+- Test live email confirmation, all membership roles, two organizations,
+  revoked members, last-seat contention, offline sync, sign-out,
+  notifications and password recovery on a staging HTTPS origin.
+  `.github/workflows/hosted-auth-smoke.yml` provides a read-only
+  three-account authorization gate, but it needs seeded staging credentials.
+
+**Do not claim production readiness from a successful build alone.**
+
 ## Prerequisites
 
 - A clean checkout of the exact commit to release, with no untracked secrets.
 - The Node version in `.node-version`, pnpm 12.9.1, stable Rust, and the platform's Tauri
   prerequisites.
 - `pnpm install --frozen-lockfile` completes without changing the lockfile.
-- The signing and updater secrets are configured for the repository, or the release is explicitly
-  marked unsigned in its notes.
+- The signing and updater secrets are configured for this repository. Unsigned test builds may
+  be distributed as such, but a functioning auto-updater requires a valid signed feed.
+- Verify that the updater endpoint points to `Praket7/civic-flow` and that the embedded public
+  key matches the signing private key configured for its releases. A successful build does not
+  prove that an update can be authenticated.
+- Earlier `civicflow2` installers still point to the original repository's feed. Test upgrades
+  from a prior `civic-flow` release separately; do not assume those older binaries will
+  discover the new feed without an explicitly tested transition.
+
+## Signing and publication gate
+
+The tagged release workflow now **fails closed** if required updater,
+macOS signing/notarization, Windows signing, or Supabase shared-workspace
+credentials are missing. Configure the GitHub Actions secrets
+`TAURI_SIGNING_PRIVATE_KEY`, `VITE_SUPABASE_ANON_KEY`,
+`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`,
+`WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD`,
+and either a complete Apple ID or App Store Connect API notarization set.
+
+A release tag must point to a merged `main` commit. Artifacts are published
+to a **draft GitHub release** first, so GitHub's public `latest` feed and
+existing auto-updaters do not expose binaries before verification.
+Complete checksums, provenance, the real clean-install matrix and a signed
+updater round trip _before_ manually publishing the draft. Configuring
+secrets and getting a green build is not evidence that existing user data
+upgrades correctly.
+
+Do not advise visitors to bypass Gatekeeper or SmartScreen for an untrusted
+installer. Investigate and correct missing signatures or notarization.
 
 ## Version and automated gate
 
@@ -71,15 +120,31 @@ release-candidate result, and do not claim notarization or signing that was not 
 
 ## Signing constraints
 
-- Without an Apple Developer ID certificate and notarization credentials, macOS builds are
-  ad-hoc signed and Gatekeeper will reject them on a quarantined download. Publish the Open Anyway
-  instructions with the release; do not imply the artifact is notarized.
-- Without a Windows code-signing certificate, SmartScreen warns about the installer. Publish that
-  limitation explicitly and rely on SHA-256 checksums plus GitHub build provenance, not a
-  self-signed certificate.
+- Public macOS release builds require a Developer ID signature and successful
+  notarization. The release workflow fails if its required credentials are absent.
+- Public Windows release builds require a code-signing certificate. Do not
+  publish a development installer as if it were a signed production release.
+  Checksums and attestations supplement a signature; they do not replace it.
 - Linux AppImages need the executable bit; the deb and rpm use WebKitGTK 4.1.
 - The updater requires `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
   Losing either half prevents installed builds from updating.
+
+## Backup and restoration gate
+
+1. Protect `main` and the GitHub `backup-production` environment with
+   reviewed commits and restricted environment secrets.
+2. Configure an encrypted off-site destination, and manually run
+   `.github/workflows/backup-cloud.yml` on `main`. Review the encrypted
+   S3 object's existence without downloading plaintext to CI artifacts.
+3. On a private workstation, use `scripts/verify-cloud-restore.sh` against
+   a throwaway localhost `civicflow_restore_*` database. Confirm actual
+   organization rows, auth identities, RLS grants and user workflows.
+4. Document the restoration date, operator, key custody, retention policy,
+   recovery time and point objectives. Do not create a `backup_runs`
+   success entry until real verification has occurred.
+5. A GitHub scheduled dispatcher is not a substitute for an external liveness
+   alarm. Prove reminder delivery to a consenting test device and review
+   last-job freshness in the hosted coordinator health console.
 
 ## Tag and publish
 

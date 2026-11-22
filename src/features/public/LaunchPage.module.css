@@ -1,4 +1,4 @@
-/* Launch — a front page, not a splash card: masthead, readiness ledger, city strip. */
+/* Launch page: masthead, feature overview, and credited city image. */
 
 .launch {
   display: flex;
@@ -226,9 +226,13 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--tone-green-ink);
+  color: var(--text-primary);
   font-size: 12.5px;
   font-weight: 620;
+}
+
+.checkTop svg {
+  color: var(--action-primary);
 }
 
 .checkDetail {

@@ -62,6 +62,34 @@ SQLite workspace                          change log + commands
 - The shared workspace uses the server as the authority. Writes are queued locally, retried with stable operation IDs, and refused rather than silently merged when the server has newer data.
 - The volunteer PWA and the desktop's shared view use the same Rust planner and the same synchronized data model.
 
+For an exit-gate-by-exit-gate review, see the [public release readiness audit](docs/PUBLIC-RELEASE-READINESS.md). The current source is not approved for unrestricted public launch.
+
+## Web surfaces and data boundaries
+
+**Build targets are intentionally different.** The native Tauri build runs
+`pnpm build:web`, keeping `index.html` as the local demonstration and
+`pwa.html` as the separately embedded real Supabase client. The browser
+preview cannot sign in to local browser-only accounts in production and must
+not hold real volunteer information.
+
+For an independently hosted website, `pnpm build:hosted` first validates
+the **publishable/anon** `VITE_SUPABASE_ANON_KEY` (never a service-role key),
+builds the same source, then replaces the compiled root `dist/index.html`
+with the real `pwa.html` entrypoint. `vercel.json` uses this dedicated
+hosted build. It fails rather than silently deploying a localStorage demo
+when configuration is absent. The original source files and Tauri build
+remain unchanged.
+
+The hosted PWA supports authenticated volunteers and a narrower coordinator
+view with live workspace health, reminder history, and RLS-scoped upcoming
+shifts. **This is not the full desktop coordinator interface.** Browser
+AutoRoster editing, full service-hour approval and full reporting still need
+server-backed UI development and real multi-account acceptance testing.
+
+The preview is never a substitute for an organization database. A successful
+`build:hosted` proves the correct entrypoint was compiled, not that
+production authentication, SMTP, backups or permissions were tested.
+
 ## Development
 
 Use the Node version in `.node-version`, pnpm 12.9.1, stable Rust, and the platform's Tauri prerequisites.
@@ -71,10 +99,38 @@ pnpm install --frozen-lockfile
 pnpm dev              # browser preview at http://localhost:5173
 pnpm tauri dev        # native desktop window
 pnpm verify           # local quality gate
+pnpm test:hosted      # fail-closed production entrypoint tests
+pnpm test:ops         # encrypted backup / restore script syntax
 pnpm tauri build      # installers for this platform
 ```
 
 The seeded demo workspace is available from the welcome screen and needs no account or network.
+
+### Production operations before live enrollment
+
+The Supabase Free plan does not automatically preserve daily project
+backups. `scripts/backup-cloud.sh` streams a custom PostgreSQL dump
+through **age encryption** directly into a private S3 bucket and requires
+bucket-level public-access blocking. Its manual
+`.github/workflows/backup-cloud.yml` workflow is deliberately restricted
+to `main` and a GitHub `backup-production` environment: enable required
+environment reviewers and protect `main` before configuring
+`CIVICFLOW_DATABASE_URL`, `CIVICFLOW_BACKUP_AGE_RECIPIENT`,
+`CIVICFLOW_BACKUP_S3_URI`, and the OIDC
+`CIVICFLOW_BACKUP_ROLE_ARN`. An upload **is not a verified restore**.
+
+`scripts/verify-cloud-restore.sh` decrypts an archived object through a
+pipe to an explicitly authorized disposable **localhost**
+`civicflow_restore_*` PostgreSQL database. Keep the age private identity
+off the repository and GitHub logs. Rehearse a real restore and separately
+validate membership, authentication and application records before approving
+release. No test or workflow invents successful `backup_runs` records.
+
+`.github/workflows/hosted-auth-smoke.yml` is an opt-in, read-only test
+against three actual staging accounts in two organizations; provide the
+account credentials through the protected `hosted-staging` environment.
+Until it runs successfully, synthetic SQL role tests are not equivalent to
+a live hosted-account acceptance test.
 
 ## Testing and quality
 
@@ -96,9 +152,9 @@ CI additionally runs the macOS native end-to-end test with WebdriverIO, dependen
 
 [Download `SHA256SUMS.txt`](https://github.com/Praket7/civicflow2/releases/download/v0.1.2/SHA256SUMS.txt) before running an installer.
 
-Installers are built by `.github/workflows/release.yml` when a `v*` tag is pushed. The workflow runs the full verification gate on the tagged commit and publishes SHA-256 checksums and GitHub build provenance for the assets. Verify a download with `shasum -a 256 -c SHA256SUMS.txt` (macOS/Linux) or `Get-FileHash <file> -Algorithm SHA256` (Windows), and verify provenance with `gh attestation verify <installer> --repo Praket7/civicflow2`.
+Installers are built by `.github/workflows/release.yml` when a `v*` tag is pushed. The workflow verifies the exact tagged commit and builds draft release assets with SHA-256 checksums and GitHub build provenance. The draft must pass signed installer, migration, and clean-install verification before a maintainer publishes it. Verify a download with `shasum -a 256 -c SHA256SUMS.txt` (macOS/Linux) or `Get-FileHash <file> -Algorithm SHA256` (Windows), and verify provenance with `gh attestation verify <installer> --repo Praket7/civicflow2`.
 
-macOS builds are ad-hoc signed unless Apple signing credentials are configured. Without notarization, Gatekeeper still warns on a quarantined download: open **System Settings → Privacy & Security** and choose **Open Anyway**, or run `xattr -dr com.apple.quarantine /Applications/CivicFlow.app`. Unsigned Windows builds may show SmartScreen; choose **More info → Run anyway**. Follow [`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md) for versioning, signing, and the clean-install matrix. The updater feed is published with the same tagged release.
+Previously published installers may lack signing or notarization. Verify provenance and publisher identity before using them; do not bypass Gatekeeper or SmartScreen warnings for an untrusted binary. New public releases are blocked unless signing credentials are configured. Follow [`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md) for versioning, signing, and the clean-install matrix. The legacy installers continue to use the original repository's updater feed. New builds from `civic-flow` use this repository's releases; do not assume the old 0.1.2 installers will discover a release here automatically. The first new release must include a verified signing key and signed `latest.json` feed.
 
 ## License and acknowledgements
 

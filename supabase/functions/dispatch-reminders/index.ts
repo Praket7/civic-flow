@@ -221,8 +221,9 @@ async function dispatch(client: SupabaseClient, limit: number): Promise<Response
 
   await client.rpc("record_server_job", {
     p_job: "reminders",
-    p_status:
-      failures.length > 0 && counts.sent === 0 && counts.skipped === 0 ? "failed" : "succeeded",
+    // A partially failed job is not healthy. The per-delivery outcomes remain
+    // idempotent, but operators need a failed server-job status to investigate.
+    p_status: failures.length > 0 ? "failed" : "succeeded",
     p_detail: detail,
   });
 

@@ -56,6 +56,7 @@ const RATIONALE = {
   base64: "Encoding for sealed archive payloads.",
   getrandom: "Operating-system randomness for keys and salts.",
   keyring: "Stores the SQLCipher key in the operating system credential store.",
+  reqwest: "Verifies Supabase identity tokens directly at the Rust command boundary.",
   rusqlite: "SQLite access, compiled with SQLCipher and vendored OpenSSL.",
   serde: "Serialization across the IPC boundary and into the database.",
   serde_json: "JSON encoding for IPC payloads and the authored demo seed.",

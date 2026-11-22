@@ -3,7 +3,7 @@
  *
  * README.md is the only project-state document. LICENSE, the generated
  * third-party notice, and the media license are legal artifacts, not a second
- * description of the product. The release checklist, foundation baseline, and security audit are
+ * description of the product. The release checklist, foundation baseline, security audit, and release-readiness audit are
  * operational references rather than competing product descriptions; allow
  * them explicitly by filename. This checks that README links resolve, that the generated facts block
  * is current, and that no other project document has crept back into the tree.
@@ -77,6 +77,7 @@ const OPERATIONAL_DOCUMENTS = new Set([
   "docs/RELEASE-CHECKLIST.md",
   "docs/FOUNDATION-BASELINE.md",
   "docs/SECURITY-AUDIT.md",
+  "docs/PUBLIC-RELEASE-READINESS.md",
 ]);
 const extra = [...markdown(".")].filter(
   (path) => path !== "README.md" && !LEGAL_DOCUMENTS.has(path) && !OPERATIONAL_DOCUMENTS.has(path),

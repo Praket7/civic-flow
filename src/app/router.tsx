@@ -1,15 +1,13 @@
+import { lazy, Suspense } from "react";
 import type { ReactNode } from "react";
 import { createBrowserRouter, createHashRouter, Navigate } from "react-router-dom";
 import { accountHome, useAuth } from "../lib/auth/session";
 import { isTauri } from "../lib/platform";
 import { WorkspaceSessionProvider } from "../lib/workspace/session";
-import { AccessibilityPage } from "../features/settings/AccessibilityPage";
 import { AskPage } from "../features/ask/AskPage";
 import { ApplicationsPage } from "../features/recruitment/ApplicationsPage";
 import { AttendancePage } from "../features/attendance/AttendancePage";
 import { AuditPage } from "../features/records/AuditPage";
-import { AutoRosterPage } from "../features/coverage/AutoRosterPage";
-import { BackupPage } from "../features/records/BackupPage";
 import { CheckInPage } from "../features/volunteer/CheckInPage";
 import { DesktopReplicaPage } from "../pwa/DesktopReplicaPage";
 import { SharedConflictsPage } from "../features/shared/SharedConflictsPage";
@@ -20,11 +18,9 @@ import { SharedVolunteersPage } from "../features/shared/SharedVolunteersPage";
 import { CoveragePage } from "../features/coverage/CoveragePage";
 import { CreateOpportunityPage } from "../features/schedule/CreateOpportunityPage";
 import { CredentialsPage } from "../features/credentials/CredentialsPage";
-import { CustomReportPage } from "../features/reports/CustomReportPage";
 import { DiscoverPage } from "../features/volunteer/DiscoverPage";
 import { HelpPage } from "../features/help/HelpPage";
 import { HoursReviewPage } from "../features/hours/HoursReviewPage";
-import { ImpactAnalyticsPage } from "../features/impact/ImpactAnalyticsPage";
 import { ImpactReportPage } from "../features/reports/ImpactReportPage";
 import { KioskPage } from "../features/attendance/KioskPage";
 import { LaunchPage } from "../features/public/LaunchPage";
@@ -42,8 +38,6 @@ import { OrganizationCreatePage } from "../features/organizations/OrganizationCr
 import { VolunteerStartPage } from "../features/organizations/VolunteerStartPage";
 import { PersonalImpactPage } from "../features/volunteer/PersonalImpactPage";
 import { RecordsPage } from "../features/records/RecordsPage";
-import { ReportsPage } from "../features/reports/ReportsPage";
-import { RetentionPage } from "../features/insights/RetentionPage";
 import { SavedPage } from "../features/volunteer/SavedPage";
 import { SchedulePage } from "../features/schedule/SchedulePage";
 import { SettingsPage } from "../features/settings/SettingsPage";
@@ -65,6 +59,54 @@ import { AppShell } from "./AppShell";
 import { RequireAuth } from "./RequireAuth";
 import { CreditsPage } from "./CreditsPage";
 import { routes } from "./routes";
+
+// Keep the frequently used launch, volunteer, and coordinator home screens eager.
+// Reports, large planners, and settings load only when someone opens them.
+const LazyAccessibilityPage = lazy(() =>
+  import("../features/settings/AccessibilityPage").then((module) => ({
+    default: module.AccessibilityPage,
+  })),
+);
+const LazyAutoRosterPage = lazy(() =>
+  import("../features/coverage/AutoRosterPage").then((module) => ({
+    default: module.AutoRosterPage,
+  })),
+);
+const LazyBackupPage = lazy(() =>
+  import("../features/records/BackupPage").then((module) => ({ default: module.BackupPage })),
+);
+const LazyCustomReportPage = lazy(() =>
+  import("../features/reports/CustomReportPage").then((module) => ({
+    default: module.CustomReportPage,
+  })),
+);
+const LazyImpactAnalyticsPage = lazy(() =>
+  import("../features/impact/ImpactAnalyticsPage").then((module) => ({
+    default: module.ImpactAnalyticsPage,
+  })),
+);
+const LazyReportsPage = lazy(() =>
+  import("../features/reports/ReportsPage").then((module) => ({ default: module.ReportsPage })),
+);
+const LazyRetentionPage = lazy(() =>
+  import("../features/insights/RetentionPage").then((module) => ({
+    default: module.RetentionPage,
+  })),
+);
+
+function DeferredPage({ children }: { children: ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <p role="status" data-route-loading="true">
+          Opening this screen…
+        </p>
+      }
+    >
+      {children}
+    </Suspense>
+  );
+}
 
 const standaloneNumbers = new Set([1, 2, 3, 4, 5, 31, 43, 44, 45, 46, 47, 48, 49]);
 
@@ -100,7 +142,11 @@ export const pages: Record<string, ReactNode> = {
   notifications: <NotificationsPage />,
   "mission-control": <MissionControlPage />,
   coverage: <CoveragePage />,
-  autoroster: <AutoRosterPage />,
+  autoroster: (
+    <DeferredPage>
+      <LazyAutoRosterPage />
+    </DeferredPage>
+  ),
   schedule: <SchedulePage />,
   opportunities: <OpportunitiesPage />,
   "create-opportunity": <CreateOpportunityPage />,
@@ -113,16 +159,40 @@ export const pages: Record<string, ReactNode> = {
   attendance: <AttendancePage />,
   kiosk: <KioskPage />,
   "hours-review": <HoursReviewPage />,
-  reports: <ReportsPage />,
-  "custom-report": <CustomReportPage />,
-  "impact-analytics": <ImpactAnalyticsPage />,
-  insights: <RetentionPage />,
+  reports: (
+    <DeferredPage>
+      <LazyReportsPage />
+    </DeferredPage>
+  ),
+  "custom-report": (
+    <DeferredPage>
+      <LazyCustomReportPage />
+    </DeferredPage>
+  ),
+  "impact-analytics": (
+    <DeferredPage>
+      <LazyImpactAnalyticsPage />
+    </DeferredPage>
+  ),
+  insights: (
+    <DeferredPage>
+      <LazyRetentionPage />
+    </DeferredPage>
+  ),
   "impact-report": <ImpactReportPage />,
   records: <RecordsPage />,
   audit: <AuditPage />,
-  backup: <BackupPage />,
+  backup: (
+    <DeferredPage>
+      <LazyBackupPage />
+    </DeferredPage>
+  ),
   settings: <SettingsPage />,
-  accessibility: <AccessibilityPage />,
+  accessibility: (
+    <DeferredPage>
+      <LazyAccessibilityPage />
+    </DeferredPage>
+  ),
   ask: <AskPage />,
   "shared-workspace": <SharedWorkspacePage />,
   "shared-schedule": <SharedSchedulePage />,

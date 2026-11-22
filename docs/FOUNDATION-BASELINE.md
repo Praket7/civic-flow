@@ -56,6 +56,15 @@ verification; a passed source run does not verify a new build automatically.
 7. Publish a new release only after the full CI matrix, signed update path,
    clean installs, and migration upgrades are verified.
 
+> **Historical baseline notice (November 22, 2026):** This document records
+> the original import and pre-deployment state. The old statement below that
+> Supabase SQL access failed is no longer current. Access was restored; two
+> production hardening migrations were deployed and verified by rollback-only
+> role simulations, as recorded in `docs/SECURITY-AUDIT.md` and issue #1.
+> The desktop updater feed was also switched to `civic-flow` on the draft
+> hardening branch; no released installation has been upgraded or signed yet.
+> This baseline document should not be treated as a current release status.
+
 ## Phase 1 status and gaps
 
 - Implemented: explicit SQL function privileges, restricted internal RPCs,

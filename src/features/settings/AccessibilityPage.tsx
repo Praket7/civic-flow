@@ -105,10 +105,10 @@ export function AccessibilityPage() {
           <Card>
             <SectionHeader
               title="Language"
-              subtitle="Choose the language for menus, labels, dates, and every built-in screen."
+              subtitle="Choose an interface catalog. Some phrases may still appear in English."
               action={
                 <Badge tone="neutral">
-                  <Languages size={11} aria-hidden="true" /> {LOCALES.length} languages
+                  <Languages size={11} aria-hidden="true" /> {LOCALES.length} catalogs
                 </Badge>
               }
             />
@@ -134,16 +134,16 @@ export function AccessibilityPage() {
               </div>
             </div>
             <p id="language-note" className={styles.languageNote}>
-              Built-in interface copy is translated. Names, street addresses, program titles, and
-              notes your team enters stay exactly as written, so referrals and printed records keep
-              their original wording.
+              Most desktop interface text has translations, but not every catalog has been reviewed
+              by a native speaker. Missing phrases remain in English, and the separate volunteer PWA
+              may show English. Your team's names, addresses and notes stay as entered.
             </p>
             <p className={styles.languageStatus} role="status" aria-live="polite">
               {pending
                 ? t("Loading this language…")
                 : locale === "en"
                   ? t("English is the source language for this workspace.")
-                  : `${meta.nativeName} ${t("is active across CivicFlow.")}`}
+                  : `${meta.nativeName} ${t("is selected. Untranslated text may remain in English.")}`}
             </p>
           </Card>
 

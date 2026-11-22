@@ -5,7 +5,7 @@ description = "CivicFlow — volunteer coordination with explainable staffing"
 authors = ["CivicFlow"]
 license = "MIT"
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.89"
 
 [lib]
 name = "civicflow_lib"
@@ -24,6 +24,7 @@ keyring = "3"
 getrandom = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+reqwest = { version = "=0.13.5", default-features = false, features = ["json", "rustls"] }
 civicflow-core = { path = "core" }
 # 2.6.1+ builds ini::ParseOption without the fields rust-ini now requires,
 # which breaks the Linux desktop build; hold until upstream catches up.

@@ -5,17 +5,19 @@ import { accountHome, useAuth } from "../../lib/auth/session";
 import { t } from "../../lib/i18n";
 import styles from "./WelcomePage.module.css";
 import { messageOf } from "../../lib/errors";
+import { isTauri } from "../../lib/platform";
 
 const trustChips: { label: string; icon: typeof WifiOff; tone: "green" | "violet" | "teal" }[] = [
-  { label: "Runs offline", icon: WifiOff, tone: "green" },
-  { label: "Data stays on this device", icon: Database, tone: "violet" },
-  { label: "Account stays on this device", icon: ShieldCheck, tone: "teal" },
+  { label: "Desktop works offline", icon: WifiOff, tone: "green" },
+  { label: "Shared workspaces sync when connected", icon: Database, tone: "violet" },
+  { label: "Explore a sample organization", icon: ShieldCheck, tone: "teal" },
 ];
 
 export function WelcomePage() {
   const { user, openDemo } = useAuth();
   const navigate = useNavigate();
   const [demoError, setDemoError] = useState<string | null>(null);
+  const demoOnly = import.meta.env.PROD && !isTauri();
 
   async function exploreDemo() {
     setDemoError(null);
@@ -54,11 +56,11 @@ export function WelcomePage() {
         <div className={styles.photoCopy}>
           <p className={styles.photoEyebrow}>Coordinators and volunteers</p>
           <h2 className={styles.statement} id="welcome-statement">
-            The work is local. So is the record.
+            Keep the roster close. Keep the team in sync.
           </h2>
           <p className={styles.photoBody}>
-            CivicFlow keeps the schedule, the roster, the hours, and the proof that they happened on
-            this device — no account on a server, no signal required.
+            The desktop workspace keeps schedules, check-ins, and service hours available offline.
+            Shared workspaces synchronize through the cloud when connected.
           </p>
         </div>
 
@@ -87,13 +89,22 @@ export function WelcomePage() {
                 Continue as {user.name.split(" ")[0]}
                 <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
               </Link>
+            ) : demoOnly ? (
+              <button
+                type="button"
+                className={styles.primaryAction}
+                onClick={() => void exploreDemo()}
+              >
+                Explore the demo
+                <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
+              </button>
             ) : (
               <Link className={styles.primaryAction} to="/sign-in">
                 Sign in
                 <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
               </Link>
             )}
-            {user ? null : (
+            {user || demoOnly ? null : (
               <>
                 <Link className={styles.secondaryAction} to="/create-account">
                   Create an account
@@ -111,7 +122,9 @@ export function WelcomePage() {
           <p className={styles.actionNote}>
             {user
               ? "This device still has your session. Continue where you left off."
-              : "Creating an account only proves who you are. You choose an organization next."}
+              : demoOnly
+                ? "This browser version is a sample workspace. Changes are stored only in this browser, not in a shared organization."
+                : "Creating an account only proves who you are. You choose an organization next."}
           </p>
           {demoError ? (
             <p className={styles.actionNote} role="alert">
@@ -145,7 +158,7 @@ export function WelcomePage() {
             </ul>
           </div>
 
-          {user ? null : (
+          {user || demoOnly ? null : (
             <div className={styles.signIn}>
               <p>
                 Just looking? <Link to="/sign-in">Open the demo workspace</Link> from the sign-in

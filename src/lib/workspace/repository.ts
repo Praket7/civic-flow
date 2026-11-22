@@ -47,7 +47,8 @@ import type {
   WeeklyAssignment,
   WorkspaceSettings,
 } from "../../types/domain";
-import type { HostedIdentity } from "../auth/hosted";
+import { currentHostedSession, type HostedIdentity } from "../auth/hosted";
+import { supabaseAnonKey } from "../sync/config";
 import type {
   IssuedInvite,
   NewOrganizationInput,
@@ -253,11 +254,16 @@ const desktopRepository: WorkspaceRepository = {
   openDemoWorkspace: () => invoke<AuthSession>("open_demo_workspace"),
   createAccount: (name, email, password) =>
     invoke<AuthSession>("create_account", { name, email, password }),
-  signInWithHosted: (identity) =>
-    invoke<AuthSession>("sign_in_with_hosted", {
-      name: identity.name,
-      email: identity.email,
-    }),
+  signInWithHosted: async (_identity) => {
+    const hostedSession = await currentHostedSession();
+    if (!hostedSession?.access_token || !supabaseAnonKey) {
+      throw new Error("Sign in with the hosted provider before opening this workspace.");
+    }
+    return invoke<AuthSession>("sign_in_with_hosted", {
+      accessToken: hostedSession.access_token,
+      anonKey: supabaseAnonKey,
+    });
+  },
   signOut: async (token) => {
     await invoke<boolean>("sign_out", { token });
   },

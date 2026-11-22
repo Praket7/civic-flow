@@ -20,26 +20,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check configuration
-        id: config
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-            echo "::notice title=Reminder dispatch skipped::Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY repository secrets to run the dispatch clock."
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error title=Reminder dispatch unconfigured::Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY repository secrets; no reminders were sent."
+            exit 1
           fi
-          echo "configured=true" >> "$GITHUB_OUTPUT"
+          if [[ "$SUPABASE_URL" != https://*.supabase.co ]]; then
+            echo "::error title=Unexpected Supabase URL::The dispatcher URL must be the HTTPS Supabase project origin."
+            exit 1
+          fi
       - name: Invoke the dispatcher
-        if: steps.config.outputs.configured == 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          curl --fail --silent --show-error --retry 3 --retry-delay 5 \
+          response="$(curl --fail --silent --show-error --retry 3 --retry-delay 5 --max-time 60 \
             --request POST "$SUPABASE_URL/functions/v1/dispatch-reminders?limit=100" \
             --header "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
             --header "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
             --header "Content-Type: application/json" \
-            --data '{}'
+            --data '{}')"
+          printf '%s' "$response" | python3 -c '
+          import json, sys
+          payload = json.load(sys.stdin)
+          counts = {name: payload.get(name, 0) for name in ("generated", "claimed", "sent", "failed", "skipped", "deferred")}
+          print("Reminder dispatch:", counts)
+          if payload.get("status") != "ok" or counts["failed"] or payload.get("failures"):
+              print("::error title=Reminder delivery requires attention::One or more deliveries or audit writes failed; review Supabase server job logs.")
+              sys.exit(1)
+          '

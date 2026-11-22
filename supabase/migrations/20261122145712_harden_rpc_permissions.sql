@@ -2,8 +2,6 @@
 -- Prior migrations grant authenticated users blanket EXECUTE privileges in
 -- private and leave internal sync functions callable through PUBLIC.
 -- In particular, sync.cmd_* accepts a claimed role and must never be a client RPC.
-begin;
-
 -- PostgreSQL grants EXECUTE on new functions to PUBLIC unless default
 -- privileges have been changed for the creating role.
 alter default privileges revoke execute on functions from public;
@@ -29,12 +27,28 @@ grant execute on function private.own_volunteer_id(uuid) to authenticated;
 grant execute on function sync.change_row(text, uuid, text, integer, bigint)
     to authenticated;
 
--- Clients can SELECT the change log for replication; restrict that SELECT
--- to organizations in which the current user is an active member.
+-- Defense-in-depth for all four internal sync tables. The authoritative
+-- mutation path is SECURITY DEFINER public.apply_command; ordinary users
+-- never need direct writes to these internal tables. Function owners retain
+-- access, so enabling RLS cannot break trusted internal mutations.
+alter table sync.devices enable row level security;
+alter table sync.processed_operations enable row level security;
 alter table sync.sync_changes enable row level security;
+alter table sync.entity_tables enable row level security;
+
+-- The client-facing pull_changes function is SECURITY INVOKER. It needs
+-- member-scoped change-log reads; avoid exposing changes from other orgs.
 create policy sync_changes_active_members
     on sync.sync_changes for select to authenticated
     using (private.is_member(organization_id));
+
+-- This table contains only the static entity-type-to-table-name map (no
+-- organization or personal data). bootstrap_workspace and sync.change_row
+-- execute as the caller and must preserve authenticated SELECT access.
+-- Anon has neither schema USAGE nor SELECT privileges on sync.entity_tables.
+create policy sync_entity_tables_authenticated_read
+    on sync.entity_tables for select to authenticated
+    using (true);
 
 -- Client RPCs: membership/role checks remain inside each implementation.
 grant execute on function public.apply_command(uuid, uuid, uuid, text, bigint, jsonb, jsonb, timestamptz) to authenticated;
@@ -61,4 +75,3 @@ grant execute on function public.vapid_public_key() to anon, authenticated;
 -- allowed to call other public RPCs for administrative jobs as well.
 grant execute on all functions in schema public to service_role;
 
-commit;

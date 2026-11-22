@@ -23,6 +23,10 @@ const ALLOWED = new Set(
     "Apache-2.0 WITH LLVM-exception",
     "BSD-2-Clause",
     "BSD-3-Clause",
+    // SQLCipher source bundles SQLite (SPDX `blessing`) and a WTFPL-licensed
+    // component. Both licenses permit redistribution; retain the complete
+    // compound license expression in the generated third-party inventory.
+    "blessing",
     "BSL-1.0",
     "CC0-1.0",
     "CDLA-Permissive-2.0",
@@ -33,6 +37,7 @@ const ALLOWED = new Set(
     "OFL-1.1",
     "Unicode-3.0",
     "Unlicense",
+    "WTFPL",
     "Zlib",
   ].map((license) => license.toLowerCase()),
 );

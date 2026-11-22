@@ -1,4 +1,17 @@
-import { awaitSessionFromParent, isBridgedSession, sendSession, SESSION_MESSAGE } from "./bridge";
+import {
+  awaitSessionFromParent,
+  isBridgedSession,
+  sendSession,
+  SESSION_MESSAGE,
+  trustedPwaFrame,
+} from "./bridge";
+
+function sameOriginFrame(postMessage: (message: unknown, target: string) => void) {
+  return {
+    contentDocument: { URL: new URL("pwa.html#/", window.location.href).href },
+    contentWindow: { postMessage },
+  } as unknown as HTMLIFrameElement;
+}
 
 describe("desktop session bridge", () => {
   it("adopts only a pair of tokens", () => {
@@ -14,11 +27,7 @@ describe("desktop session bridge", () => {
 
   it("posts the session as tokens and nothing else", () => {
     const posted: Array<{ message: unknown; target: string }> = [];
-    const frame = {
-      contentWindow: {
-        postMessage: (message: unknown, target: string) => posted.push({ message, target }),
-      },
-    } as unknown as HTMLIFrameElement;
+    const frame = sameOriginFrame((message, target) => posted.push({ message, target }));
 
     sendSession(frame, { access_token: "access", refresh_token: "refresh" });
 
@@ -28,22 +37,39 @@ describe("desktop session bridge", () => {
           type: SESSION_MESSAGE,
           session: { accessToken: "access", refreshToken: "refresh" },
         },
-        // The packaged scheme can serialize its origin as "null", which
-        // postMessage refuses; identity is proven by event.source instead.
-        target: "*",
+        target: window.location.origin === "null" ? "*" : window.location.origin,
       },
     ]);
   });
 
   it("passes an explicit absence of a session rather than staying silent", () => {
     const posted: unknown[] = [];
-    const frame = {
-      contentWindow: { postMessage: (message: unknown) => posted.push(message) },
-    } as unknown as HTMLIFrameElement;
+    const frame = sameOriginFrame((message) => posted.push(message));
 
     sendSession(frame, null);
 
     expect(posted).toEqual([{ type: SESSION_MESSAGE, session: null }]);
+  });
+
+  it("refuses to send credentials after the iframe navigates to another origin", () => {
+    const posted: unknown[] = [];
+    const frame = {
+      contentDocument: null,
+      contentWindow: { postMessage: (message: unknown) => posted.push(message) },
+    } as unknown as HTMLIFrameElement;
+    expect(trustedPwaFrame(frame)).toBeNull();
+    sendSession(frame, { access_token: "secret", refresh_token: "refresh-secret" });
+    expect(posted).toEqual([]);
+  });
+
+  it("refuses same-origin navigation to a different document", () => {
+    const posted: unknown[] = [];
+    const frame = {
+      contentDocument: { URL: new URL("welcome.html", window.location.href).href },
+      contentWindow: { postMessage: (message: unknown) => posted.push(message) },
+    } as unknown as HTMLIFrameElement;
+    sendSession(frame, { access_token: "secret", refresh_token: "refresh-secret" });
+    expect(posted).toEqual([]);
   });
 
   it("resolves to no session in a top-level document", async () => {

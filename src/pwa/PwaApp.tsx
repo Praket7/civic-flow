@@ -83,13 +83,14 @@ export function PwaApp() {
     );
   }
 
-  if (workspace && workspace.role !== "volunteer") return <CoordinatorApp />;
-
-  // A revoked device must stop inviting writes. The conflict is the server's
-  // answer, so it wins over whatever the cached role still says.
+  // A server rejection overrides the cached role for every account,
+  // including coordinators. Never show stale organization health after
+  // the server rejects this device's membership authority.
   if (conflicts.some((conflict) => conflict.code === "stale_authority")) {
     return <AccessChanged />;
   }
+
+  if (workspace && workspace.role !== "volunteer") return <CoordinatorApp />;
 
   return (
     <div className={styles.shell}>
@@ -126,7 +127,7 @@ function ShiftRoute() {
 }
 
 function AccessChanged() {
-  const { workspace, conflicts, dismissConflict, signOut } = useCloud();
+  const { workspace, signOut } = useCloud();
   return (
     <main className={styles.authPage}>
       <div className={styles.authPanel}>
@@ -142,18 +143,7 @@ function AccessChanged() {
           access.
         </p>
         <div className={styles.rowActions}>
-          <Button
-            onClick={() => {
-              for (const conflict of conflicts) {
-                if (conflict.code === "stale_authority") void dismissConflict(conflict.id);
-              }
-            }}
-          >
-            Dismiss and continue
-          </Button>
-          <Button variant="secondary" onClick={() => void signOut()}>
-            Sign out
-          </Button>
+          <Button onClick={() => void signOut()}>Sign out</Button>
         </div>
       </div>
     </main>

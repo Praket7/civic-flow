@@ -27,6 +27,8 @@ const flag = (name, fallback) => {
 const bestEffort = args.includes("--best-effort");
 const explicitBase = flag("base", null);
 const OUT = flag("out", "zoom-report.json");
+const SCREENSHOTS = flag("screenshots", null);
+const REVIEW_ROUTES = new Set(["01", "02", "04", "09", "11", "17", "24"]);
 const PORT = Number(flag("port", "9334"));
 const SERVER_PORT = Number(flag("server-port", "5200"));
 const CHROME_CANDIDATES = [
@@ -265,7 +267,7 @@ try {
   const report = {};
   let failures = 0;
 
-  for (const [number, path, role] of routes) {
+  for (const [number, routePath, role] of routes) {
     await send("Runtime.evaluate", {
       expression:
         role === "volunteer"
@@ -274,7 +276,7 @@ try {
             ? `localStorage.setItem("civicflow.auth.token", "preview:user-praket:demo"); void 0`
             : `void 0`,
     });
-    await send("Page.navigate", { url: BASE + path });
+    await send("Page.navigate", { url: BASE + routePath });
     // The first route compiles Vite modules and every authenticated route waits
     // for the workspace snapshot. Poll for the heading rather than guessing a
     // fixed delay.
@@ -285,11 +287,44 @@ try {
     const bad = found.horizontalOverflow || found.heading.length === 0;
     if (bad) {
       failures += 1;
-      report[number] = { path, ...found };
+      report[number] = { path: routePath, ...found };
     }
     process.stdout.write(
       `${number} ${bad ? "FAIL" : "ok"} ${found.viewport.width}x${found.viewport.height} ${found.heading.slice(0, 40)}\n`,
     );
+
+    // Keep visual review images as CI artifacts, not hardcoded screenshots.
+    // Capture only seven representative seeded demo screens: no live user data.
+    if (SCREENSHOTS && REVIEW_ROUTES.has(number)) {
+      await fs.mkdir(SCREENSHOTS, { recursive: true });
+      for (const viewport of [
+        { name: "zoom200", width: 800, height: 500, mobile: false },
+        { name: "desktop", width: 1440, height: 900, mobile: false },
+        { name: "mobile", width: 390, height: 844, mobile: true },
+      ]) {
+        await send("Emulation.setDeviceMetricsOverride", {
+          width: viewport.width,
+          height: viewport.height,
+          deviceScaleFactor: 1,
+          mobile: viewport.mobile,
+        });
+        await sleep(300);
+        const shot = await send("Page.captureScreenshot", {
+          format: "png",
+          captureBeyondViewport: false,
+        });
+        await fs.writeFile(
+          path.join(SCREENSHOTS, `${number}-${viewport.name}.png`),
+          Buffer.from(shot.data, "base64"),
+        );
+      }
+      await send("Emulation.setDeviceMetricsOverride", {
+        width: 800,
+        height: 500,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+    }
   }
 
   await fs.writeFile(OUT, JSON.stringify(report, null, 1));

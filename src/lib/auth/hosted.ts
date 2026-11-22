@@ -1,18 +1,12 @@
 import { createClient, type AuthError, type Session, type User } from "@supabase/supabase-js";
 import { isTauri } from "../platform";
+import { cloudConfigured, supabaseAnonKey, supabaseUrl } from "../sync/config";
 
-/**
- * Must match `connect-src` in `src-tauri/tauri.conf.json`; change both or the
- * webview blocks the request.
- */
-const url = "https://imzdblvljdcbnxtwbmbw.supabase.co";
-const key = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() ?? "";
-
-/** Hosted accounts are optional; without the key the app stays local. */
-export const hostedAuthConfigured = Boolean(key);
+/** Hosted accounts share the same origin and publishable key as cloud sync. */
+export const hostedAuthConfigured = cloudConfigured();
 
 const client = hostedAuthConfigured
-  ? createClient(url, key, {
+  ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         // Email links must survive the app closing, so the fragment carries the
         // session rather than a PKCE code tied to one browser's storage.

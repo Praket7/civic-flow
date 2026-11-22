@@ -1,0 +1,38 @@
+name: Hosted authorization smoke (staging)
+
+# Runs only when a reviewer explicitly requests a non-destructive test.
+# Three staging accounts must be seeded in two different organizations.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-sessions:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: hosted-staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify hosted identity and organization boundaries
+        env:
+          CIVICFLOW_SMOKE_SUPABASE_URL: ${{ vars.CIVICFLOW_SMOKE_SUPABASE_URL }}
+          CIVICFLOW_SMOKE_SUPABASE_ANON_KEY: ${{ secrets.CIVICFLOW_SMOKE_SUPABASE_ANON_KEY }}
+          CIVICFLOW_SMOKE_COORD_A_EMAIL: ${{ secrets.CIVICFLOW_SMOKE_COORD_A_EMAIL }}
+          CIVICFLOW_SMOKE_COORD_A_PASSWORD: ${{ secrets.CIVICFLOW_SMOKE_COORD_A_PASSWORD }}
+          CIVICFLOW_SMOKE_VOL_A_EMAIL: ${{ secrets.CIVICFLOW_SMOKE_VOL_A_EMAIL }}
+          CIVICFLOW_SMOKE_VOL_A_PASSWORD: ${{ secrets.CIVICFLOW_SMOKE_VOL_A_PASSWORD }}
+          CIVICFLOW_SMOKE_COORD_B_EMAIL: ${{ secrets.CIVICFLOW_SMOKE_COORD_B_EMAIL }}
+          CIVICFLOW_SMOKE_COORD_B_PASSWORD: ${{ secrets.CIVICFLOW_SMOKE_COORD_B_PASSWORD }}
+        run: node scripts/live-hosted-auth-smoke.mjs
