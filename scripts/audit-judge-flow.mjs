@@ -180,7 +180,22 @@ try {
   );
 } finally {
   socket?.close();
-  chrome?.kill();
-  server?.kill();
-  await rm(profile, { recursive: true, force: true });
+
+  // Chromium can still be flushing IndexedDB/profile files after kill().
+  // Wait for the child to exit before removing its profile. Otherwise the
+  // successful browser smoke test intermittently fails with ENOTEMPTY.
+  async function stopProcess(child) {
+    if (!child || child.exitCode !== null) return;
+    const finished = new Promise((resolve) => {
+      child.once("exit", resolve);
+      child.once("error", resolve);
+    });
+    child.kill();
+    await Promise.race([finished, sleep(3000)]);
+    if (child.exitCode === null) child.kill("SIGKILL");
+  }
+
+  await stopProcess(chrome);
+  await stopProcess(server);
+  await rm(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 }
