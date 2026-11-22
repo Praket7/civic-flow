@@ -44,7 +44,8 @@ async function expectForbidden(client, orgId, label) {
   const result = await pull(client, orgId);
   ensure(
     result.data?.status === "forbidden" ||
-      (result.error && /forbidden|permission|not authorized|access denied/i.test(result.error.message)),
+      (result.error &&
+        /forbidden|permission|not authorized|access denied/i.test(result.error.message)),
     label + " could access an unrelated organization",
   );
 }
@@ -59,21 +60,45 @@ export async function verifyHostedAccess() {
   ensure(!key.startsWith("sb_secret_"), "server secret passed as an anonymous key");
 
   const [coordinator, volunteer, foreign] = await Promise.all([
-    session("coordinator A", "CIVICFLOW_SMOKE_COORD_A_EMAIL", "CIVICFLOW_SMOKE_COORD_A_PASSWORD", url, key),
-    session("volunteer A", "CIVICFLOW_SMOKE_VOL_A_EMAIL", "CIVICFLOW_SMOKE_VOL_A_PASSWORD", url, key),
-    session("coordinator B", "CIVICFLOW_SMOKE_COORD_B_EMAIL", "CIVICFLOW_SMOKE_COORD_B_PASSWORD", url, key),
+    session(
+      "coordinator A",
+      "CIVICFLOW_SMOKE_COORD_A_EMAIL",
+      "CIVICFLOW_SMOKE_COORD_A_PASSWORD",
+      url,
+      key,
+    ),
+    session(
+      "volunteer A",
+      "CIVICFLOW_SMOKE_VOL_A_EMAIL",
+      "CIVICFLOW_SMOKE_VOL_A_PASSWORD",
+      url,
+      key,
+    ),
+    session(
+      "coordinator B",
+      "CIVICFLOW_SMOKE_COORD_B_EMAIL",
+      "CIVICFLOW_SMOKE_COORD_B_PASSWORD",
+      url,
+      key,
+    ),
   ]);
 
   const coordinatorOrg = coordinator.workspaces.find(
     (w) => w.status === "active" && ["owner", "coordinator"].includes(w.role),
   );
   const volunteerOrg = volunteer.workspaces.find(
-    (w) => w.organizationId === coordinatorOrg?.organizationId && w.role === "volunteer" && w.status === "active",
+    (w) =>
+      w.organizationId === coordinatorOrg?.organizationId &&
+      w.role === "volunteer" &&
+      w.status === "active",
   );
   const foreignOrg = foreign.workspaces.find(
     (w) => w.status === "active" && w.organizationId !== coordinatorOrg?.organizationId,
   );
-  ensure(coordinatorOrg && volunteerOrg && foreignOrg, "test memberships are not properly isolated");
+  ensure(
+    coordinatorOrg && volunteerOrg && foreignOrg,
+    "test memberships are not properly isolated",
+  );
 
   ensure(
     !coordinator.workspaces.some((w) => w.organizationId === foreignOrg.organizationId),
@@ -105,14 +130,19 @@ export async function verifyHostedAccess() {
   const healthVolunteer = await volunteer.client.rpc("health_snapshot", {
     p_organization_id: coordinatorOrg.organizationId,
   });
-  ensure(healthVolunteer.error || healthVolunteer.data?.status !== "ok", "volunteer can see staff health");
+  ensure(
+    healthVolunteer.error || healthVolunteer.data?.status !== "ok",
+    "volunteer can see staff health",
+  );
 
   await Promise.all([
     coordinator.client.auth.signOut(),
     volunteer.client.auth.signOut(),
     foreign.client.auth.signOut(),
   ]);
-  console.log("Hosted staging sign-in, email verification, membership, own-org sync and cross-org denial: PASS");
+  console.log(
+    "Hosted staging sign-in, email verification, membership, own-org sync and cross-org denial: PASS",
+  );
 }
 
 if (import.meta.url === new URL("file://" + process.argv[1]).href) {

@@ -13,10 +13,11 @@ test("hosted publishing refuses missing or placeholder project keys", () => {
     );
   }
   assert.throws(
-    () => assertHostedConfiguration({
-      VITE_SUPABASE_URL: "http://localhost:54321",
-      VITE_SUPABASE_ANON_KEY: "sb_publishable_publickey",
-    }),
+    () =>
+      assertHostedConfiguration({
+        VITE_SUPABASE_URL: "http://localhost:54321",
+        VITE_SUPABASE_ANON_KEY: "sb_publishable_publickey",
+      }),
     /HTTPS/,
   );
 });
@@ -36,9 +37,7 @@ test("hosted publishing accepts only public project credentials", () => {
       Buffer.from(JSON.stringify({ role })).toString("base64url"),
       "public-test-signature",
     ].join(".");
-  assert.doesNotThrow(() =>
-    assertHostedConfiguration({ VITE_SUPABASE_ANON_KEY: jwt("anon") }),
-  );
+  assert.doesNotThrow(() => assertHostedConfiguration({ VITE_SUPABASE_ANON_KEY: jwt("anon") }));
   assert.throws(
     () => assertHostedConfiguration({ VITE_SUPABASE_ANON_KEY: jwt("service_role") }),
     /privileged/,

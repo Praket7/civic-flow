@@ -123,10 +123,14 @@ export function CoordinatorSchedule({
         </Button>
       </div>
       <p className={styles.muted}>
-        Live organization records, not the sample schedule. Showing up to 20 upcoming shifts.
-        Use CivicFlow desktop to edit staffing and publish new opportunities.
+        Live organization records, not the sample schedule. Showing up to 20 upcoming shifts. Use
+        CivicFlow desktop to edit staffing and publish new opportunities.
       </p>
-      {loading ? <p className={styles.body} role="status">Reading the shared schedule…</p> : null}
+      {loading ? (
+        <p className={styles.body} role="status">
+          Reading the shared schedule…
+        </p>
+      ) : null}
       {error ? (
         <p className={styles.cautionBody} role="alert">
           The schedule could not be loaded: {error}

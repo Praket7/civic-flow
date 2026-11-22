@@ -38,15 +38,12 @@ describe("operational health signals", () => {
       verifiedAt: "2026-11-21T17:00:00.000Z",
       ageHours: 50,
     };
-    expect(
-      verifiedBackupIsRecent({ ...base, finishedAt: "2026-11-20T15:00:00.000Z" }, now),
-    ).toBe(false);
-    expect(
-      verifiedBackupIsRecent(
-        { ...base, finishedAt: "2026-11-22T18:00:00.000Z" },
-        now,
-      ),
-    ).toBe(false);
+    expect(verifiedBackupIsRecent({ ...base, finishedAt: "2026-11-20T15:00:00.000Z" }, now)).toBe(
+      false,
+    );
+    expect(verifiedBackupIsRecent({ ...base, finishedAt: "2026-11-22T18:00:00.000Z" }, now)).toBe(
+      false,
+    );
   });
 
   it("requires a recent successful reminder dispatch", () => {

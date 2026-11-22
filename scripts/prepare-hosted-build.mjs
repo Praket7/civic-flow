@@ -43,10 +43,7 @@ export function assertHostedConfiguration(env = process.env) {
 export async function promoteHostedPwa(dist) {
   const index = path.join(dist, "index.html");
   const pwa = path.join(dist, "pwa.html");
-  const [demoHtml, pwaHtml] = await Promise.all([
-    readFile(index, "utf8"),
-    readFile(pwa, "utf8"),
-  ]);
+  const [demoHtml, pwaHtml] = await Promise.all([readFile(index, "utf8"), readFile(pwa, "utf8")]);
   if (!demoHtml.includes("<html") || !demoHtml.includes("CivicFlow")) {
     throw new Error("Cannot verify the built desktop/demo entrypoint.");
   }
@@ -71,7 +68,9 @@ if (invoked) {
     } else {
       const dist = path.resolve("dist");
       const out = await promoteHostedPwa(dist);
-      console.log("Hosted release ready: the Supabase-backed PWA is the root entrypoint (" + out + ").");
+      console.log(
+        "Hosted release ready: the Supabase-backed PWA is the root entrypoint (" + out + ").",
+      );
     }
   } catch (error) {
     console.error("Hosted release blocked:", error.message);
