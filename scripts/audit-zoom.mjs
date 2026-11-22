@@ -267,7 +267,7 @@ try {
   const report = {};
   let failures = 0;
 
-  for (const [number, path, role] of routes) {
+  for (const [number, routePath, role] of routes) {
     await send("Runtime.evaluate", {
       expression:
         role === "volunteer"
@@ -276,7 +276,7 @@ try {
             ? `localStorage.setItem("civicflow.auth.token", "preview:user-praket:demo"); void 0`
             : `void 0`,
     });
-    await send("Page.navigate", { url: BASE + path });
+    await send("Page.navigate", { url: BASE + routePath });
     // The first route compiles Vite modules and every authenticated route waits
     // for the workspace snapshot. Poll for the heading rather than guessing a
     // fixed delay.
@@ -287,7 +287,7 @@ try {
     const bad = found.horizontalOverflow || found.heading.length === 0;
     if (bad) {
       failures += 1;
-      report[number] = { path, ...found };
+      report[number] = { path: routePath, ...found };
     }
     process.stdout.write(
       `${number} ${bad ? "FAIL" : "ok"} ${found.viewport.width}x${found.viewport.height} ${found.heading.slice(0, 40)}\n`,
