@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { asOwner, asUser, createDatabase, ids, query, seed, sendCommand } from "./harness.mjs";
+import { asAnon, asOwner, asUser, createDatabase, ids, query, seed, sendCommand } from "./harness.mjs";
 
 let db;
 
@@ -117,4 +117,36 @@ test("public command authority still accepts a valid coordinator request", async
     payload: { title: "Permission Smoke Test", slug: "permission-smoke" },
   });
   assert.equal(response.status, "applied");
+});
+
+test("all internal sync tables use row-level security", async () => {
+  const names = ["devices", "entity_tables", "processed_operations", "sync_changes"];
+  for (const name of names) {
+    const [row] = await query(
+      db,
+      "select relrowsecurity as enabled from pg_class where oid = $1::regclass",
+      [`sync.${name}`],
+    );
+    assert.equal(row.enabled, true, `sync.${name} must have RLS`);
+  }
+});
+
+test("authenticated replication can read the static catalog but not internal state", async () => {
+  const [catalog] = await asUser(db, ids.ownerA, () =>
+    query(db, "select count(*)::int as n from sync.entity_tables"),
+  );
+  assert.ok(catalog.n > 0, "workspace bootstrap needs the entity-type catalog");
+
+  await assert.rejects(
+    asAnon(db, () => query(db, "select * from sync.entity_tables limit 1")),
+    /permission denied/i,
+  );
+
+  for (const name of ["devices", "processed_operations"]) {
+    await assert.rejects(
+      asUser(db, ids.ownerA, () => query(db, `select * from sync.${name} limit 1`)),
+      /permission denied/i,
+      `sync.${name} must not be readable directly`,
+    );
+  }
 });
