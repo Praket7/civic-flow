@@ -17,6 +17,7 @@ import { GoogleSignIn } from "./GoogleSignIn";
 import styles from "./auth.module.css";
 import local from "./SignUpPage.module.css";
 import { messageOf } from "../../lib/errors";
+import { isTauri } from "../../lib/platform";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -159,6 +160,7 @@ export function SignUpPage() {
 
   // An account already signed in on this device goes to its own home; creating
   // another one here would replace the session without warning.
+  if (import.meta.env.PROD && !isTauri()) return <Navigate to="/welcome" replace />;
   if (user && !busy) return <Navigate to={accountHome(user)} replace />;
 
   return (
