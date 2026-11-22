@@ -26,13 +26,14 @@ export function assertHostedConfiguration(env = process.env) {
     throw new Error("Refusing to embed a Supabase secret key in a browser build.");
   }
   if (key.split(".").length === 3) {
+    let payload;
     try {
-      const payload = JSON.parse(Buffer.from(key.split(".")[1], "base64url").toString("utf8"));
-      if (payload.role !== "anon") {
-        throw new Error("Browser build requires an anon JWT, not a privileged token.");
-      }
+      payload = JSON.parse(Buffer.from(key.split(".")[1], "base64url").toString("utf8"));
     } catch (error) {
-      throw new Error("Invalid Supabase anon JWT: " + String(error.message || error));
+      throw new Error("Invalid Supabase anon JWT.", { cause: error });
+    }
+    if (payload.role !== "anon") {
+      throw new Error("Browser build requires an anon JWT, not a privileged token.");
     }
   } else if (!/^sb_publishable_[a-zA-Z0-9_-]+$/.test(key)) {
     throw new Error("Hosted build expects a Supabase publishable key or legacy anon JWT.");
