@@ -159,3 +159,14 @@ Previously published installers may lack signing or notarization. Verify provena
 ## License and acknowledgements
 
 CivicFlow is released under the [MIT License](LICENSE). The generated [third-party notices](THIRD_PARTY_NOTICES.md) list the direct dependencies and licenses. Bundled photography and fonts are credited in the in-app credits screen and in [`public/media/LICENSE.md`](public/media/LICENSE.md).
+
+
+## FBLA judging review
+
+A reviewed hosted deployment serves a **separate judging page** at `/judge/`. It links to
+`/judge/demo/#/welcome`, the full coordinator UI running only against **browser-local sample
+data**. This is not a real hosted nonprofit workspace. The production root continues to serve
+the authenticated Supabase-backed PWA. The desktop release remains the complete offline app.
+
+See [FBLA Stage 1 release and judging requirements](docs/FBLA-STAGE1-JUDGING.md) before
+publishing an installer or sharing a program URL for state prejudging.
