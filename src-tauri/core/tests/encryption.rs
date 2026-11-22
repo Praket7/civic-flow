@@ -30,9 +30,21 @@ fn an_encrypted_workspace_needs_its_key_for_every_copy() {
 
     {
         let database = Database::open_with_key(&path, KEY).expect("open encrypted workspace");
+        let cipher_version = database
+            .cipher_version()
+            .expect("the workspace should be opened by SQLCipher");
+        let version_numbers: Vec<u32> = cipher_version
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .split('.')
+            .filter_map(|part| part.parse().ok())
+            .collect();
         assert!(
-            database.cipher_version().is_some(),
-            "the workspace should be opened by SQLCipher"
+            version_numbers.len() >= 2
+                && (version_numbers[0] > 4
+                    || (version_numbers[0] == 4 && version_numbers[1] >= 20)),
+            "SQLCipher must bundle patched SQLite (SQLCipher >=4.20); found {cipher_version}"
         );
     }
     assert!(
