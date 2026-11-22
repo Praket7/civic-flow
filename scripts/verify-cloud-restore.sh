@@ -51,14 +51,14 @@ aws s3 cp "$CIVICFLOW_BACKUP_OBJECT_URI" - --only-show-errors --no-progress \
 
 PGDATABASE="$CIVICFLOW_RESTORE_DATABASE_URL" psql --no-psqlrc \
   --set ON_ERROR_STOP=1 --tuples-only --no-align \
-  --command="DO \\$\\$ BEGIN
+  --command="DO \$\$ BEGIN
     IF to_regclass('public.organization_memberships') IS NULL
        OR to_regclass('public.opportunities') IS NULL
        OR to_regclass('public.shifts') IS NULL
        OR to_regclass('auth.users') IS NULL THEN
       RAISE EXCEPTION 'Restored CivicFlow schema is incomplete';
     END IF;
-  END \\$\\$;"
+  END \$\$;"
 
 echo "Encrypted archive restored and critical application tables verified in an isolated database."
 echo "Human migration, RLS, sign-in and data-integrity review is still required before release."
