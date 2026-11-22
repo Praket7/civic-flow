@@ -5,6 +5,7 @@ pnpm typecheck
 pnpm lint
 pnpm format
 pnpm check:copy
+pnpm check:demo
 pnpm check:i18n
 pnpm check:hardcodes
 pnpm check:identity
