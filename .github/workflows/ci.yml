@@ -1,0 +1,166 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format
+      - run: pnpm check:copy
+      - run: pnpm check:i18n
+      - run: pnpm check:generated
+      - run: pnpm check:hardcodes
+      - run: pnpm check:identity
+      - run: pnpm check:help
+      - run: pnpm docs:check
+      - run: pnpm test
+      - run: pnpm test:sql
+      - run: pnpm build:web
+      - name: Print audit
+        run: node scripts/audit-print.mjs
+      - name: Accessibility-tree audit
+        run: node scripts/audit-accessibility-tree.mjs
+      - name: 200% zoom audit
+        run: node scripts/audit-zoom.mjs
+      - name: Contrast audit
+        run: node scripts/audit-contrast.mjs
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz \
+            | tar -xz -C /usr/local/bin gitleaks
+      - name: Scan the working tree
+        run: gitleaks dir . --no-banner --redact --config .gitleaks.toml
+
+  security:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+      - name: Rust advisories (desktop shell)
+        uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: src-tauri
+      - name: Rust advisories (core)
+        uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: src-tauri/core
+      - name: Shipped JavaScript dependencies
+        run: pnpm audit --prod --audit-level=high
+
+  native:
+    name: Native end-to-end (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri/core -> target
+            src-tauri -> target
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:native:test
+      - run: pnpm test:native
+      - name: Upload native test log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-test-log
+          path: |
+            wdio-logs/
+          if-no-files-found: ignore
+
+  rust:
+    name: Rust checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            wget
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri/core -> target
+            src-tauri -> target
+      - name: Format
+        working-directory: src-tauri/core
+        run: cargo fmt --check
+      - name: Clippy
+        working-directory: src-tauri/core
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Core tests
+        working-directory: src-tauri/core
+        run: cargo test
+      - name: Build the embedded frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build:web
+      - name: Third-party inventory is current
+        run: pnpm check:third-party
+      - name: Licenses are redistributable
+        run: pnpm check:licenses
+      - name: Desktop shell compiles
+        working-directory: src-tauri
+        run: cargo check

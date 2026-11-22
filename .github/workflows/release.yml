@@ -1,0 +1,313 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  # A release is only cut from a commit that passed the same checks as main. The
+  # tag is the thing being shipped, so the verification runs on the checked-out
+  # tag commit itself rather than trusting that CI ran on it earlier.
+  verify:
+    name: Verify tagged commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: The checked-out commit is the tagged commit
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Tag matches every manifest version
+        run: node scripts/check-release-version.mjs "$GITHUB_REF_NAME"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri/core -> target
+
+      - run: pnpm install --frozen-lockfile
+      - run: bash scripts/verify.sh
+
+  publish:
+    name: Bundle ${{ matrix.label }}
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS (Universal)
+            platform: macos-latest
+            target: universal-apple-darwin
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - label: Linux (x64)
+            platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            rust_targets: x86_64-unknown-linux-gnu
+          - label: Windows (x64)
+            platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            rust_targets: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install Tauri system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            wget
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri/core -> target
+            src-tauri -> target
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Import Apple signing certificate
+        if: matrix.platform == 'macos-latest'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then
+            echo "No APPLE_CERTIFICATE secret; the macOS build will be unsigned."
+            exit 0
+          fi
+
+          if [ -n "$APPLE_ID$APPLE_PASSWORD$APPLE_TEAM_ID" ]; then
+            if [ -z "$APPLE_ID" ] || [ -z "$APPLE_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; then
+              echo "APPLE_ID, APPLE_PASSWORD and APPLE_TEAM_ID must all be set." >&2
+              exit 1
+            fi
+            NOTARY_MODE=apple-id
+          elif [ -n "$APPLE_API_KEY$APPLE_API_ISSUER$APPLE_API_KEY_CONTENT" ]; then
+            if [ -z "$APPLE_API_KEY" ] || [ -z "$APPLE_API_ISSUER" ] || [ -z "$APPLE_API_KEY_CONTENT" ]; then
+              echo "APPLE_API_KEY, APPLE_API_ISSUER and APPLE_API_KEY_CONTENT must all be set." >&2
+              exit 1
+            fi
+            NOTARY_MODE=api-key
+          else
+            echo "Certificate found but no notarization credentials were provided." >&2
+            exit 1
+          fi
+
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security import "$RUNNER_TEMP/certificate.p12" -k build.keychain \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security list-keychains -d user -s build.keychain "$HOME/Library/Keychains/login.keychain-db"
+
+          IDENTITY=$(security find-identity -v -p codesigning build.keychain \
+            | awk -F'"' '/Developer ID Application/ { print $2; exit }')
+          if [ -z "$IDENTITY" ]; then
+            echo "The imported certificate is not a Developer ID Application identity." >&2
+            exit 1
+          fi
+          echo "APPLE_SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+          if [ "$NOTARY_MODE" = "apple-id" ]; then
+            echo "APPLE_ID=$APPLE_ID" >> "$GITHUB_ENV"
+            echo "APPLE_PASSWORD=$APPLE_PASSWORD" >> "$GITHUB_ENV"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> "$GITHUB_ENV"
+          else
+            KEY_PATH="$RUNNER_TEMP/AuthKey_$APPLE_API_KEY.p8"
+            printf '%s' "$APPLE_API_KEY_CONTENT" | base64 --decode > "$KEY_PATH"
+            chmod 600 "$KEY_PATH"
+            echo "APPLE_API_KEY=$APPLE_API_KEY" >> "$GITHUB_ENV"
+            echo "APPLE_API_ISSUER=$APPLE_API_ISSUER" >> "$GITHUB_ENV"
+            echo "APPLE_API_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+          fi
+
+          rm -f "$RUNNER_TEMP/certificate.p12"
+          echo "Imported $IDENTITY for signing and notarization."
+
+      - name: Import Windows signing certificate
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          WINDOWS_TIMESTAMP_URL: ${{ secrets.WINDOWS_TIMESTAMP_URL }}
+        run: |
+          if (-not $env:WINDOWS_CERTIFICATE) {
+            Write-Host "No WINDOWS_CERTIFICATE secret; the Windows build will be unsigned."
+            exit 0
+          }
+          if (-not $env:WINDOWS_CERTIFICATE_PASSWORD) {
+            throw "WINDOWS_CERTIFICATE_PASSWORD is required with WINDOWS_CERTIFICATE."
+          }
+
+          $pfx = Join-Path $env:RUNNER_TEMP "certificate.pfx"
+          [IO.File]::WriteAllBytes(
+            $pfx,
+            [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
+          )
+          $secure = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD `
+            -Force -AsPlainText
+          $cert = Import-PfxCertificate -FilePath $pfx `
+            -CertStoreLocation Cert:\CurrentUser\My -Password $secure
+          Remove-Item $pfx -Force
+
+          $timestamp = if ($env:WINDOWS_TIMESTAMP_URL) {
+            $env:WINDOWS_TIMESTAMP_URL
+          } else {
+            "http://timestamp.digicert.com"
+          }
+          $config = @{
+            bundle = @{
+              windows = @{
+                certificateThumbprint = $cert.Thumbprint
+                digestAlgorithm = "sha256"
+                timestampUrl = $timestamp
+              }
+            }
+          } | ConvertTo-Json -Depth 5 -Compress
+          Add-Content -Path $env:GITHUB_ENV -Value "TAURI_CONFIG=$config"
+          Write-Host "Imported Windows certificate $($cert.Thumbprint) for signing."
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Baked into the bundle at build time. Without the key the shared
+          # workspace reports that the build has no configuration, which is the
+          # honest answer but not a useful installer.
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || 'https://imzdblvljdcbnxtwbmbw.supabase.co' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        with:
+          includeUpdaterJson: true
+          tagName: ${{ github.ref_name }}
+          releaseName: CivicFlow ${{ github.ref_name }}
+          releaseBody: |
+            CivicFlow desktop installers for macOS (universal Apple silicon and
+            Intel), Windows x64, and Linux x64. The macOS DMG is one universal
+            build, not separate architecture-specific downloads.
+
+            This release is built from the tagged commit by GitHub Actions.
+            macOS and Windows builds are signed and notarized when the
+            repository signing secrets are configured. Without those secrets,
+            the macOS DMG is ad-hoc signed and Gatekeeper will warn on a
+            quarantined download; choose Open Anyway in System Settings →
+            Privacy & Security, or run
+            `xattr -dr com.apple.quarantine /Applications/CivicFlow.app`.
+            Unsigned Windows builds may show SmartScreen; choose More info →
+            Run anyway. On Linux, chmod +x the AppImage before running it; the
+            deb and rpm use the system WebKitGTK 4.1.
+
+            Verify the download against SHA256SUMS.txt (macOS/Linux:
+            `shasum -a 256 -c SHA256SUMS.txt`; Windows: compare
+            `Get-FileHash <file> -Algorithm SHA256`).
+
+            Verify GitHub's build provenance attestation with
+            `gh attestation verify <installer> --repo Praket7/civicflow2`.
+            The checksums and attestations are generated from the same tagged
+            commit as the installers.
+
+            First launch starts empty. The welcome screen can open the local
+            demo workspace without a password, but it never seeds or opens one
+            behind your back. Before entering real volunteer data, create your
+            own organization or connect a hosted workspace, then set a
+            password from Settings → Accounts.
+          releaseDraft: false
+          # A tag with a hyphen is a release candidate and must never become
+          # `latest`, because the updater reads releases/latest.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
+
+  checksums:
+    name: Publish checksums
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download every installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir artifacts --clobber
+
+      - name: Write SHA-256 checksums
+        working-directory: artifacts
+        run: |
+          rm -f SHA256SUMS.txt
+          sha256sum ./* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Attach checksums to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" artifacts/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --clobber
+
+  attest:
+    name: Attest release assets
+    needs: checksums
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir artifacts --clobber
+
+      - name: Create GitHub build provenance attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: artifacts/*
