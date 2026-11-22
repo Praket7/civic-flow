@@ -34,6 +34,41 @@ jobs:
       - name: Tag matches every manifest version
         run: node scripts/check-release-version.mjs "$GITHUB_REF_NAME"
 
+      - name: Release tags must point to merged main commits
+        run: git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
+
+      # Public artifacts must not silently fall back to unsigned builds or an
+      # empty cloud configuration. Configure these before tagging a release.
+      - name: Verify release credentials
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          missing=0
+          for secret in TAURI_SIGNING_PRIVATE_KEY VITE_SUPABASE_ANON_KEY APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD WINDOWS_CERTIFICATE WINDOWS_CERTIFICATE_PASSWORD; do
+            if [ -z "${!secret}" ]; then
+              echo "::error title=Release credential missing::${secret} must be configured before tagging a public release."
+              missing=1
+            fi
+          done
+          if [ -z "$APPLE_ID" ] || [ -z "$APPLE_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; then
+            if [ -z "$APPLE_API_KEY" ] || [ -z "$APPLE_API_ISSUER" ] || [ -z "$APPLE_API_KEY_CONTENT" ]; then
+              echo "::error title=Apple notarization unavailable::Configure a complete Apple ID or App Store Connect API-key notarization credential set."
+              missing=1
+            fi
+          fi
+          exit "$missing"
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -119,8 +154,8 @@ jobs:
           APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
         run: |
           if [ -z "$APPLE_CERTIFICATE" ]; then
-            echo "No APPLE_CERTIFICATE secret; the macOS build will be unsigned."
-            exit 0
+            echo "::error::APPLE_CERTIFICATE is required for public macOS releases."
+            exit 1
           fi
 
           if [ -n "$APPLE_ID$APPLE_PASSWORD$APPLE_TEAM_ID" ]; then
@@ -186,8 +221,7 @@ jobs:
           WINDOWS_TIMESTAMP_URL: ${{ secrets.WINDOWS_TIMESTAMP_URL }}
         run: |
           if (-not $env:WINDOWS_CERTIFICATE) {
-            Write-Host "No WINDOWS_CERTIFICATE secret; the Windows build will be unsigned."
-            exit 0
+            throw "WINDOWS_CERTIFICATE is required for public Windows releases."
           }
           if (-not $env:WINDOWS_CERTIFICATE_PASSWORD) {
             throw "WINDOWS_CERTIFICATE_PASSWORD is required with WINDOWS_CERTIFICATE."
@@ -241,15 +275,11 @@ jobs:
             build, not separate architecture-specific downloads.
 
             This release is built from the tagged commit by GitHub Actions.
-            macOS and Windows builds are signed and notarized when the
-            repository signing secrets are configured. Without those secrets,
-            the macOS DMG is ad-hoc signed and Gatekeeper will warn on a
-            quarantined download; choose Open Anyway in System Settings →
-            Privacy & Security, or run
-            `xattr -dr com.apple.quarantine /Applications/CivicFlow.app`.
-            Unsigned Windows builds may show SmartScreen; choose More info →
-            Run anyway. On Linux, chmod +x the AppImage before running it; the
-            deb and rpm use the system WebKitGTK 4.1.
+            This release requires a signed updater feed and properly signed
+            Windows and notarized macOS installers. Do not bypass Gatekeeper
+            or SmartScreen warnings for an unverified download. On Linux,
+            chmod +x the verified AppImage before running it; deb and rpm
+            packages use the system WebKitGTK 4.1.
 
             Verify the download against SHA256SUMS.txt (macOS/Linux:
             `shasum -a 256 -c SHA256SUMS.txt`; Windows: compare
@@ -265,7 +295,9 @@ jobs:
             behind your back. Before entering real volunteer data, create your
             own organization or connect a hosted workspace, then set a
             password from Settings → Accounts.
-          releaseDraft: false
+          # Artifacts become public only after checksums, provenance, clean
+          # installation and updater verification are reviewed.
+          releaseDraft: true
           # A tag with a hyphen is a release candidate and must never become
           # `latest`, because the updater reads releases/latest.
           prerelease: ${{ contains(github.ref_name, '-') }}
