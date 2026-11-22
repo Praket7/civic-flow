@@ -448,6 +448,18 @@
       "direct": false
     },
     {
+      "name": "aws-lc-rs",
+      "version": "1.19.0",
+      "license": "ISC AND (Apache-2.0 OR ISC)",
+      "direct": false
+    },
+    {
+      "name": "aws-lc-sys",
+      "version": "0.47.0",
+      "license": "ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0)",
+      "direct": false
+    },
+    {
       "name": "axum",
       "version": "0.8.9",
       "license": "MIT",
@@ -485,7 +497,19 @@
     },
     {
       "name": "bit-set",
+      "version": "0.11.1",
+      "license": "Apache-2.0 OR MIT",
+      "direct": false
+    },
+    {
+      "name": "bit-set",
       "version": "0.8.0",
+      "license": "Apache-2.0 OR MIT",
+      "direct": false
+    },
+    {
+      "name": "bit-vec",
+      "version": "0.10.2",
       "license": "Apache-2.0 OR MIT",
       "direct": false
     },
@@ -520,6 +544,12 @@
       "direct": false
     },
     {
+      "name": "block-buffer",
+      "version": "0.12.1",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
       "name": "block2",
       "version": "0.6.2",
       "license": "MIT",
@@ -527,13 +557,13 @@
     },
     {
       "name": "brotli",
-      "version": "9.0.0",
+      "version": "9.1.3",
       "license": "BSD-3-Clause AND MIT",
       "direct": false
     },
     {
       "name": "brotli-decompressor",
-      "version": "6.0.1",
+      "version": "6.3.2",
       "license": "BSD-3-Clause/MIT",
       "direct": false
     },
@@ -545,7 +575,7 @@
     },
     {
       "name": "bumpalo",
-      "version": "3.20.3",
+      "version": "3.20.4",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -563,7 +593,7 @@
     },
     {
       "name": "bytes",
-      "version": "1.12.1",
+      "version": "1.12.2",
       "license": "MIT",
       "direct": false
     },
@@ -605,7 +635,7 @@
     },
     {
       "name": "cc",
-      "version": "1.9.0",
+      "version": "1.11.3",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -629,7 +659,7 @@
     },
     {
       "name": "cfg-expr",
-      "version": "0.20.10",
+      "version": "0.20.11",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -643,6 +673,12 @@
       "name": "cfg_aliases",
       "version": "0.2.2",
       "license": "MIT",
+      "direct": false
+    },
+    {
+      "name": "chacha20",
+      "version": "0.10.2",
+      "license": "MIT OR Apache-2.0",
       "direct": false
     },
     {
@@ -670,9 +706,21 @@
       "direct": false
     },
     {
+      "name": "cmake",
+      "version": "0.1.58",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
       "name": "combine",
       "version": "4.6.9",
       "license": "MIT",
+      "direct": false
+    },
+    {
+      "name": "const-oid",
+      "version": "0.10.3",
+      "license": "Apache-2.0 OR MIT",
       "direct": false
     },
     {
@@ -685,6 +733,12 @@
       "name": "const-random-macro",
       "version": "0.1.16",
       "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
+      "name": "constant_time_eq",
+      "version": "0.6.1",
+      "license": "CC0-1.0 OR MIT-0 OR Apache-2.0",
       "direct": false
     },
     {
@@ -730,8 +784,14 @@
       "direct": false
     },
     {
+      "name": "cpufeatures",
+      "version": "0.3.1",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
       "name": "crc32fast",
-      "version": "1.5.3",
+      "version": "1.5.5",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -760,8 +820,20 @@
       "direct": false
     },
     {
+      "name": "crypto-common",
+      "version": "0.2.2",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
       "name": "cssparser",
       "version": "0.37.0",
+      "license": "MPL-2.0",
+      "direct": false
+    },
+    {
+      "name": "cssparser",
+      "version": "0.38.0",
       "license": "MPL-2.0",
       "direct": false
     },
@@ -773,7 +845,7 @@
     },
     {
       "name": "ctor",
-      "version": "1.0.13",
+      "version": "1.0.14",
       "license": "Apache-2.0 OR MIT",
       "direct": false
     },
@@ -802,24 +874,6 @@
       "direct": false
     },
     {
-      "name": "defmt",
-      "version": "1.2.0",
-      "license": "MIT OR Apache-2.0",
-      "direct": false
-    },
-    {
-      "name": "defmt-macros",
-      "version": "1.2.0",
-      "license": "MIT OR Apache-2.0",
-      "direct": false
-    },
-    {
-      "name": "defmt-parser",
-      "version": "1.1.0",
-      "license": "MIT OR Apache-2.0",
-      "direct": false
-    },
-    {
       "name": "deranged",
       "version": "0.5.9",
       "license": "MIT OR Apache-2.0",
@@ -840,6 +894,12 @@
     {
       "name": "digest",
       "version": "0.10.7",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
+      "name": "digest",
+      "version": "0.11.3",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -888,6 +948,12 @@
     {
       "name": "dom_query",
       "version": "0.28.0",
+      "license": "MIT",
+      "direct": false
+    },
+    {
+      "name": "dom_query",
+      "version": "0.29.0",
       "license": "MIT",
       "direct": false
     },
@@ -941,13 +1007,13 @@
     },
     {
       "name": "erased-serde",
-      "version": "0.4.10",
+      "version": "0.4.11",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
     {
       "name": "errno",
-      "version": "0.3.14",
+      "version": "0.3.15",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -983,7 +1049,7 @@
     },
     {
       "name": "filetime",
-      "version": "0.2.29",
+      "version": "0.2.30",
       "license": "MIT/Apache-2.0",
       "direct": false
     },
@@ -995,7 +1061,7 @@
     },
     {
       "name": "flate2",
-      "version": "1.1.10",
+      "version": "1.1.11",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -1003,12 +1069,6 @@
       "name": "fnv",
       "version": "1.0.7",
       "license": "Apache-2.0 / MIT",
-      "direct": false
-    },
-    {
-      "name": "foldhash",
-      "version": "0.1.5",
-      "license": "Zlib",
       "direct": false
     },
     {
@@ -1039,6 +1099,12 @@
       "name": "form_urlencoded",
       "version": "1.2.3",
       "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
+      "name": "fs_extra",
+      "version": "1.3.0",
+      "license": "MIT",
       "direct": false
     },
     {
@@ -1259,19 +1325,13 @@
     },
     {
       "name": "hashbrown",
-      "version": "0.15.5",
-      "license": "MIT OR Apache-2.0",
-      "direct": false
-    },
-    {
-      "name": "hashbrown",
-      "version": "0.17.1",
+      "version": "0.17.2",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
     {
       "name": "hashlink",
-      "version": "0.10.0",
+      "version": "0.12.2",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -1296,6 +1356,12 @@
     {
       "name": "html5ever",
       "version": "0.39.0",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
+      "name": "html5ever",
+      "version": "0.40.1",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -1326,6 +1392,12 @@
     {
       "name": "httpdate",
       "version": "1.0.3",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
+      "name": "hybrid-array",
+      "version": "0.4.15",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -1457,7 +1529,7 @@
     },
     {
       "name": "itoa",
-      "version": "1.0.18",
+      "version": "1.0.19",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -1475,31 +1547,61 @@
     },
     {
       "name": "jiff",
-      "version": "0.2.38",
+      "version": "0.2.46",
+      "license": "Unlicense OR MIT",
+      "direct": false
+    },
+    {
+      "name": "jiff",
+      "version": "1.0.2",
       "license": "Unlicense OR MIT",
       "direct": false
     },
     {
       "name": "jiff-core",
-      "version": "0.1.1",
+      "version": "0.1.8",
+      "license": "Unlicense OR MIT",
+      "direct": false
+    },
+    {
+      "name": "jiff-core",
+      "version": "1.0.1",
       "license": "Unlicense OR MIT",
       "direct": false
     },
     {
       "name": "jiff-static",
-      "version": "0.2.38",
+      "version": "0.2.46",
+      "license": "Unlicense OR MIT",
+      "direct": false
+    },
+    {
+      "name": "jiff-static",
+      "version": "1.0.2",
       "license": "Unlicense OR MIT",
       "direct": false
     },
     {
       "name": "jiff-tzdb",
-      "version": "0.1.9",
+      "version": "0.1.10",
+      "license": "Unlicense OR MIT",
+      "direct": false
+    },
+    {
+      "name": "jiff-tzdb",
+      "version": "1.0.0",
       "license": "Unlicense OR MIT",
       "direct": false
     },
     {
       "name": "jiff-tzdb-platform",
       "version": "0.1.3",
+      "license": "Unlicense OR MIT",
+      "direct": false
+    },
+    {
+      "name": "jiff-tzdb-platform",
+      "version": "1.0.0",
       "license": "Unlicense OR MIT",
       "direct": false
     },
@@ -1540,8 +1642,14 @@
       "direct": false
     },
     {
+      "name": "jobserver",
+      "version": "0.1.35",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
       "name": "js-sys",
-      "version": "0.3.106",
+      "version": "0.3.107",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -1607,8 +1715,14 @@
     },
     {
       "name": "libsqlite3-sys",
-      "version": "0.35.0",
+      "version": "0.40.0",
       "license": "MIT",
+      "direct": false
+    },
+    {
+      "name": "link-section",
+      "version": "0.19.4",
+      "license": "Apache-2.0 OR MIT",
       "direct": false
     },
     {
@@ -1631,13 +1745,25 @@
     },
     {
       "name": "log",
-      "version": "0.4.34",
+      "version": "0.4.35",
       "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
+      "name": "lru-slab",
+      "version": "0.1.3",
+      "license": "MIT OR Apache-2.0 OR Zlib",
       "direct": false
     },
     {
       "name": "markup5ever",
       "version": "0.39.0",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
+      "name": "markup5ever",
+      "version": "0.40.0",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -1661,7 +1787,7 @@
     },
     {
       "name": "mime",
-      "version": "0.3.17",
+      "version": "0.3.18",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -1685,7 +1811,7 @@
     },
     {
       "name": "mio",
-      "version": "1.2.4",
+      "version": "1.2.5",
       "license": "MIT",
       "direct": false
     },
@@ -1721,7 +1847,7 @@
     },
     {
       "name": "nix",
-      "version": "0.31.3",
+      "version": "0.32.0",
       "license": "MIT",
       "direct": false
     },
@@ -1901,7 +2027,7 @@
     },
     {
       "name": "openssl-sys",
-      "version": "0.9.117",
+      "version": "0.9.118",
       "license": "MIT",
       "direct": false
     },
@@ -1966,8 +2092,20 @@
       "direct": false
     },
     {
+      "name": "phf",
+      "version": "0.14.0",
+      "license": "MIT",
+      "direct": false
+    },
+    {
       "name": "phf_codegen",
       "version": "0.13.1",
+      "license": "MIT",
+      "direct": false
+    },
+    {
+      "name": "phf_codegen",
+      "version": "0.14.0",
       "license": "MIT",
       "direct": false
     },
@@ -1978,8 +2116,20 @@
       "direct": false
     },
     {
+      "name": "phf_generator",
+      "version": "0.14.0",
+      "license": "MIT",
+      "direct": false
+    },
+    {
       "name": "phf_macros",
       "version": "0.13.1",
+      "license": "MIT",
+      "direct": false
+    },
+    {
+      "name": "phf_macros",
+      "version": "0.14.0",
       "license": "MIT",
       "direct": false
     },
@@ -1990,8 +2140,14 @@
       "direct": false
     },
     {
+      "name": "phf_shared",
+      "version": "0.14.0",
+      "license": "MIT",
+      "direct": false
+    },
+    {
       "name": "pin-project-lite",
-      "version": "0.2.17",
+      "version": "0.2.18",
       "license": "Apache-2.0 OR MIT",
       "direct": false
     },
@@ -2003,7 +2159,7 @@
     },
     {
       "name": "plist",
-      "version": "1.10.3",
+      "version": "1.10.4",
       "license": "MIT",
       "direct": false
     },
@@ -2092,6 +2248,24 @@
       "direct": false
     },
     {
+      "name": "quinn",
+      "version": "0.11.12",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
+      "name": "quinn-proto",
+      "version": "0.11.19",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
+      "name": "quinn-udp",
+      "version": "0.5.16",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
       "name": "quote",
       "version": "1.0.47",
       "license": "MIT OR Apache-2.0",
@@ -2110,8 +2284,26 @@
       "direct": false
     },
     {
+      "name": "rand",
+      "version": "0.10.4",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
+      "name": "rand_core",
+      "version": "0.10.1",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
       "name": "rand_core",
       "version": "0.6.4",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
+      "name": "rand_pcg",
+      "version": "0.10.3",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -2147,19 +2339,19 @@
     },
     {
       "name": "regex",
-      "version": "1.13.1",
+      "version": "1.13.2",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
     {
       "name": "regex-automata",
-      "version": "0.4.18",
+      "version": "0.4.19",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
     {
       "name": "regex-syntax",
-      "version": "0.8.11",
+      "version": "0.8.12",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -2171,7 +2363,7 @@
     },
     {
       "name": "rfd",
-      "version": "0.16.1",
+      "version": "0.17.2",
       "license": "MIT",
       "direct": false
     },
@@ -2182,8 +2374,14 @@
       "direct": false
     },
     {
+      "name": "rsqlite-vfs",
+      "version": "0.2.0",
+      "license": "MIT",
+      "direct": false
+    },
+    {
       "name": "rusqlite",
-      "version": "0.37.0",
+      "version": "0.42.0",
       "license": "MIT",
       "direct": false
     },
@@ -2207,7 +2405,7 @@
     },
     {
       "name": "rustix",
-      "version": "1.1.5",
+      "version": "1.1.6",
       "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
       "direct": false
     },
@@ -2225,7 +2423,7 @@
     },
     {
       "name": "rustls-pki-types",
-      "version": "1.15.1",
+      "version": "1.16.0",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -2243,7 +2441,7 @@
     },
     {
       "name": "rustls-webpki",
-      "version": "0.103.16",
+      "version": "0.103.17",
       "license": "ISC",
       "direct": false
     },
@@ -2320,6 +2518,12 @@
       "direct": false
     },
     {
+      "name": "selectors",
+      "version": "0.41.0",
+      "license": "MPL-2.0",
+      "direct": false
+    },
+    {
       "name": "semver",
       "version": "1.0.28",
       "license": "MIT OR Apache-2.0",
@@ -2381,7 +2585,7 @@
     },
     {
       "name": "serde_spanned",
-      "version": "1.1.2",
+      "version": "1.1.3",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -2393,13 +2597,13 @@
     },
     {
       "name": "serde_with",
-      "version": "3.24.0",
+      "version": "3.25.0",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
     {
       "name": "serde_with_macros",
-      "version": "3.24.0",
+      "version": "3.25.0",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -2422,8 +2626,20 @@
       "direct": false
     },
     {
+      "name": "servo_arc",
+      "version": "0.5.0",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
       "name": "sha2",
       "version": "0.10.9",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
+      "name": "sha2",
+      "version": "0.11.1",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -2465,7 +2681,7 @@
     },
     {
       "name": "smallvec",
-      "version": "1.16.3",
+      "version": "1.16.6",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -2494,6 +2710,18 @@
       "direct": false
     },
     {
+      "name": "sqlcipher-src",
+      "version": "420.0.0+sqlcipher-4.20.0-sqlite-3.54.1-libtomcrypt-1.18.2",
+      "license": "MIT AND BSD-3-Clause AND blessing AND WTFPL",
+      "direct": false
+    },
+    {
+      "name": "sqlite-wasm-rs",
+      "version": "0.6.3",
+      "license": "MIT",
+      "direct": false
+    },
+    {
       "name": "stable_deref_trait",
       "version": "1.2.1",
       "license": "MIT OR Apache-2.0",
@@ -2507,7 +2735,19 @@
     },
     {
       "name": "string_cache",
+      "version": "0.11.0",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
+      "name": "string_cache",
       "version": "0.9.0",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
+      "name": "string_cache_codegen",
+      "version": "0.11.2",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -2549,7 +2789,7 @@
     },
     {
       "name": "syn",
-      "version": "3.0.9",
+      "version": "3.0.10",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -2591,7 +2831,7 @@
     },
     {
       "name": "tao",
-      "version": "0.37.1",
+      "version": "0.37.3",
       "license": "Apache-2.0",
       "direct": false
     },
@@ -2621,31 +2861,31 @@
     },
     {
       "name": "tauri",
-      "version": "2.12.5",
+      "version": "2.12.7",
       "license": "Apache-2.0 OR MIT",
       "direct": true
     },
     {
       "name": "tauri-build",
-      "version": "2.7.4",
+      "version": "2.7.6",
       "license": "Apache-2.0 OR MIT",
       "direct": true
     },
     {
       "name": "tauri-codegen",
-      "version": "2.7.4",
+      "version": "2.7.6",
       "license": "Apache-2.0 OR MIT",
       "direct": false
     },
     {
       "name": "tauri-macros",
-      "version": "2.7.4",
+      "version": "2.7.6",
       "license": "Apache-2.0 OR MIT",
       "direct": false
     },
     {
       "name": "tauri-plugin",
-      "version": "2.7.2",
+      "version": "2.7.4",
       "license": "Apache-2.0 OR MIT",
       "direct": false
     },
@@ -2657,7 +2897,7 @@
     },
     {
       "name": "tauri-plugin-dialog",
-      "version": "2.8.3",
+      "version": "2.8.4",
       "license": "Apache-2.0 OR MIT",
       "direct": true
     },
@@ -2687,19 +2927,19 @@
     },
     {
       "name": "tauri-runtime",
-      "version": "2.12.2",
+      "version": "2.12.4",
       "license": "Apache-2.0 OR MIT",
       "direct": false
     },
     {
       "name": "tauri-runtime-wry",
-      "version": "2.12.3",
+      "version": "2.12.5",
       "license": "Apache-2.0 OR MIT",
       "direct": false
     },
     {
       "name": "tauri-utils",
-      "version": "2.10.2",
+      "version": "2.10.4",
       "license": "Apache-2.0 OR MIT",
       "direct": false
     },
@@ -2813,7 +3053,7 @@
     },
     {
       "name": "toml",
-      "version": "1.1.8+spec-1.1.0",
+      "version": "1.2.2+spec-1.1.0",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -2825,7 +3065,7 @@
     },
     {
       "name": "toml_datetime",
-      "version": "1.1.2+spec-1.1.0",
+      "version": "1.1.3+spec-1.1.0",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -2843,19 +3083,19 @@
     },
     {
       "name": "toml_edit",
-      "version": "0.25.17+spec-1.1.0",
+      "version": "0.25.20+spec-1.1.0",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
     {
       "name": "toml_parser",
-      "version": "1.1.5+spec-1.1.0",
+      "version": "1.1.6+spec-1.1.0",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
     {
       "name": "toml_writer",
-      "version": "1.1.3+spec-1.1.0",
+      "version": "1.2.0+spec-1.1.0",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -2969,13 +3209,19 @@
     },
     {
       "name": "utf8_iter",
-      "version": "1.0.4",
+      "version": "1.1.0",
+      "license": "Apache-2.0 OR MIT",
+      "direct": false
+    },
+    {
+      "name": "utf_types",
+      "version": "1.0.0",
       "license": "Apache-2.0 OR MIT",
       "direct": false
     },
     {
       "name": "uuid",
-      "version": "1.28.0",
+      "version": "1.29.3",
       "license": "Apache-2.0 OR MIT",
       "direct": false
     },
@@ -3011,7 +3257,7 @@
     },
     {
       "name": "walkdir",
-      "version": "2.5.0",
+      "version": "2.5.1",
       "license": "Unlicense/MIT",
       "direct": false
     },
@@ -3035,31 +3281,31 @@
     },
     {
       "name": "wasm-bindgen",
-      "version": "0.2.129",
+      "version": "0.2.130",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
     {
       "name": "wasm-bindgen-futures",
-      "version": "0.4.79",
+      "version": "0.4.80",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
     {
       "name": "wasm-bindgen-macro",
-      "version": "0.2.129",
+      "version": "0.2.130",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
     {
       "name": "wasm-bindgen-macro-support",
-      "version": "0.2.129",
+      "version": "0.2.130",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
     {
       "name": "wasm-bindgen-shared",
-      "version": "0.2.129",
+      "version": "0.2.130",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -3071,7 +3317,7 @@
     },
     {
       "name": "web-sys",
-      "version": "0.3.106",
+      "version": "0.3.107",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -3084,6 +3330,12 @@
     {
       "name": "web_atoms",
       "version": "0.2.6",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
+      "name": "web_atoms",
+      "version": "0.3.0",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -3101,7 +3353,7 @@
     },
     {
       "name": "webpki-root-certs",
-      "version": "1.0.11",
+      "version": "1.0.12",
       "license": "CDLA-Permissive-2.0",
       "direct": false
     },
@@ -3233,12 +3485,6 @@
     },
     {
       "name": "windows-sys",
-      "version": "0.60.2",
-      "license": "MIT OR Apache-2.0",
-      "direct": false
-    },
-    {
-      "name": "windows-sys",
       "version": "0.61.2",
       "license": "MIT OR Apache-2.0",
       "direct": false
@@ -3252,12 +3498,6 @@
     {
       "name": "windows-targets",
       "version": "0.52.6",
-      "license": "MIT OR Apache-2.0",
-      "direct": false
-    },
-    {
-      "name": "windows-targets",
-      "version": "0.53.5",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -3286,12 +3526,6 @@
       "direct": false
     },
     {
-      "name": "windows_aarch64_gnullvm",
-      "version": "0.53.1",
-      "license": "MIT OR Apache-2.0",
-      "direct": false
-    },
-    {
       "name": "windows_aarch64_msvc",
       "version": "0.42.2",
       "license": "MIT OR Apache-2.0",
@@ -3304,12 +3538,6 @@
       "direct": false
     },
     {
-      "name": "windows_aarch64_msvc",
-      "version": "0.53.1",
-      "license": "MIT OR Apache-2.0",
-      "direct": false
-    },
-    {
       "name": "windows_i686_gnu",
       "version": "0.42.2",
       "license": "MIT OR Apache-2.0",
@@ -3318,12 +3546,6 @@
     {
       "name": "windows_i686_gnu",
       "version": "0.52.6",
-      "license": "MIT OR Apache-2.0",
-      "direct": false
-    },
-    {
-      "name": "windows_i686_gnu",
-      "version": "0.53.1",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -3334,12 +3556,6 @@
       "direct": false
     },
     {
-      "name": "windows_i686_gnullvm",
-      "version": "0.53.1",
-      "license": "MIT OR Apache-2.0",
-      "direct": false
-    },
-    {
       "name": "windows_i686_msvc",
       "version": "0.42.2",
       "license": "MIT OR Apache-2.0",
@@ -3348,12 +3564,6 @@
     {
       "name": "windows_i686_msvc",
       "version": "0.52.6",
-      "license": "MIT OR Apache-2.0",
-      "direct": false
-    },
-    {
-      "name": "windows_i686_msvc",
-      "version": "0.53.1",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -3370,12 +3580,6 @@
       "direct": false
     },
     {
-      "name": "windows_x86_64_gnu",
-      "version": "0.53.1",
-      "license": "MIT OR Apache-2.0",
-      "direct": false
-    },
-    {
       "name": "windows_x86_64_gnullvm",
       "version": "0.42.2",
       "license": "MIT OR Apache-2.0",
@@ -3388,12 +3592,6 @@
       "direct": false
     },
     {
-      "name": "windows_x86_64_gnullvm",
-      "version": "0.53.1",
-      "license": "MIT OR Apache-2.0",
-      "direct": false
-    },
-    {
       "name": "windows_x86_64_msvc",
       "version": "0.42.2",
       "license": "MIT OR Apache-2.0",
@@ -3402,12 +3600,6 @@
     {
       "name": "windows_x86_64_msvc",
       "version": "0.52.6",
-      "license": "MIT OR Apache-2.0",
-      "direct": false
-    },
-    {
-      "name": "windows_x86_64_msvc",
-      "version": "0.53.1",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -3419,7 +3611,7 @@
     },
     {
       "name": "winnow",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "license": "MIT",
       "direct": false
     },
@@ -3443,7 +3635,7 @@
     },
     {
       "name": "wry",
-      "version": "0.57.0",
+      "version": "0.57.3",
       "license": "Apache-2.0 OR MIT",
       "direct": false
     },
@@ -3461,7 +3653,7 @@
     },
     {
       "name": "xattr",
-      "version": "1.6.1",
+      "version": "1.7.0",
       "license": "MIT OR Apache-2.0",
       "direct": false
     },
@@ -3491,7 +3683,13 @@
     },
     {
       "name": "zeroize",
-      "version": "1.9.1",
+      "version": "1.9.2",
+      "license": "Apache-2.0 OR MIT",
+      "direct": false
+    },
+    {
+      "name": "zeroize_derive",
+      "version": "1.5.0",
       "license": "Apache-2.0 OR MIT",
       "direct": false
     },
@@ -3515,7 +3713,7 @@
     },
     {
       "name": "zip",
-      "version": "9.1.3",
+      "version": "9.8.1",
       "license": "MIT",
       "direct": false
     },
