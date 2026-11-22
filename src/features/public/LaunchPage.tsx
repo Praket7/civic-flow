@@ -1,33 +1,28 @@
-import { ArrowRight, Check, LogIn } from "lucide-react";
+import { ArrowRight, LogIn } from "lucide-react";
 import { Link } from "react-router-dom";
 import { t } from "../../lib/i18n";
 import { demoWorkspace } from "../../lib/workspace/dataset";
-import { getShiftRows, getUpcomingShiftRows } from "../../lib/workspace/selectors";
+import { isTauri } from "../../lib/platform";
 import styles from "./LaunchPage.module.css";
 
 // The launch screen is public, so it reads the bundled seed rather than the
 // signed-in workspace. No volunteer record reaches this page before sign-in.
 export function LaunchPage() {
   const workspace = demoWorkspace;
-  const shifts = getShiftRows(workspace);
-  const upcoming = getUpcomingShiftRows(workspace);
+  const demoOnly = import.meta.env.PROD && !isTauri();
 
-  const checks = [
+  const features = [
     {
-      title: t("Database verified"),
-      detail: t("{volunteers} volunteers · {shifts} shifts · {programs} programs", {
-        volunteers: workspace.volunteers.length,
-        shifts: shifts.length,
-        programs: workspace.opportunities.length,
-      }),
+      title: t("Plan schedules and open shifts"),
+      detail: t("Keep volunteer roles, assignments, and availability together."),
     },
     {
-      title: t("Backup ready"),
-      detail: t("A local snapshot is written when the workspace first opens"),
+      title: t("Review attendance and hours"),
+      detail: t("Record check-ins and review service before approving hours."),
     },
     {
-      title: t("Ready offline"),
-      detail: t("{count} upcoming shifts need no internet", { count: upcoming.length }),
+      title: t("Fill gaps with AutoRoster"),
+      detail: t("Compare eligible volunteers before assigning open roles."),
     },
   ];
 
@@ -56,54 +51,60 @@ export function LaunchPage() {
       <main className={styles.stage}>
         <section className={styles.copy} aria-labelledby="launch-title">
           <p className={styles.kicker}>
-            {workspace.organization.name} · {workspace.organization.city},{" "}
+            Sample workspace · {workspace.organization.city},{" "}
             {workspace.organization.state}
           </p>
           <h1 className={styles.headline} id="launch-title">
             The volunteer desk is open.
           </h1>
           <p className={styles.lede}>
-            Sign in to load today&rsquo;s schedule, check-in list and hours ledger. Everything stays
-            on this device. No network required.
+            Coordinate opportunities, shifts, check-ins, and service hours in one place. Desktop
+            workspaces run offline; shared workspaces synchronize when connected.
           </p>
 
           <div className={styles.actions}>
             <Link className={styles.primaryAction} to="/welcome">
-              Open workspace
+              {demoOnly ? "Explore the demo" : "Open workspace"}
               <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
             </Link>
-            <Link className={styles.secondaryAction} to="/sign-in">
-              <LogIn size={14} strokeWidth={1.9} aria-hidden="true" />
-              Sign in
-            </Link>
-            <Link className={styles.tertiaryAction} to="/create-account">
-              Create account
-            </Link>
+            {demoOnly ? null : (
+              <>
+                <Link className={styles.secondaryAction} to="/sign-in">
+                  <LogIn size={14} strokeWidth={1.9} aria-hidden="true" />
+                  Sign in
+                </Link>
+                <Link className={styles.tertiaryAction} to="/create-account">
+                  Create account
+                </Link>
+              </>
+            )}
           </div>
 
           <p className={styles.reassurance}>
-            Everything stays on this device. Closing the app does not erase it.
+            {demoOnly
+              ? "The browser demo uses sample data and does not save changes to a real organization."
+              : "Local records stay on this device. Shared records sync through Supabase when connected."}
           </p>
         </section>
 
-        <aside className={styles.statusCard} aria-label="Workspace readiness">
+        <aside className={styles.statusCard} aria-label="What CivicFlow supports">
           <div className={styles.statusHead}>
-            <span className={styles.statusKicker}>Startup checks</span>
-            <span className={styles.statusCount}>3 of 3</span>
+            <span className={styles.statusKicker}>What you can do</span>
+            <span className={styles.statusCount}>At a glance</span>
           </div>
           <ul className={styles.checks}>
-            {checks.map((check) => (
-              <li key={check.title} className={styles.check}>
+            {features.map((feature) => (
+              <li key={feature.title} className={styles.check}>
                 <span className={styles.checkTop}>
-                  <Check size={13} strokeWidth={2.6} aria-hidden="true" />
-                  {check.title}
+                  <ArrowRight size={13} strokeWidth={2} aria-hidden="true" />
+                  {feature.title}
                 </span>
-                <span className={styles.checkDetail}>{check.detail}</span>
+                <span className={styles.checkDetail}>{feature.detail}</span>
               </li>
             ))}
           </ul>
           <p className={styles.statusFoot}>
-            Read at startup · volunteer records stay in the local SQLite database
+            Previewed with sample records · not a live database health check
           </p>
         </aside>
       </main>
