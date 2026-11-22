@@ -62,6 +62,25 @@ SQLite workspace                          change log + commands
 - The shared workspace uses the server as the authority. Writes are queued locally, retried with stable operation IDs, and refused rather than silently merged when the server has newer data.
 - The volunteer PWA and the desktop's shared view use the same Rust planner and the same synchronized data model.
 
+## Web surfaces and data boundaries
+
+The public browser build of `index.html` is a **local demonstration**, not a hosted
+coordinator service. It uses sample data and stores preview changes in that browser.
+Production browser builds disable the preview's sign-in and create-account forms so
+visitors are not asked for passwords for accounts that cannot synchronize. Do not
+enter actual volunteer, donor, or organization information in the browser demo.
+
+The separate `/pwa.html` document is the volunteer shared-workspace client. It
+uses Supabase authentication and database authorization and requires a configured
+publishable/anonymous key. Public use of this PWA needs a real-user sign-up, sync,
+permission, and recovery test on the deployed HTTPS origin. The native Tauri desktop
+app is a third surface: its local records live in encrypted SQLite, and its optional
+shared workspace connects to Supabase when online.
+
+A passing Vite build or browser preview test does **not** mean the coordinator
+browser interface is multiuser or ready to accept public accounts. That requires
+an explicitly implemented and tested server-backed coordinator repository.
+
 ## Development
 
 Use the Node version in `.node-version`, pnpm 12.9.1, stable Rust, and the platform's Tauri prerequisites.
