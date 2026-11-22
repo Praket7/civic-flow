@@ -36,6 +36,7 @@ fails when it is out of date.
 | `react` | Interface runtime. |
 | `react-dom` | DOM renderer for the React interface. |
 | `react-router-dom` | Client-side routes for the 50 registered screens. |
+| `reqwest` | Verifies Supabase identity tokens directly at the Rust command boundary. |
 | `rusqlite` | SQLite access, compiled with SQLCipher and vendored OpenSSL. |
 | `serde` | Serialization across the IPC boundary and into the database. |
 | `serde_json` | JSON encoding for IPC payloads and the authored demo seed. |
