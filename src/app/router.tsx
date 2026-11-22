@@ -63,30 +63,46 @@ import { routes } from "./routes";
 // Keep the frequently used launch, volunteer, and coordinator home screens eager.
 // Reports, large planners, and settings load only when someone opens them.
 const LazyAccessibilityPage = lazy(() =>
-  import("../features/settings/AccessibilityPage").then((module) => ({ default: module.AccessibilityPage })),
+  import("../features/settings/AccessibilityPage").then((module) => ({
+    default: module.AccessibilityPage,
+  })),
 );
 const LazyAutoRosterPage = lazy(() =>
-  import("../features/coverage/AutoRosterPage").then((module) => ({ default: module.AutoRosterPage })),
+  import("../features/coverage/AutoRosterPage").then((module) => ({
+    default: module.AutoRosterPage,
+  })),
 );
 const LazyBackupPage = lazy(() =>
   import("../features/records/BackupPage").then((module) => ({ default: module.BackupPage })),
 );
 const LazyCustomReportPage = lazy(() =>
-  import("../features/reports/CustomReportPage").then((module) => ({ default: module.CustomReportPage })),
+  import("../features/reports/CustomReportPage").then((module) => ({
+    default: module.CustomReportPage,
+  })),
 );
 const LazyImpactAnalyticsPage = lazy(() =>
-  import("../features/impact/ImpactAnalyticsPage").then((module) => ({ default: module.ImpactAnalyticsPage })),
+  import("../features/impact/ImpactAnalyticsPage").then((module) => ({
+    default: module.ImpactAnalyticsPage,
+  })),
 );
 const LazyReportsPage = lazy(() =>
   import("../features/reports/ReportsPage").then((module) => ({ default: module.ReportsPage })),
 );
 const LazyRetentionPage = lazy(() =>
-  import("../features/insights/RetentionPage").then((module) => ({ default: module.RetentionPage })),
+  import("../features/insights/RetentionPage").then((module) => ({
+    default: module.RetentionPage,
+  })),
 );
 
 function DeferredPage({ children }: { children: ReactNode }) {
   return (
-    <Suspense fallback={<p role="status" data-route-loading="true">Opening this screen…</p>}>
+    <Suspense
+      fallback={
+        <p role="status" data-route-loading="true">
+          Opening this screen…
+        </p>
+      }
+    >
       {children}
     </Suspense>
   );
@@ -126,7 +142,11 @@ export const pages: Record<string, ReactNode> = {
   notifications: <NotificationsPage />,
   "mission-control": <MissionControlPage />,
   coverage: <CoveragePage />,
-  autoroster: <DeferredPage><LazyAutoRosterPage /></DeferredPage>,
+  autoroster: (
+    <DeferredPage>
+      <LazyAutoRosterPage />
+    </DeferredPage>
+  ),
   schedule: <SchedulePage />,
   opportunities: <OpportunitiesPage />,
   "create-opportunity": <CreateOpportunityPage />,
@@ -139,16 +159,40 @@ export const pages: Record<string, ReactNode> = {
   attendance: <AttendancePage />,
   kiosk: <KioskPage />,
   "hours-review": <HoursReviewPage />,
-  reports: <DeferredPage><LazyReportsPage /></DeferredPage>,
-  "custom-report": <DeferredPage><LazyCustomReportPage /></DeferredPage>,
-  "impact-analytics": <DeferredPage><LazyImpactAnalyticsPage /></DeferredPage>,
-  insights: <DeferredPage><LazyRetentionPage /></DeferredPage>,
+  reports: (
+    <DeferredPage>
+      <LazyReportsPage />
+    </DeferredPage>
+  ),
+  "custom-report": (
+    <DeferredPage>
+      <LazyCustomReportPage />
+    </DeferredPage>
+  ),
+  "impact-analytics": (
+    <DeferredPage>
+      <LazyImpactAnalyticsPage />
+    </DeferredPage>
+  ),
+  insights: (
+    <DeferredPage>
+      <LazyRetentionPage />
+    </DeferredPage>
+  ),
   "impact-report": <ImpactReportPage />,
   records: <RecordsPage />,
   audit: <AuditPage />,
-  backup: <DeferredPage><LazyBackupPage /></DeferredPage>,
+  backup: (
+    <DeferredPage>
+      <LazyBackupPage />
+    </DeferredPage>
+  ),
   settings: <SettingsPage />,
-  accessibility: <DeferredPage><LazyAccessibilityPage /></DeferredPage>,
+  accessibility: (
+    <DeferredPage>
+      <LazyAccessibilityPage />
+    </DeferredPage>
+  ),
   ask: <AskPage />,
   "shared-workspace": <SharedWorkspacePage />,
   "shared-schedule": <SharedSchedulePage />,
