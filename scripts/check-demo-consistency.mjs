@@ -22,7 +22,7 @@ for (const activity of demo.recentActivity) {
     (shift) =>
       shift.opportunityId === matchingOpportunity.id &&
       Date.parse(shift.startsAt) - 30 * 60_000 <= at &&
-      at <= Date.parse(shift.endsAt),
+      at <= Date.parse(shift.startsAt) + 15 * 60_000,
   );
   assert.ok(matchingShift, `Check-in has no matching active shift: ${activity.id}`);
 }
