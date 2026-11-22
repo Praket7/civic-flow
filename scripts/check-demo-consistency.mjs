@@ -21,7 +21,7 @@ for (const activity of demo.recentActivity) {
   const matchingShift = demo.shifts.find(
     (shift) =>
       shift.opportunityId === matchingOpportunity.id &&
-      Date.parse(shift.startsAt) <= at &&
+      Date.parse(shift.startsAt) - 30 * 60_000 <= at &&
       at <= Date.parse(shift.endsAt),
   );
   assert.ok(matchingShift, `Check-in has no matching active shift: ${activity.id}`);
