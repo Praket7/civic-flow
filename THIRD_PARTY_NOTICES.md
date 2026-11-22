@@ -270,7 +270,7 @@ Applications* (1993), Chapter 9.
 | `foreign-types` | 0.5.0 | MIT/Apache-2.0 | no |
 | `foreign-types-macros` | 0.2.4 | MIT/Apache-2.0 | no |
 | `foreign-types-shared` | 0.3.1 | MIT/Apache-2.0 | no |
-| `form_urlencoded` | 1.2.2 | MIT OR Apache-2.0 | no |
+| `form_urlencoded` | 1.2.3 | MIT OR Apache-2.0 | no |
 | `futures-channel` | 0.3.34 | MIT OR Apache-2.0 | no |
 | `futures-core` | 0.3.34 | MIT OR Apache-2.0 | no |
 | `futures-executor` | 0.3.34 | MIT OR Apache-2.0 | no |
@@ -590,7 +590,7 @@ Applications* (1993), Chapter 9.
 | `unicode-segmentation` | 1.13.3 | MIT OR Apache-2.0 | no |
 | `universal-hash` | 0.5.1 | MIT OR Apache-2.0 | no |
 | `untrusted` | 0.9.0 | ISC | no |
-| `url` | 2.5.8 | MIT OR Apache-2.0 | no |
+| `url` | 2.5.9 | MIT OR Apache-2.0 | no |
 | `urlpattern` | 0.6.0 | MIT | no |
 | `utf8_iter` | 1.0.4 | Apache-2.0 OR MIT | no |
 | `uuid` | 1.28.0 | Apache-2.0 OR MIT | no |
