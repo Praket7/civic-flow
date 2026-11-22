@@ -1,0 +1,14 @@
+node_modules
+dist
+src-tauri/target
+src-tauri/core/target
+src-tauri/gen
+shared/demo-workspace.json
+src/lib/i18n/catalogs
+pnpm-lock.yaml
+README.md
+.secrets
+
+# Generated from the lockfiles by scripts/generate-third-party.mjs.
+THIRD_PARTY_NOTICES.md
+src/data/thirdParty.json
