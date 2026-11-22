@@ -13,7 +13,6 @@ function sameOriginFrame(postMessage: (message: unknown, target: string) => void
   } as unknown as HTMLIFrameElement;
 }
 
-
 describe("desktop session bridge", () => {
   it("adopts only a pair of tokens", () => {
     expect(isBridgedSession({ accessToken: "a", refreshToken: "r" })).toBe(true);
