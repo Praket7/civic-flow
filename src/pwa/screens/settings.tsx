@@ -30,6 +30,7 @@ export function SettingsScreen() {
     retryConflict,
     view,
   } = useCloud();
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
   return (
     <div className={styles.stack}>
       <PageTitle eyebrow="Settings" title="This device and your account." />
@@ -39,10 +40,39 @@ export function SettingsScreen() {
         <p className={styles.accountEmail}>{view?.email}</p>
         <p className={`${styles.muted} ${styles.accountOrg}`}>{workspace?.organization.name}</p>
         <div className={styles.rowActions}>
-          <Button variant="secondary" onClick={() => void signOut()}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              if (status.pending > 0) {
+                setConfirmSignOut(true);
+                return;
+              }
+              void signOut();
+            }}
+          >
             Sign out
           </Button>
         </div>
+        <p className={styles.fieldHint}>
+          Signing out clears downloaded records. Unsent offline changes remain on this device for
+          recovery, so use a private device for sensitive records.
+        </p>
+        {confirmSignOut ? (
+          <div className={styles.conflictCard} role="alert">
+            <p className={styles.body}>
+              You still have {status.pending} change{status.pending === 1 ? "" : "s"} waiting to sync.
+              Signing out will not send or erase them. Sign in again on this device to recover them.
+            </p>
+            <div className={styles.rowActions}>
+              <Button variant="ghost" onClick={() => setConfirmSignOut(false)}>
+                Stay signed in
+              </Button>
+              <Button variant="secondary" onClick={() => void signOut()}>
+                Sign out with unsent changes
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </Card>
 
       {workspaces.length > 1 ? (
