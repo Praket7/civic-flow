@@ -12,3 +12,6 @@ README.md
 # Generated from the lockfiles by scripts/generate-third-party.mjs.
 THIRD_PARTY_NOTICES.md
 src/data/thirdParty.json
+
+# The independent judging page deliberately embeds its small stylesheet.
+public/judge/index.html
