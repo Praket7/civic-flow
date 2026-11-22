@@ -83,6 +83,10 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   // Supabase and any other API host is left alone entirely.
   if (url.pathname.startsWith("/api/")) return;
+  // The competition judging site is a separate, publicly accessible sample.
+  // Never cache its navigation as the hosted PWA shell, which would replace
+  // offline /pwa.html with the unrelated coordinator demo document.
+  if (url.pathname === "/judge" || url.pathname.startsWith("/judge/")) return;
 
   if (request.mode === "navigate") {
     event.respondWith(
