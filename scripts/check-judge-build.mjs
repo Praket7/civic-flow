@@ -16,12 +16,22 @@ const sample = read("judge/demo/index.html");
 
 assert.match(root, /CivicFlow Volunteer/, "root must serve the real hosted PWA");
 assert.match(root, /\/assets\/pwa-[\w-]+\.js/, "root must load PWA JS");
-assert.doesNotMatch(root, /\/assets\/main-[\w-]+\.js/, "browser-local demo must not replace the hosted PWA");
-assert.match(sample, /\/assets\/main-[\w-]+\.js/, "judge demo must load the actual coordinator UI");
-assert.match(judge, /\/judge\/demo\/#\/welcome/, "judge page must link to the interactive demo");
-assert.match(judge, /sample data/i, "judge page must disclose its local-only sample data");
-for (const name of ["mission-control", "autoroster", "schedule", "volunteer-home", "volunteer-schedule"]) {
+assert.doesNotMatch(
+  root,
+  /\/assets\/main-[\w-]+\.js/,
+  "browser-local demo must not replace the hosted PWA",
+);
+assert.match(sample, /\/assets\/main-[\w-]+\.js/, "judge demo must load the coordinator UI");
+assert.match(judge, /\/judge\/demo\/#\/welcome/, "judge page must link to the demo");
+assert.match(judge, /sample data/i, "judge page must disclose local-only data");
+for (const name of [
+  "mission-control",
+  "autoroster",
+  "schedule",
+  "volunteer-home",
+  "volunteer-schedule",
+]) {
   const screenshot = path.join(dist, "judge", "screenshots", name + ".png");
   assert.ok(statSync(screenshot).size > 100_000, "missing repository screenshot: " + name);
 }
-console.log("Judging build gate passed: hosted PWA root, isolated sample and five local screenshots.");
+console.log("Judging build gate passed: hosted PWA root, isolated sample and screenshots.");
