@@ -37,5 +37,8 @@ const results = budgets.map(({ name, pattern, maxKiB }) => {
   };
 });
 
-writeFileSync(resolve(assets, "../bundle-budget-report.json"), JSON.stringify({ results }, null, 2));
+writeFileSync(
+  resolve(assets, "../bundle-budget-report.json"),
+  JSON.stringify({ results }, null, 2),
+);
 if (failed) process.exitCode = 1;
