@@ -84,7 +84,9 @@ CI additionally runs the macOS native end-to-end test with WebdriverIO, dependen
 
 ## Install and releases
 
-[Download the latest CivicFlow release](https://github.com/Praket7/civicflow2/releases/latest) for macOS, Windows, or Linux. The macOS asset is one universal DMG for Apple silicon and Intel Macs; the Windows and Linux releases contain the x64 installers for those platforms.
+**Release status:** This repository contains the reviewed CivicFlow source and Phase 1 authorization changes, but it has not published a verified installer release. The links below point to **legacy v0.1.2 installers** in the original repository, not new builds from `civic-flow`.
+
+[Download the previous CivicFlow release](https://github.com/Praket7/civicflow2/releases/latest) for macOS, Windows, or Linux. The macOS asset is one universal DMG for Apple silicon and Intel Macs; the Windows and Linux releases contain the x64 installers for those platforms.
 
 | Platform | Direct download |
 | --- | --- |

@@ -256,7 +256,7 @@ jobs:
             `Get-FileHash <file> -Algorithm SHA256`).
 
             Verify GitHub's build provenance attestation with
-            `gh attestation verify <installer> --repo Praket7/civicflow2`.
+            `gh attestation verify <installer> --repo Praket7/civic-flow`.
             The checksums and attestations are generated from the same tagged
             commit as the installers.
 
