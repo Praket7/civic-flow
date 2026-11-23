@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { providerError } from "../errors";
 import type { CommandEnvelope, CommandResult, PullResult } from "./protocol";
 import type { SyncTransport } from "./engine";
 
@@ -28,7 +29,7 @@ export function createSupabaseTransport(client: SupabaseClient): SyncTransport {
         p_payload: envelope.payload,
         p_client_created_at: envelope.clientCreatedAt,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw providerError(error);
       return data as CommandResult;
     },
 
@@ -38,7 +39,7 @@ export function createSupabaseTransport(client: SupabaseClient): SyncTransport {
         p_after: cursor,
         p_limit: limit,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw providerError(error);
       const result = data as PullResult | null;
       if (!result) throw new Error("The server returned no change batch.");
       return result;

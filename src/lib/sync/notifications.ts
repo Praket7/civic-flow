@@ -1,4 +1,5 @@
 import { supabase } from "./auth";
+import { providerError } from "../errors";
 import { supabaseAnonKey, supabaseUrl } from "./config";
 
 export interface NotificationPreferences {
@@ -71,7 +72,7 @@ export async function loadPreferences(organizationId: string): Promise<Notificat
   const { data, error } = await supabase().rpc("my_notification_preferences", {
     p_organization_id: organizationId,
   });
-  if (error) throw new Error(error.message);
+  if (error) throw providerError(error);
   const result = data as { status?: string; preferences?: Partial<NotificationPreferences> } | null;
   if (!result || result.status !== "ok" || !result.preferences) {
     throw new Error("Notification preferences could not be read.");
@@ -93,7 +94,7 @@ export async function savePreferences(
     p_quiet_hours_end: preferences.quietHoursEnd,
     p_reminder_minutes: preferences.reminderMinutes,
   });
-  if (error) throw new Error(error.message);
+  if (error) throw providerError(error);
   const result = data as { status?: string; code?: string } | null;
   if (!result || result.status !== "ok") {
     throw new Error(
@@ -177,7 +178,7 @@ export async function enablePush(organizationId: string, publicKey: string): Pro
     p_auth: auth,
     p_label: navigator.userAgent.includes("iPhone") ? "iPhone" : "This device",
   });
-  if (error) throw new Error(error.message);
+  if (error) throw providerError(error);
   const result = data as { status?: string; code?: string } | null;
   if (!result || result.status !== "ok") {
     throw new Error(
@@ -204,7 +205,7 @@ export async function markAllRead(organizationId: string): Promise<number> {
   const { data, error } = await supabase().rpc("mark_all_notifications_read", {
     p_organization_id: organizationId,
   });
-  if (error) throw new Error(error.message);
+  if (error) throw providerError(error);
   const result = data as { status?: string; read?: number } | null;
   if (!result || result.status !== "ok") throw new Error("Notifications could not be marked read.");
   return result.read ?? 0;
@@ -214,5 +215,5 @@ export async function markRead(notificationId: string): Promise<void> {
   const { error } = await supabase().rpc("mark_notification_read", {
     p_notification_id: notificationId,
   });
-  if (error) throw new Error(error.message);
+  if (error) throw providerError(error);
 }

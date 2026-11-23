@@ -31,6 +31,30 @@ function textOf(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+/** Preserve provider SQLSTATE/status at the hosted transport boundary. */
+export function providerError(value: unknown): Error & { code?: string; status?: number } {
+  const record = recordOf(value);
+  const error = new Error(
+    textOf(record?.message) ?? textOf(record?.error_description) ?? "The service request failed.",
+  ) as Error & { code?: string; status?: number };
+  if (textOf(record?.code)) error.code = textOf(record?.code);
+  const status = record?.status ?? record?.statusCode;
+  if (typeof status === "number" && Number.isInteger(status)) error.status = status;
+  return error;
+}
+
+/** Keep SQL statements, paths and server tracebacks out of user-facing errors. */
+function publicMessage(message: string | undefined): string | undefined {
+  if (
+    message &&
+    /SELECT\s+\*|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM|SQLSTATE|stack trace|postgres|sqlite|pg_catalog|\/(?:private|Users|home|var)\/|relation "[^"]+"/i.test(
+      message,
+    )
+  )
+    return undefined;
+  return message;
+}
+
 /** Classify failures by recoverable behavior, never by a screen's catch block. */
 export function classifyError(error: unknown): RecoveryError {
   const record = recordOf(error);
@@ -39,7 +63,11 @@ export function classifyError(error: unknown): RecoveryError {
     textOf(record?.message) ??
     textOf(record?.error_description) ??
     textOf(error);
-  const code = textOf(record?.code)?.toUpperCase() ?? "UNKNOWN";
+  const status = record?.status ?? record?.statusCode;
+  const code =
+    textOf(record?.code)?.toUpperCase() ??
+    (typeof status === "number" && Number.isInteger(status) ? String(status) : "UNKNOWN");
+  const safe = publicMessage(message);
   const action = textOf(record?.action);
   const field = textOf(record?.field);
 
@@ -57,7 +85,10 @@ export function classifyError(error: unknown): RecoveryError {
       retryable: true,
     };
   }
-  if (/AUTH|UNAUTHORIZED|401/.test(code) || /session (?:expired|invalid)/i.test(message ?? "")) {
+  if (
+    /AUTH|UNAUTHORIZED|401|PGRST30[12]/.test(code) ||
+    /session (?:expired|invalid)/i.test(message ?? "")
+  ) {
     return {
       category: "authentication",
       code,
@@ -75,11 +106,29 @@ export function classifyError(error: unknown): RecoveryError {
       retryable: false,
     };
   }
+  if (code === "23505") {
+    return {
+      category: "conflict",
+      code,
+      message: "A record with these details already exists.",
+      action: "Review the existing record before retrying.",
+      retryable: false,
+    };
+  }
+  if (/^(?:23502|23503|23514|22P02)$/.test(code)) {
+    return {
+      category: "validation",
+      code,
+      message: "These details do not satisfy workspace rules.",
+      action: "Review the required fields and eligibility, then retry.",
+      retryable: false,
+    };
+  }
   if (/CONFLICT|STALE|REVISION|409/.test(code)) {
     return {
       category: "conflict",
       code,
-      message: message ?? "This record changed on another device.",
+      message: safe ?? "This record changed on another device.",
       action: action ?? "Refresh the workspace, review the changes and retry.",
       field,
       retryable: true,
@@ -89,7 +138,7 @@ export function classifyError(error: unknown): RecoveryError {
     return {
       category: "validation",
       code,
-      message: message ?? "Check the information entered.",
+      message: safe ?? "Check the information entered.",
       action,
       field,
       retryable: false,
@@ -99,7 +148,7 @@ export function classifyError(error: unknown): RecoveryError {
     return {
       category: "not_found",
       code,
-      message: message ?? "The requested record could not be found.",
+      message: safe ?? "The requested record could not be found.",
       action: action ?? "Return to the list and refresh.",
       retryable: false,
     };
@@ -113,7 +162,7 @@ export function classifyError(error: unknown): RecoveryError {
       retryable: true,
     };
   }
-  if (/INTERNAL|PANIC|500/.test(code)) {
+  if (/INTERNAL|PANIC|500|^5\d\d$/.test(code)) {
     return {
       category: "internal",
       code,
@@ -125,7 +174,7 @@ export function classifyError(error: unknown): RecoveryError {
   return {
     category: "unknown",
     code,
-    message: message ?? "The request couldn't be completed.",
+    message: safe ?? "The request couldn't be completed.",
     action,
     field,
     retryable: false,

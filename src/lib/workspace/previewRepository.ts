@@ -15,26 +15,21 @@ import type {
   AttendanceEntry,
   AuditEvent,
   BackupRestoreResult,
-  BackupSnapshot,
   CandidateAnswer,
   CheckinCode,
   CheckinStatus,
   CheckinWindow,
-  ConstraintCheck,
   Credential,
   AuthSession,
   DemoWorkspace,
   DisruptedRole,
   DisruptedShift,
   DisruptionReport,
-  ForcedComparison,
   HoursDecision,
   ImpactMetric,
   InstallationAccess,
-  MatchExplanation,
   NewOpportunityInput,
   Opportunity,
-  PlannedAssignment,
   PriorityLevel,
   RetentionCohort,
   CredentialReadiness,
@@ -49,8 +44,6 @@ import type {
   RecoverySeat,
   ReplacementRecommendation,
   RetentionSignal,
-  CandidateEvaluation,
-  EvaluatedSlot,
   RosterApplyAssignment,
   RosterEvaluation,
   RosterOptions,
@@ -59,14 +52,12 @@ import type {
   RosterPolicyView,
   RosterVolunteer,
   SavedViewRecord,
-  ScoreComponent,
   SeriesResult,
   ServiceVerification,
   SessionSnapshot,
   ShiftSeriesRecord,
   VolunteerInsight,
   WaitlistCandidate,
-  Volunteer,
   VolunteerImportPreview,
   WaitlistEntry,
   WorkspaceSettings,
@@ -76,6 +67,10 @@ import { buildMissionControl } from "./compute";
 import { buildPreviewReport } from "./preview/reports";
 import { renderPrintableReport } from "./preview/reportHtml";
 import { IMPORT_COLUMNS, previewVolunteerCsv } from "./preview/volunteerImport";
+import { createPreviewRosterStorage } from "./preview/rosterStorage";
+import { createPreviewRosterPolicyStore } from "./preview/rosterPolicyStore";
+import { createPreviewBackupStore } from "./preview/backupStore";
+import { createPreviewRosterEngine } from "./preview/rosterEngine";
 import { demoWorkspace } from "./dataset";
 import { blankWorkspaceForOrganization, withRoster } from "./organizationWorkspace";
 import type { OrganizationScope } from "./organizationWorkspace";
@@ -89,7 +84,6 @@ import {
 
 const STORAGE_KEY = "civicflow.workflow.v1";
 const READ_KEY = "civicflow.notifications.read";
-const BACKUP_KEY = "civicflow.backups.v1";
 
 /**
  * Each organization has its own workflow overlay; the demo keeps the original
@@ -112,7 +106,6 @@ function scopeId(): string {
 function scoped(key: string): string {
   return scopeId() === DEMO_ORGANIZATION_ID ? key : `${key}:${scopeId()}`;
 }
-const BACKUP_RETENTION = 20;
 /** The identity the preview screens are operating as. */
 let activePreviewAccount: Account | null = null;
 
@@ -335,6 +328,11 @@ function defaultSavedViews(): SavedViewRecord[] {
   }));
 }
 
+const { readImportedRoster, writeImportedRoster, workspaceRoster } = createPreviewRosterStorage(
+  scoped,
+  () => workspace.volunteers,
+);
+
 export function createDefaultSnapshot(): SessionSnapshot {
   return {
     savedOpportunityIds: [...seed.savedOpportunityIds],
@@ -410,165 +408,12 @@ function loadSnapshot(): SessionSnapshot {
 let state = loadSnapshot();
 let revision = loadRevision();
 
-interface StoredBackup {
-  meta: BackupSnapshot;
-  snapshot: SessionSnapshot;
-}
-
-function previewChecksum(value: string): string {
-  let h1 = 0x811c9dc5;
-  let h2 = 0x1000193;
-  for (let index = 0; index < value.length; index += 1) {
-    h1 = Math.imul(h1 ^ value.charCodeAt(index), 0x01000193) >>> 0;
-    h2 = Math.imul(h2 + value.charCodeAt(index), 0x85ebca6b) >>> 0;
-  }
-  const block = (seed: number) => seed.toString(16).padStart(8, "0");
-  return (block(h1) + block(h2) + block(h1 ^ h2) + block(h1 + h2)).repeat(2);
-}
-
-function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function validSnapshot(value: unknown): value is SessionSnapshot {
-  if (!isRecord(value)) return false;
-  return (
-    Array.isArray(value.savedOpportunityIds) &&
-    isRecord(value.attendance) &&
-    isRecord(value.hoursDecisions) &&
-    Array.isArray(value.applications) &&
-    Array.isArray(value.waitlist) &&
-    isRecord(value.settings) &&
-    Array.isArray(value.createdOpportunities) &&
-    Array.isArray(value.registrations) &&
-    Array.isArray(value.audit) &&
-    isRecord(value.volunteerProfile) &&
-    Array.isArray(value.credentials) &&
-    Array.isArray(value.verifications) &&
-    Array.isArray(value.impactMetrics) &&
-    Array.isArray(value.savedViews) &&
-    Array.isArray(value.retention)
+const { clone, isRecord, validSnapshot, makeBackup, writeBackups, ensureBackups, listBackupMeta } =
+  createPreviewBackupStore(
+    scoped,
+    () => workspace,
+    () => state,
   );
-}
-
-function backupCounts(snapshot: SessionSnapshot) {
-  return {
-    volunteers: workspace.volunteers.length,
-    programs: workspace.opportunities.length,
-    shifts: workspace.shifts.length,
-    hours: workspace.hourEntries.length + workspace.mayaEntries.length,
-    notifications: workspace.notifications.length,
-    audit: snapshot.audit.length,
-  };
-}
-
-function backupRows(snapshot: SessionSnapshot): number {
-  const counts = backupCounts(snapshot);
-  return (
-    counts.volunteers +
-    counts.programs +
-    counts.shifts +
-    counts.hours +
-    counts.notifications +
-    counts.audit +
-    snapshot.savedOpportunityIds.length +
-    snapshot.applications.length +
-    snapshot.waitlist.length +
-    snapshot.registrations.length +
-    Object.values(snapshot.attendance).flat().length +
-    Object.keys(snapshot.hoursDecisions).length
-  );
-}
-
-function makeBackup(
-  snapshot: SessionSnapshot,
-  kind: BackupSnapshot["kind"],
-  note: string,
-): StoredBackup {
-  const stored: StoredBackup = {
-    meta: {
-      id: `backup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      createdAt: new Date().toISOString(),
-      kind,
-      bytes: 0,
-      rows: backupRows(snapshot),
-      note,
-      counts: backupCounts(snapshot),
-      sha256: "",
-      schemaVersion: 3,
-      integrity: "ok",
-    },
-    snapshot: clone(snapshot),
-  };
-  const payload = JSON.stringify(stored.snapshot);
-  stored.meta.bytes = new TextEncoder().encode(payload).length;
-  stored.meta.sha256 = previewChecksum(payload);
-  return stored;
-}
-
-function readBackups(): StoredBackup[] {
-  try {
-    const raw = localStorage.getItem(scoped(BACKUP_KEY));
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((entry): entry is StoredBackup => {
-        if (!isRecord(entry) || !isRecord(entry.meta) || !isRecord(entry.snapshot)) return false;
-        const meta = entry.meta;
-        return (
-          typeof meta.id === "string" &&
-          typeof meta.createdAt === "string" &&
-          (meta.kind === "manual" || meta.kind === "automatic") &&
-          typeof meta.bytes === "number" &&
-          typeof meta.rows === "number" &&
-          typeof meta.note === "string" &&
-          isRecord(meta.counts)
-        );
-      })
-      .map((entry) => ({
-        ...entry,
-        meta: {
-          ...entry.meta,
-          sha256: entry.meta.sha256 || previewChecksum(JSON.stringify(entry.snapshot)),
-          schemaVersion: entry.meta.schemaVersion || 3,
-          integrity: entry.meta.integrity || "ok",
-        },
-      }));
-  } catch {
-    return [];
-  }
-}
-
-function writeBackups(backups: StoredBackup[]): void {
-  try {
-    localStorage.setItem(scoped(BACKUP_KEY), JSON.stringify(backups.slice(0, BACKUP_RETENTION)));
-  } catch {
-    // The current session can still create and restore in memory.
-  }
-}
-
-function ensureBackups(): StoredBackup[] {
-  const stored = readBackups();
-  if (stored.length > 0) {
-    if (stored.length > BACKUP_RETENTION) {
-      const retained = stored.slice(0, BACKUP_RETENTION);
-      writeBackups(retained);
-      return retained;
-    }
-    return stored;
-  }
-  const baseline = makeBackup(state, "automatic", "Initial workspace snapshot");
-  writeBackups([baseline]);
-  return [baseline];
-}
-
-function listBackupMeta(): BackupSnapshot[] {
-  return ensureBackups().map((entry) => entry.meta);
-}
 
 function persist(next: SessionSnapshot): SessionSnapshot {
   state = next;
@@ -733,60 +578,6 @@ function withAttendance(
   };
 }
 
-const IMPORTED_VOLUNTEERS_KEY = "civicflow.imported-volunteers.v1";
-
-/** The heads the importer reads, mirroring the desktop column list. */
-function readImportedRoster(): RosterVolunteer[] {
-  try {
-    const raw = localStorage.getItem(scoped(IMPORTED_VOLUNTEERS_KEY));
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? (parsed as RosterVolunteer[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeImportedRoster(records: RosterVolunteer[]): void {
-  try {
-    localStorage.setItem(scoped(IMPORTED_VOLUNTEERS_KEY), JSON.stringify(records));
-  } catch {
-    // Storage can be unavailable in hardened webviews; the session still works.
-  }
-}
-
-function rosterRecord(volunteer: Volunteer): RosterVolunteer {
-  return {
-    id: volunteer.id,
-    name: volunteer.name,
-    email: volunteer.email,
-    phone: volunteer.phone,
-    status: volunteer.status,
-    joinedAt: volunteer.joinedAt,
-    skills: volunteer.skills,
-    availability: volunteer.availability.map((slot) => `${slot.day}:${slot.period}`),
-    causes: volunteer.causes,
-  };
-}
-
-/**
- * What the roster holds: the seeded people plus the ones this device imported,
- * which is the same thing the desktop snapshot reports from SQLite.
- */
-function workspaceRoster(): RosterVolunteer[] {
-  const records = [...workspace.volunteers.map(rosterRecord), ...readImportedRoster()];
-  const seen = new Set<string>();
-  return records.filter((record) => {
-    if (seen.has(record.id)) return false;
-    seen.add(record.id);
-    return true;
-  });
-}
-
-/**
- * The same check the desktop importer runs, so the browser preview refuses the
- * same files rather than accepting what SQLite would reject.
- */
-/** Keep the browser preview's existing scoped roster as the duplicate-email oracle. */
 function previewVolunteers(text: string): VolunteerImportPreview {
   return previewVolunteerCsv(
     text,
@@ -2040,114 +1831,8 @@ const PREVIEW_PRIORITY_LEVELS: PriorityLevel[] = [
   { key: "top", weight: 35 },
 ];
 
-const POLICY_KEY = "civicflow.roster-policy.v1";
-
-function defaultRosterPolicy(): RosterPolicy {
-  return {
-    version: 1,
-    maxShiftsPerDay: null,
-    maxMinutesPerDay: null,
-    maxShiftsPerWeek: null,
-    maxMinutesPerWeek: null,
-    minimumGapMinutes: 0,
-    unknownAgeBehavior: "block",
-    unknownCredentialBehavior: "block",
-    skillWeight: 35,
-    interestWeight: 15,
-    languageWeight: 10,
-    fairnessWeight: 10,
-    reliabilityWeight: 5,
-    waitlistPreference: false,
-  };
-}
-
-function readRosterPolicy(): RosterPolicy {
-  try {
-    const raw = localStorage.getItem(scoped(POLICY_KEY));
-    if (!raw) return defaultRosterPolicy();
-    const parsed = JSON.parse(raw) as Partial<RosterPolicy>;
-    return { ...defaultRosterPolicy(), ...parsed };
-  } catch {
-    return defaultRosterPolicy();
-  }
-}
-
-function writeRosterPolicy(policy: RosterPolicy): void {
-  try {
-    localStorage.setItem(scoped(POLICY_KEY), JSON.stringify(policy));
-  } catch {
-    // Storage can be unavailable in hardened webviews; the run still works.
-  }
-}
-
-function validateRosterPolicy(policy: RosterPolicy): void {
-  const limits: [string, number | null, number, number][] = [
-    ["Maximum shifts a day", policy.maxShiftsPerDay, 1, 12],
-    ["Maximum shifts a week", policy.maxShiftsPerWeek, 1, 40],
-    ["Maximum minutes a day", policy.maxMinutesPerDay, 15, 1_440],
-    ["Maximum minutes a week", policy.maxMinutesPerWeek, 60, 10_080],
-  ];
-  for (const [label, value, low, high] of limits) {
-    if (value !== null && (value < low || value > high)) {
-      throw new Error(`${label} must be between ${low} and ${high}.`);
-    }
-  }
-  if (policy.minimumGapMinutes < 0 || policy.minimumGapMinutes > 1_440) {
-    throw new Error("Keep the minimum time between shifts under 24 hours.");
-  }
-  const weights = [
-    policy.skillWeight,
-    policy.interestWeight,
-    policy.languageWeight,
-    policy.fairnessWeight,
-    policy.reliabilityWeight,
-  ];
-  if (weights.some((weight) => !PREVIEW_PRIORITY_LEVELS.some((level) => level.weight === weight))) {
-    throw new Error("Choose one of the offered match priorities.");
-  }
-  if (weights.reduce((total, weight) => total + weight, 0) > 100) {
-    throw new Error("Those priorities add up past a perfect match. Lower one of them.");
-  }
-}
-
-interface PreviewSeat {
-  slotId: string;
-  shiftId: string;
-  opportunityId: string;
-  shiftTitle: string;
-  role: string;
-  cause: string;
-  startsAt: string;
-  endsAt: string;
-  dayKey: string;
-  requiredSkill: string;
-  requiredCredential: string | null;
-}
-
-interface PreviewBlock {
-  start: number;
-  end: number;
-}
-
-interface PreviewLoad {
-  blocks: Map<string, PreviewBlock[]>;
-  dayCount: Map<string, number>;
-  weekCount: Map<string, number>;
-}
-
-interface PreviewChoice {
-  seat: PreviewSeat;
-  volunteer: Volunteer;
-  checks: ConstraintCheck[];
-  components: ScoreComponent[];
-  score: number;
-}
-
-interface PreviewPlanShape {
-  choices: PreviewChoice[];
-  unfilled: { seat: PreviewSeat; reason: string }[];
-  beforeSeat: Map<string, PreviewLoad>;
-}
+const { readRosterPolicy, writeRosterPolicy, validateRosterPolicy } =
+  createPreviewRosterPolicyStore(scoped, PREVIEW_PRIORITY_LEVELS);
 
 function previewDayKey(startsAt: string): string {
   return ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][new Date(startsAt).getDay()];
@@ -2678,660 +2363,31 @@ function previewReminders(): string[] {
   return due;
 }
 
-/**
- * The skill and credential a role demands, by the same name rules the Rust
- * core applies when it seeds requirements. The browser has to agree with the
- * desktop here, otherwise the preview would show a different shortlist than
- * the optimizer actually used.
- */
-function previewRoleRequirement(role: string): { skill: string; credential: string | null } {
-  const lower = role.toLowerCase();
-  if (lower.includes("spanish")) return { skill: "Spanish", credential: null };
-  if (lower.includes("driver") || lower.includes("delivery")) {
-    return { skill: "Driver", credential: "Safe driver clearance" };
-  }
-  if (lower.includes("tutor")) return { skill: "Tutoring", credential: "Tutor certification" };
-  if (lower.includes("food") || lower.includes("pantry") || lower.includes("sort")) {
-    return { skill: "Food handling", credential: "Food safety handler" };
-  }
-  if (lower.includes("garden") || lower.includes("tool")) {
-    return { skill: "Gardening", credential: "Garden tool safety" };
-  }
-  return { skill: "", credential: null };
-}
-
-function previewSeats(shiftIds: string[]): PreviewSeat[] {
-  const seats: PreviewSeat[] = [];
-  for (const shift of workspace.shifts.filter((row) => shiftIds.includes(row.id))) {
-    const opportunity = workspace.opportunities.find((row) => row.id === shift.opportunityId);
-    const live = state.registrations.filter(
-      (row) => row.shiftId === shift.id && row.status === "registered",
-    );
-    for (const role of shift.roles) {
-      const requirement = previewRoleRequirement(role.name);
-      const filled = live.filter((row) => row.role === role.name).length;
-      for (let seat = 0; seat < Math.max(0, role.required - filled); seat += 1) {
-        seats.push({
-          slotId: `${shift.id}-${role.name}-${seat + 1}`,
-          shiftId: shift.id,
-          opportunityId: shift.opportunityId,
-          shiftTitle: opportunity?.title ?? "Shift",
-          role: role.name,
-          cause: opportunity?.cause ?? "food",
-          startsAt: shift.startsAt,
-          endsAt: shift.endsAt,
-          dayKey: previewDayKey(shift.startsAt),
-          requiredSkill: requirement.skill,
-          requiredCredential: requirement.credential,
-        });
-      }
-    }
-  }
-  return seats;
-}
-
-function emptyLoad(): PreviewLoad {
-  return { blocks: new Map(), dayCount: new Map(), weekCount: new Map() };
-}
-
-function cloneLoad(load: PreviewLoad): PreviewLoad {
-  return {
-    blocks: new Map(
-      [...load.blocks].map(([volunteerId, blocks]) => [
-        volunteerId,
-        blocks.map((block) => ({ ...block })),
-      ]),
-    ),
-    dayCount: new Map(load.dayCount),
-    weekCount: new Map(load.weekCount),
-  };
-}
-
-/**
- * Everything the roster already holds: blocks for overlap checks, plus the
- * day and week counts the limits read. Building it once keeps the plan and the
- * candidate browser on the same starting point.
- */
-function previewBaseLoad(): PreviewLoad {
-  const load = emptyLoad();
-  const now = new Date(workspace.now).getTime();
-  const horizon = now + 7 * 86_400_000;
-  for (const registration of state.registrations) {
-    if (registration.status !== "registered") continue;
-    const shift = workspace.shifts.find((row) => row.id === registration.shiftId);
-    if (!shift) continue;
-    const start = new Date(shift.startsAt).getTime();
-    const blocks = load.blocks.get(registration.volunteerId) ?? [];
-    blocks.push({ start, end: new Date(shift.endsAt).getTime() });
-    load.blocks.set(registration.volunteerId, blocks);
-    if (start < now || start > horizon) continue;
-    const day = previewDayKey(shift.startsAt);
-    const dayKey = `${registration.volunteerId}:${day}`;
-    load.dayCount.set(dayKey, (load.dayCount.get(dayKey) ?? 0) + 1);
-    load.weekCount.set(
-      registration.volunteerId,
-      (load.weekCount.get(registration.volunteerId) ?? 0) + 1,
-    );
-  }
-  return load;
-}
-
-function previewAvailability(volunteer: Volunteer, seat: PreviewSeat): boolean {
-  if (volunteer.availability.length === 0) return true;
-  const period = previewPeriod(seat.startsAt);
-  return volunteer.availability.some((slot) => slot.day === seat.dayKey && slot.period === period);
-}
-
-function previewChecks(
-  volunteer: Volunteer,
-  seat: PreviewSeat,
-  options: RosterOptions,
-  policy: RosterPolicy,
-  load: PreviewLoad,
-): ConstraintCheck[] {
-  const checks: ConstraintCheck[] = [];
-  const registered = state.registrations.some(
-    (row) =>
-      row.shiftId === seat.shiftId &&
-      row.volunteerId === volunteer.id &&
-      row.status === "registered",
-  );
-  checks.push({
-    name: "Already on this shift",
-    passed: !registered,
-    detail: registered
-      ? "This volunteer is already registered for the shift"
-      : "Not registered yet",
+function createMatchingEngine() {
+  return createPreviewRosterEngine({
+    workspace,
+    state,
+    revision,
+    readRosterPolicy,
+    previewDayKey,
+    previewPeriod,
   });
-  if (seat.requiredSkill) {
-    const skillMatch = volunteer.skills.some((skill) =>
-      skill.toLowerCase().includes(seat.requiredSkill.toLowerCase()),
-    );
-    checks.push({
-      name: "Required skill",
-      passed: skillMatch,
-      detail: skillMatch ? `${seat.requiredSkill} on the profile` : `Needs ${seat.requiredSkill}`,
-    });
-  }
-
-  if (seat.requiredCredential) {
-    const on = seat.startsAt.slice(0, 10);
-    const held = state.credentials.filter(
-      (row) =>
-        row.volunteerId === volunteer.id &&
-        row.name.toLowerCase() === seat.requiredCredential!.toLowerCase(),
-    );
-    const current = held.some((row) => row.validThrough.slice(0, 10) >= on);
-    const expired = !current && held.length > 0;
-    checks.push({
-      name: "Required credential",
-      passed: current,
-      detail: current
-        ? `${seat.requiredCredential} current`
-        : expired
-          ? `${seat.requiredCredential} expired`
-          : `No ${seat.requiredCredential} on record`,
-    });
-  }
-
-  const available = previewAvailability(volunteer, seat);
-  checks.push({
-    name: "Availability",
-    passed: available,
-    detail: available
-      ? `Available ${seat.dayKey.toUpperCase()} ${previewPeriod(seat.startsAt)}`
-      : `Not available ${seat.dayKey.toUpperCase()} ${previewPeriod(seat.startsAt)}`,
-  });
-
-  if (options.blockConflicts) {
-    const start = new Date(seat.startsAt).getTime();
-    const end = new Date(seat.endsAt).getTime();
-    const clash = (load.blocks.get(volunteer.id) ?? []).some(
-      (block) => block.start < end && block.end > start,
-    );
-    checks.push({
-      name: "No overlapping shift",
-      passed: !clash,
-      detail: clash ? "Already booked at this time" : "No shift overlaps this time",
-    });
-  }
-
-  const dayTaken = (load.dayCount.get(`${volunteer.id}:${seat.dayKey}`) ?? 0) + 1;
-  if (policy.maxShiftsPerDay !== null) {
-    checks.push({
-      name: "Daily shift limit",
-      passed: dayTaken <= policy.maxShiftsPerDay,
-      detail: `${dayTaken} of ${policy.maxShiftsPerDay} that day`,
-    });
-  }
-
-  const weekTaken = (load.weekCount.get(volunteer.id) ?? 0) + 1;
-  const weekLimit = policy.maxShiftsPerWeek ?? (options.capWeekly ? 2 : null);
-  if (weekLimit !== null) {
-    checks.push({
-      name: "Weekly shift limit",
-      passed: weekTaken <= weekLimit,
-      detail: `${weekTaken} of ${weekLimit} this week`,
-    });
-  }
-  return checks;
 }
-
-function previewShare(weight: number, numerator: number, denominator: number): number {
-  return Math.floor((weight * numerator) / denominator);
-}
-
-function previewScore(
-  volunteer: Volunteer,
-  seat: PreviewSeat,
-  options: RosterOptions,
-  policy: RosterPolicy,
-  load: PreviewLoad,
-): { components: ScoreComponent[]; total: number } {
-  const skillMatches =
-    !seat.requiredSkill ||
-    volunteer.skills.some((skill) =>
-      skill.toLowerCase().includes(seat.requiredSkill.toLowerCase()),
-    );
-  // A role with no requirement fits anyone eligible, slightly less precisely
-  // than a matched requirement, which is how the solver scores it too.
-  const skill = seat.requiredSkill
-    ? skillMatches
-      ? policy.skillWeight
-      : 0
-    : previewShare(policy.skillWeight, 6, 7);
-  const availability = 25;
-  const interest = volunteer.causes.includes(seat.cause as Volunteer["causes"][number])
-    ? policy.interestWeight
-    : 0;
-  const spanish = volunteer.languages.includes("Spanish");
-  const preference =
-    seat.role.toLowerCase().includes("spanish") && spanish
-      ? policy.languageWeight
-      : options.preferSpanish && spanish
-        ? previewShare(policy.languageWeight, 8, 10)
-        : previewShare(policy.languageWeight, 6, 10);
-  const weekShifts = load.weekCount.get(volunteer.id) ?? 0;
-  const fairness = previewShare(policy.fairnessWeight, 10 - Math.min(weekShifts, 4) * 2, 10);
-  const reliability =
-    volunteer.eventsCompleted === 0
-      ? previewShare(policy.reliabilityWeight, 3, 5)
-      : Math.round((volunteer.attendanceRate / 100) * policy.reliabilityWeight);
-  const components: ScoreComponent[] = [
-    { label: "Skill", awarded: skill, maximum: policy.skillWeight },
-    { label: "Availability", awarded: availability, maximum: 25 },
-    { label: "Interest", awarded: interest, maximum: policy.interestWeight },
-    { label: "Language", awarded: preference, maximum: policy.languageWeight },
-    { label: "Fairness", awarded: fairness, maximum: policy.fairnessWeight },
-    { label: "Reliability", awarded: reliability, maximum: policy.reliabilityWeight },
-  ];
-  const total = Math.max(
-    0,
-    Math.min(
-      100,
-      components.reduce((sum, component) => sum + component.awarded, 0),
-    ),
-  );
-  return { components, total };
-}
-
-const PREVIEW_MAX_WEIGHT = 100;
-
-function previewBreakdown(components: ScoreComponent[]) {
-  const value = (label: string) =>
-    components.find((component) => component.label === label)?.awarded ?? 0;
-  return {
-    skill: value("Skill"),
-    availability: value("Availability"),
-    interest: value("Interest"),
-    preference: value("Language"),
-    fairness: value("Fairness"),
-    reliability: value("Reliability"),
-    total: Math.max(
-      0,
-      Math.min(
-        PREVIEW_MAX_WEIGHT,
-        components.reduce((sum, row) => sum + row.awarded, 0),
-      ),
-    ),
-  };
-}
-
-function previewReason(choice: PreviewChoice): string {
-  const parts: string[] = [
-    choice.seat.requiredSkill
-      ? `matches the required ${choice.seat.requiredSkill} skill`
-      : "needs no special skill",
-  ];
-  if (choice.volunteer.causes.includes(choice.seat.cause as Volunteer["causes"][number])) {
-    parts.push(`is interested in ${choice.seat.cause}`);
-  }
-  if (choice.volunteer.attendanceRate >= 80) {
-    parts.push(`has ${choice.volunteer.attendanceRate}% attendance`);
-  }
-  return `${choice.volunteer.name} ${parts.join(", ")}`;
-}
-
-/**
- * One pass over open seats. `forced` pins a volunteer, as the Rust planner does.
- */
-function previewPlanShape(
-  shiftIds: string[],
-  options: RosterOptions,
-  policy: RosterPolicy,
-  forced?: { candidateId: string; slotId: string },
-): PreviewPlanShape {
-  const seats = previewSeats(shiftIds);
-  const pool = workspace.volunteers.filter((volunteer) => volunteer.status === "active");
-  const load = previewBaseLoad();
-  const choices: PreviewChoice[] = [];
-  const unfilled: { seat: PreviewSeat; reason: string }[] = [];
-  const beforeSeat = new Map<string, PreviewLoad>();
-
-  for (const seat of seats) {
-    beforeSeat.set(seat.slotId, cloneLoad(load));
-    const isForcedSeat = forced?.slotId === seat.slotId;
-    const considered = isForcedSeat
-      ? pool.filter((volunteer) => volunteer.id === forced?.candidateId)
-      : pool.filter((volunteer) => volunteer.id !== forced?.candidateId);
-
-    let best: PreviewChoice | null = null;
-    for (const volunteer of considered) {
-      const checks = previewChecks(volunteer, seat, options, policy, load);
-      if (checks.some((check) => !check.passed)) continue;
-      const { components, total } = previewScore(volunteer, seat, options, policy, load);
-      if (!best || total > best.score) {
-        best = { seat, volunteer, checks, components, score: total };
-      }
-    }
-
-    if (!best) {
-      unfilled.push({
-        seat,
-        reason: isForcedSeat
-          ? "The chosen volunteer does not clear the current rules for this seat."
-          : "No eligible volunteer is available for this slot.",
-      });
-      continue;
-    }
-
-    choices.push(best);
-    const blocks = load.blocks.get(best.volunteer.id) ?? [];
-    blocks.push({
-      start: new Date(seat.startsAt).getTime(),
-      end: new Date(seat.endsAt).getTime(),
-    });
-    load.blocks.set(best.volunteer.id, blocks);
-    load.dayCount.set(
-      `${best.volunteer.id}:${seat.dayKey}`,
-      (load.dayCount.get(`${best.volunteer.id}:${seat.dayKey}`) ?? 0) + 1,
-    );
-    load.weekCount.set(best.volunteer.id, (load.weekCount.get(best.volunteer.id) ?? 0) + 1);
-  }
-
-  return { choices, unfilled, beforeSeat };
-}
-
-function previewExplanation(
-  volunteer: Volunteer,
-  seat: PreviewSeat,
-  options: RosterOptions,
-  policy: RosterPolicy,
-  load: PreviewLoad,
-  selected: boolean,
-): MatchExplanation {
-  const checks = previewChecks(volunteer, seat, options, policy, load);
-  const eligible = checks.every((check) => check.passed);
-  const { components, total } = previewScore(volunteer, seat, options, policy, load);
-  const choice: PreviewChoice = { seat, volunteer, checks, components, score: total };
-  return {
-    candidateId: volunteer.id,
-    candidateName: volunteer.name,
-    candidateInitials: volunteer.initials,
-    slotId: seat.slotId,
-    shiftId: seat.shiftId,
-    role: seat.role,
-    eligible,
-    checks,
-    components,
-    totalScore: eligible ? total : null,
-    selected,
-    selectionReason: eligible
-      ? previewReason(choice)
-      : `${volunteer.name} failed one requirement — ${
-          checks.find((check) => !check.passed)?.name.toLowerCase() ?? "eligibility"
-        }`,
-  };
-}
-
-function previewRequiredFilled(shape: PreviewPlanShape): number {
-  return shape.choices.length;
-}
-
-function previewComparison(
-  before: PreviewPlanShape,
-  after: PreviewPlanShape,
-  volunteer: Volunteer,
-  seat: PreviewSeat,
-): ForcedComparison {
-  const beforeBySlot = new Map(before.choices.map((choice) => [choice.seat.slotId, choice]));
-  const afterBySlot = new Map(after.choices.map((choice) => [choice.seat.slotId, choice]));
-  const changedAssignments: ForcedComparison["changedAssignments"] = [];
-  const becomesUncovered: string[] = [];
-
-  for (const [slotId, choice] of beforeBySlot) {
-    const now = afterBySlot.get(slotId);
-    if (now?.volunteer.id === choice.volunteer.id) continue;
-    if (!now) becomesUncovered.push(`${choice.seat.role} on ${choice.seat.shiftTitle}`);
-    changedAssignments.push({
-      kind: now ? "moved" : "lost",
-      shiftId: choice.seat.shiftId,
-      shiftTitle: choice.seat.shiftTitle,
-      role: choice.seat.role,
-      fromCandidate: choice.volunteer.id,
-      toCandidate: now?.volunteer.id ?? null,
-    });
-  }
-  for (const [slotId, choice] of afterBySlot) {
-    if (beforeBySlot.has(slotId)) continue;
-    changedAssignments.push({
-      kind: "gained",
-      shiftId: choice.seat.shiftId,
-      shiftTitle: choice.seat.shiftTitle,
-      role: choice.seat.role,
-      fromCandidate: null,
-      toCandidate: choice.volunteer.id,
-    });
-  }
-
-  const summary = [
-    `Forcing ${volunteer.name} into ${seat.role}: required seats filled ${previewRequiredFilled(
-      before,
-    )} to ${previewRequiredFilled(after)}`,
-  ];
-  const score = (shape: PreviewPlanShape) =>
-    shape.choices.reduce((total, choice) => total + choice.score, 0);
-  if (score(before) !== score(after)) {
-    summary.push(`Total match score ${score(before)} to ${score(after)}`);
-  }
-  summary.push(
-    becomesUncovered.length === 0
-      ? "No seat loses its volunteer"
-      : `Uncovered: ${becomesUncovered.join(", ")}`,
-  );
-
-  return {
-    candidateId: volunteer.id,
-    candidateName: volunteer.name,
-    slotId: seat.slotId,
-    shiftId: seat.shiftId,
-    role: seat.role,
-    filledBefore: before.choices.length,
-    filledAfter: after.choices.length,
-    requiredFilledBefore: previewRequiredFilled(before),
-    requiredFilledAfter: previewRequiredFilled(after),
-    totalScoreBefore: score(before),
-    totalScoreAfter: score(after),
-    changedAssignments,
-    becomesUncovered,
-    summary,
-  };
-}
-
 function previewRosterPlan(
   shiftIds: string[],
   options: RosterOptions,
   policy: RosterPolicy,
-  forced?: { candidateId: string; slotId: string },
 ): RosterPlan {
-  const shape = previewPlanShape(shiftIds, options, policy, forced);
-  const seats = previewSeats(shiftIds);
-  const assignments: PlannedAssignment[] = shape.choices.map((choice) => ({
-    shiftId: choice.seat.shiftId,
-    opportunityId: choice.seat.opportunityId,
-    shiftTitle: choice.seat.shiftTitle,
-    role: choice.seat.role,
-    candidateId: choice.volunteer.id,
-    candidateName: choice.volunteer.name,
-    candidateInitials: choice.volunteer.initials,
-    startsAt: choice.seat.startsAt,
-    score: choice.score,
-    breakdown: previewBreakdown(choice.components),
-    reasons: [
-      `Skill match: ${choice.seat.role}`,
-      `${options.preferSpanish && choice.volunteer.languages.includes("Spanish") ? "Spanish-speaking" : "Available"} for ${choice.seat.shiftId}`,
-      "Highest score among the eligible volunteers",
-    ],
-    promoteWaitlist: false,
-    eligibleRoles: seats
-      .filter((row) => row.shiftId === choice.seat.shiftId)
-      .filter((row) =>
-        choice.volunteer.skills.some((skill) =>
-          skill.toLowerCase().includes(row.requiredSkill.toLowerCase()),
-        ),
-      )
-      .map((row) => row.role),
-    explanation: previewExplanation(
-      choice.volunteer,
-      choice.seat,
-      options,
-      policy,
-      shape.beforeSeat.get(choice.seat.slotId) ?? emptyLoad(),
-      true,
-    ),
-  }));
-
-  return {
-    assignments,
-    unfilled: shape.unfilled.map((row) => ({
-      shiftId: row.seat.shiftId,
-      role: row.seat.role,
-      reason: row.reason,
-      requiredSkill: row.seat.requiredSkill,
-      requiredCredential: row.seat.requiredCredential,
-    })),
-    totalScore: assignments.reduce((total, assignment) => total + assignment.score, 0),
-    slotsConsidered: seats.length,
-    candidatesConsidered: workspace.volunteers.filter((volunteer) => volunteer.status === "active")
-      .length,
-    deterministicSeed: 20260415,
-    policyVersion: policy.version,
-    generatedAt: workspace.now,
-    revision,
-  };
+  return createMatchingEngine().previewRosterPlan(shiftIds, options, policy);
 }
-
-function previewAvailabilityState(
-  volunteer: Volunteer,
-  seat: PreviewSeat,
-): CandidateEvaluation["availability"] {
-  if (volunteer.availability.length === 0) return "unknown";
-  const exact = volunteer.availability.some(
-    (slot) => slot.day === seat.dayKey && slot.period === previewPeriod(seat.startsAt),
-  );
-  if (exact) return "available";
-  return volunteer.availability.some((slot) => slot.day === seat.dayKey)
-    ? "partial"
-    : "unavailable";
-}
-
-/** The read model Rust returns; the screen parses it the same in both modes. */
 function previewEvaluation(shiftIds: string[], options: RosterOptions): RosterEvaluation {
-  const policy = readRosterPolicy();
-  const plan = previewRosterPlan(shiftIds, options, policy);
-  const seats = previewSeats(shiftIds);
-  const baseLoad = previewBaseLoad();
-
-  const candidates: CandidateEvaluation[] = workspace.volunteers
-    .filter((volunteer) => volunteer.status === "active")
-    .map((volunteer) => {
-      const slots: EvaluatedSlot[] = seats.map((seat) => {
-        const explanation = previewExplanation(volunteer, seat, options, policy, baseLoad, false);
-        return {
-          slotId: seat.slotId,
-          shiftId: seat.shiftId,
-          shiftTitle: seat.shiftTitle,
-          role: seat.role,
-          startsAt: seat.startsAt,
-          endsAt: seat.endsAt,
-          eligible: explanation.eligible,
-          selected: plan.assignments.some(
-            (assignment) =>
-              assignment.candidateId === volunteer.id &&
-              assignment.explanation.slotId === seat.slotId,
-          ),
-          score: explanation.totalScore,
-          checks: explanation.checks,
-          components: explanation.components,
-          selectionReason: explanation.selectionReason,
-        };
-      });
-      const eligibleRoles = [
-        ...new Set(slots.filter((slot) => slot.eligible).map((slot) => slot.role)),
-      ].sort();
-      const bestScore = slots
-        .filter((slot) => slot.eligible)
-        .map((slot) => slot.score ?? 0)
-        .reduce<number | null>(
-          (best, score) => (best === null || score > best ? score : best),
-          null,
-        );
-      const conflict = slots
-        .flatMap((slot) => slot.checks)
-        .find((check) => check.name === "No overlapping shift" && !check.passed)?.detail;
-      const eligibleIndex = slots.findIndex((slot) => slot.eligible);
-      const availabilitySeat = eligibleIndex >= 0 ? seats[eligibleIndex] : seats[0];
-      return {
-        candidateId: volunteer.id,
-        candidateName: volunteer.name,
-        candidateInitials: volunteer.initials,
-        eligibleRoles,
-        bestScore,
-        availability: availabilitySeat
-          ? previewAvailabilityState(volunteer, availabilitySeat)
-          : "unknown",
-        conflict: conflict ?? null,
-        weeklyShifts: baseLoad.weekCount.get(volunteer.id) ?? 0,
-        weeklyMinutes: 0,
-        waitlistedShiftIds: state.waitlist
-          .filter((row) => row.volunteerId === volunteer.id && row.status === "waiting")
-          .map((row) => row.shiftId),
-        slots,
-      };
-    });
-
-  return {
-    generatedAt: workspace.now,
-    policyVersion: policy.version,
-    revision,
-    plan,
-    candidates,
-  };
+  return createMatchingEngine().previewEvaluation(shiftIds, options);
 }
-
 function previewExplain(
   shiftIds: string[],
   options: RosterOptions,
   candidateId: string,
   slotId: string,
 ): CandidateAnswer {
-  const policy = readRosterPolicy();
-  const seat = previewSeats(shiftIds).find((row) => row.slotId === slotId);
-  if (!seat) throw new Error("That seat is not open on this shift.");
-  const volunteer = workspace.volunteers.find((row) => row.id === candidateId);
-  if (!volunteer) throw new Error("That volunteer is not on file.");
-
-  const base = previewPlanShape(shiftIds, options, policy);
-  const held = base.choices.find((choice) => choice.seat.slotId === slotId);
-  const selected = held?.volunteer.id === candidateId;
-  const explanation =
-    selected && held
-      ? previewExplanation(
-          volunteer,
-          seat,
-          options,
-          policy,
-          base.beforeSeat.get(slotId) ?? emptyLoad(),
-          true,
-        )
-      : previewExplanation(
-          volunteer,
-          seat,
-          options,
-          policy,
-          base.beforeSeat.get(slotId) ?? emptyLoad(),
-          false,
-        );
-
-  const comparison =
-    !selected && explanation.eligible
-      ? previewComparison(
-          base,
-          previewPlanShape(shiftIds, options, policy, { candidateId, slotId }),
-          volunteer,
-          seat,
-        )
-      : null;
-
-  return { explanation, comparison };
+  return createMatchingEngine().previewExplain(shiftIds, options, candidateId, slotId);
 }

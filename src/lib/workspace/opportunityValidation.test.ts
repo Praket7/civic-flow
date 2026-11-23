@@ -70,3 +70,35 @@ describe("opportunity validation", () => {
     expect(validateOpportunityDraft({ ...good, requirements: "X".repeat(61) }).valid).toBe(false);
   });
 });
+
+describe("adversarial opportunity field semantics", () => {
+  it.each(["0x10", "12.0", "1_000", "1,000", "1\\u200b", "10\\n20", "99999999999999"])(
+    "rejects deceptive capacity encodings: %s",
+    (capacity) => {
+      expect(validateOpportunityDraft({ ...good, capacity })).toMatchObject({
+        valid: false,
+        field: "capacity",
+      });
+    },
+  );
+  it.each(["1e5 hours", "0.24 hours", "12.01 hours", "0.25 minutes", "8 hours\\nmore"])(
+    "rejects impossible or misleading durations: %s",
+    (duration) => {
+      expect(validateOpportunityDraft({ ...good, duration })).toMatchObject({
+        valid: false,
+        field: "duration",
+      });
+    },
+  );
+  it("enforces requirements and required fields prior to persistence", () => {
+    for (const patch of [
+      { title: " " },
+      { description: " " },
+      { address: " " },
+      { requirements: Array.from({ length: 13 }, (_, i) => "requirement-" + i).join(",") },
+      { requirements: "x".repeat(61) },
+    ]) {
+      expect(validateOpportunityDraft({ ...good, ...patch }).valid).toBe(false);
+    }
+  });
+});

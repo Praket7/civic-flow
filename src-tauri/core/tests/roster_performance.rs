@@ -5,7 +5,9 @@ use std::collections::HashSet;
 use std::time::Instant;
 
 use chrono::{DateTime, Duration, NaiveDate};
-use civicflow_core::matching::{day_key, plan, Candidate, RosterOptions, Slot};
+use civicflow_core::matching::{
+    day_key, is_eligible_explained, plan, Candidate, RosterOptions, Slot,
+};
 use civicflow_core::policy::RosterPolicy;
 
 fn fixture(people: usize, seats: usize) -> (Vec<Candidate>, Vec<Slot>) {
@@ -116,4 +118,50 @@ fn medium_roster_performance() {
 #[ignore = "run manually or in the dedicated CI benchmark step"]
 fn large_roster_performance() {
     verify_equivalent(300, 80);
+}
+
+/// Transparent greedy baseline: oldest slot first, then first eligible
+/// candidate, with one seat per candidate-day. This does not maximize scores.
+fn first_eligible_baseline(
+    candidates: &[Candidate],
+    slots: &[Slot],
+    policy: &RosterPolicy,
+    options: &RosterOptions,
+) -> usize {
+    let mut taken = HashSet::new();
+    let mut ordered: Vec<&Slot> = slots.iter().collect();
+    ordered.sort_by(|a, b| a.starts_at.cmp(&b.starts_at).then_with(|| a.id.cmp(&b.id)));
+    let mut filled = 0;
+    for slot in ordered {
+        if let Some(candidate) = candidates.iter().find(|candidate| {
+            !taken.contains(&(candidate.id.clone(), slot.day_key.clone()))
+                && is_eligible_explained(candidate, slot, policy, options)
+        }) {
+            taken.insert((candidate.id.clone(), slot.day_key.clone()));
+            filled += 1;
+        }
+    }
+    filled
+}
+
+#[test]
+#[ignore = "manual benchmark; report CPU, Rust profile, fixtures, scores and timings"]
+fn compare_optimized_and_first_eligible_baseline() {
+    for (people, seats) in [(24, 12), (120, 35), (300, 80)] {
+        let (candidates, slots) = fixture(people, seats);
+        let policy = RosterPolicy::default();
+        let options = RosterOptions::default();
+        let began = Instant::now();
+        let greedy_filled = first_eligible_baseline(&candidates, &slots, &policy, &options);
+        let greedy_ms = began.elapsed().as_secs_f64() * 1000.0;
+        let began = Instant::now();
+        let optimized = plan(&candidates, &slots, &policy, &options);
+        let optimized_ms = began.elapsed().as_secs_f64() * 1000.0;
+        assert_eq!(optimized, plan(&candidates, &slots, &policy, &options));
+        eprintln!(
+            "AutoRoster comparison: candidates={people} seats={seats} greedy_filled={greedy_filled} optimized_filled={} optimized_score={} greedy_ms={greedy_ms:.3} optimized_ms={optimized_ms:.3}",
+            optimized.assignments.len(),
+            optimized.total_score
+        );
+    }
 }
