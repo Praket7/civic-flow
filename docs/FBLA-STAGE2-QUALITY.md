@@ -8,21 +8,21 @@
 
 The [official 2026–27 FBLA Coding & Programming rubric](https://greektrack-fbla-public.s3.us-east-1.amazonaws.com/files/1/High%20School%20Competitive%20Events%20Resources/Individual%20Guidelines/Presentation%20Events/Coding-and-Programming.pdf) is a 110-point **presentation** rating sheet, not a code-only audit. Strong implementation is necessary, but delivery and accessible user journeys must also be demonstrated.
 
-| Category | Max points | Verifiable demonstration / evidence |
-| --- | ---: | --- |
-| Language choice | 5 | Explain React/TypeScript for accessible interactive UI; Rust for deterministic native domain engine; SQLite/SQLCipher for offline persistence; Postgres/RLS for opt-in shared data |
-| Comments, naming and formatting | 5 | Small scoped comments explain invariants and the reason for defensive checks; use `pnpm lint`, `pnpm format`, `cargo fmt --check` |
-| Logical, modular architecture | 10 | Pure `preview/reports.ts` and `preview/volunteerImport.ts`; separate `matching/flow.rs`; tests prove outputs do not depend on UI storage |
-| UX rationale, user journey, accessibility | 10 | Demonstrate a volunteer-to-coordinator journey, keyboard navigation, accessible labels and visible states; retain manual assistive-technology acceptance gate |
-| Intuitive interface and instructions | 5 | Show clear coordinator and volunteer navigation, in-context help, and plain-language forms |
-| Navigation and intelligent functionality | 5 | Demonstrate AutoRoster eligibility, recommended assignments, alternative explanations and Q&A/help with real behavior |
-| Syntactic and semantic input validation | 5 | Show duplicate-email, invalid availability, missing required fields and malformed CSV feedback without crashing |
-| Topic requirements | 10 | Recruit, schedule, approve attendance/hours, retain records and explain actual nonprofit usefulness |
-| Customizable analytical reports | 10 | Select report templates/fields/causes/date ranges and export a meaningful sample; `preview/reports.test.ts` checks coverage math |
-| Data structures, persistence, scope | 5 | Explain typed arrays/sets/maps, scoped repositories, encrypted local database and authenticated cloud policies without conflating demo with production |
-| Presentation organization, delivery and Q&A | 30 | Rehearse a coherent 7-minute demonstration, make technical decisions understandable and answer test/security tradeoff questions |
-| Rules and event protocols | 10 | Use permitted devices; prepare a true offline desktop fallback; judges must not click/scans links or QR codes |
-| **Total** | **110** | **No score is claimed before judging** |
+| Category                                    | Max points | Verifiable demonstration / evidence                                                                                                                                                |
+| ------------------------------------------- | ---------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Language choice                             |          5 | Explain React/TypeScript for accessible interactive UI; Rust for deterministic native domain engine; SQLite/SQLCipher for offline persistence; Postgres/RLS for opt-in shared data |
+| Comments, naming and formatting             |          5 | Small scoped comments explain invariants and the reason for defensive checks; use `pnpm lint`, `pnpm format`, `cargo fmt --check`                                                  |
+| Logical, modular architecture               |         10 | Pure `preview/reports.ts` and `preview/volunteerImport.ts`; separate `matching/flow.rs`; tests prove outputs do not depend on UI storage                                           |
+| UX rationale, user journey, accessibility   |         10 | Demonstrate a volunteer-to-coordinator journey, keyboard navigation, accessible labels and visible states; retain manual assistive-technology acceptance gate                      |
+| Intuitive interface and instructions        |          5 | Show clear coordinator and volunteer navigation, in-context help, and plain-language forms                                                                                         |
+| Navigation and intelligent functionality    |          5 | Demonstrate AutoRoster eligibility, recommended assignments, alternative explanations and Q&A/help with real behavior                                                              |
+| Syntactic and semantic input validation     |          5 | Show duplicate-email, invalid availability, missing required fields and malformed CSV feedback without crashing                                                                    |
+| Topic requirements                          |         10 | Recruit, schedule, approve attendance/hours, retain records and explain actual nonprofit usefulness                                                                                |
+| Customizable analytical reports             |         10 | Select report templates/fields/causes/date ranges and export a meaningful sample; `preview/reports.test.ts` checks coverage math                                                   |
+| Data structures, persistence, scope         |          5 | Explain typed arrays/sets/maps, scoped repositories, encrypted local database and authenticated cloud policies without conflating demo with production                             |
+| Presentation organization, delivery and Q&A |         30 | Rehearse a coherent 7-minute demonstration, make technical decisions understandable and answer test/security tradeoff questions                                                    |
+| Rules and event protocols                   |         10 | Use permitted devices; prepare a true offline desktop fallback; judges must not click/scans links or QR codes                                                                      |
+| **Total**                                   |    **110** | **No score is claimed before judging**                                                                                                                                             |
 
 ### Stage 2 engineering changes
 
@@ -52,27 +52,27 @@ Record benchmark **hardware, build profile, candidate count, seat count, fill co
 
 ## Judge demonstration (7-minute walkthrough)
 
-| Elapsed time | Action and evidence |
-| --- | --- |
-| 0:00–0:40 | State nonprofit problem and what CivicFlow actually solves; distinguish the offline desktop app from the fictitious judging sample |
-| 0:40–1:30 | Walk through volunteer discovery, registration and service history |
-| 1:30–2:40 | As coordinator, show coverage gaps and a real AutoRoster recommendation |
-| 2:40–3:40 | Explain hard eligibility vs scoring, why a candidate is selected, and why an alternative was rejected |
-| 3:40–4:40 | Demonstrate input validation, including an invalid availability value, and navigate help or Q&A |
-| 4:40–5:45 | Customize a report by cause or fields and examine accurate totals |
-| 5:45–6:35 | Show modular Rust/TypeScript code, comments, deterministic tests and measured benchmark output |
-| 6:35–7:00 | Summarize measurable nonprofit value, honest offline/cloud boundaries and limitations |
+| Elapsed time | Action and evidence                                                                                                                |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 0:00–0:40    | State nonprofit problem and what CivicFlow actually solves; distinguish the offline desktop app from the fictitious judging sample |
+| 0:40–1:30    | Walk through volunteer discovery, registration and service history                                                                 |
+| 1:30–2:40    | As coordinator, show coverage gaps and a real AutoRoster recommendation                                                            |
+| 2:40–3:40    | Explain hard eligibility vs scoring, why a candidate is selected, and why an alternative was rejected                              |
+| 3:40–4:40    | Demonstrate input validation, including an invalid availability value, and navigate help or Q&A                                    |
+| 4:40–5:45    | Customize a report by cause or fields and examine accurate totals                                                                  |
+| 5:45–6:35    | Show modular Rust/TypeScript code, comments, deterministic tests and measured benchmark output                                     |
+| 6:35–7:00    | Summarize measurable nonprofit value, honest offline/cloud boundaries and limitations                                              |
 
 The preliminary round permits **3 minutes setup, 7 minutes speaking, 3 minutes Q&A**; power may be unavailable and venue internet unreliable. Carry a charged laptop with a demonstrated local build. The event expects source code, README, third-party notices and an error-free standalone application. A judge may see a link but must not click it under the event protocol.
 
 ## Research informing the approach
 
 - [FBLA 2026–27 national Coding & Programming guidelines and scoring (August 2026)](https://greektrack-fbla-public.s3.us-east-1.amazonaws.com/files/1/High%20School%20Competitive%20Events%20Resources/Individual%20Guidelines/Presentation%20Events/Coding-and-Programming.pdf).
-- [Kenger, *Benefits of modularity and module-level tests* (2004)](https://scispace.com/papers/benefits-of-modularity-and-module-level-tests-aqdjmqsj0b): small functional units and verification at module boundaries.
-- [Yen and Bakken, *Heuristic evaluation versus end-user think-aloud* (2009)](https://scispace.com/papers/a-comparison-of-usability-evaluation-methods-heuristic-1io7s84er1): expert checks and real participant task tests find different usability barriers.
-- [Prenzel and Ringwelski, *Design of Human-computer Interfaces in Scheduling Applications* (2012)](https://scispace.com/papers/design-of-human-computer-interfaces-in-scheduling-2kqabm7fhw): studied decision support for human schedulers.
-- [*A Benchmarking Suite for Flexible Job Shop Scheduling Problems with Worker Flexibility under Uncertainty* (2025)](https://www.alphaxiv.org/abs/2501.16159): motivates reporting workload sizes and stable evaluation fixtures rather than one toy instance.
-- [*Best Practices for Empirical Meta-Algorithmic Research* (2025)](https://www.alphaxiv.org/abs/2512.16491): motivates reproducible, adequately described benchmarks.
+- [Kenger, _Benefits of modularity and module-level tests_ (2004)](https://scispace.com/papers/benefits-of-modularity-and-module-level-tests-aqdjmqsj0b): small functional units and verification at module boundaries.
+- [Yen and Bakken, _Heuristic evaluation versus end-user think-aloud_ (2009)](https://scispace.com/papers/a-comparison-of-usability-evaluation-methods-heuristic-1io7s84er1): expert checks and real participant task tests find different usability barriers.
+- [Prenzel and Ringwelski, _Design of Human-computer Interfaces in Scheduling Applications_ (2012)](https://scispace.com/papers/design-of-human-computer-interfaces-in-scheduling-2kqabm7fhw): studied decision support for human schedulers.
+- [_A Benchmarking Suite for Flexible Job Shop Scheduling Problems with Worker Flexibility under Uncertainty_ (2025)](https://www.alphaxiv.org/abs/2501.16159): motivates reporting workload sizes and stable evaluation fixtures rather than one toy instance.
+- [_Best Practices for Empirical Meta-Algorithmic Research_ (2025)](https://www.alphaxiv.org/abs/2512.16491): motivates reproducible, adequately described benchmarks.
 
 **Scope of these citations:** they inform design and test methods; they do not independently verify CivicFlow performance or prove a rubric score.
 
