@@ -84,6 +84,7 @@ try {
       "--headless=new",
       "--disable-gpu",
       "--disable-dev-shm-usage",
+      "--disable-popup-blocking",
       "--no-first-run",
       "--no-default-browser-check",
       ...(process.env.CI ? ["--no-sandbox"] : []),
@@ -404,6 +405,71 @@ try {
     true,
     "Report filter controls",
   );
+
+  // Compare real exported data to the visible table, without reusing the app's
+  // CSV implementation as the test oracle. Capture the generated download Blob
+  // and the actual printable window used by the Export PDF action.
+  const reportRows = await evaluate(`(() => {
+    const table = Array.from(document.querySelectorAll("table")).find((item) =>
+      item.caption?.textContent.trim() === "Report source records"
+    );
+    if (!table) return null;
+    return Array.from(table.rows, (row) =>
+      Array.from(row.cells, (cell) => cell.textContent.trim())
+    );
+  })()`);
+  assert.ok(reportRows && reportRows.length > 1, "Expected a populated report");
+  const armed = await evaluate(`(() => {
+    const original = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (blob) => {
+      if (blob.type.includes("text/csv")) {
+        void blob.text().then((value) => { window.__reportCsv = value; });
+      }
+      return original(blob);
+    };
+    const originalOpen = window.open.bind(window);
+    window.open = (...args) => {
+      const popup = originalOpen(...args);
+      if (popup) {
+        popup.print = () => {};
+        window.__reportPrint = popup;
+      }
+      return popup;
+    };
+    return true;
+  })()`);
+  assert.equal(armed, true);
+  await evaluate(`Array.from(document.querySelectorAll("button")).find(
+    (button) => button.textContent.trim() === "Export CSV"
+  ).click()`);
+  const csv = await until(() => evaluate("window.__reportCsv"), "CSV export payload");
+  const expectedCsv = reportRows.map((row) =>
+    row.map((cell) => {
+      const safe = /^[=@]/.test(cell) ||
+        (/^[+-]/.test(cell) && !/^[+-][0-9\\s().-]*$/.test(cell))
+        ? "'" + cell : cell;
+      return /[",\\r\\n]/.test(safe) ? '"' + safe.replaceAll('"', '""') + '"' : safe;
+    }).join(",")
+  ).join("\r\n") + "\r\n";
+  assert.equal(csv.replace(/^\uFEFF/, ""), expectedCsv, "CSV must match every visible source row");
+
+  await evaluate(`Array.from(document.querySelectorAll("button")).find(
+    (button) => button.textContent.trim() === "Export PDF"
+  ).click()`);
+  const printRows = await until(
+    () => evaluate(`(() => {
+      const table = window.__reportPrint?.document.querySelector("table");
+      if (!table) return null;
+      return Array.from(table.rows, (row) =>
+        Array.from(row.cells, (cell) => cell.textContent.trim())
+      );
+    })()`),
+    "printable report rows",
+  );
+  assert.deepEqual(printRows, reportRows, "Printable report must match every visible source row");
+  await evaluate("window.__reportPrint.close()");
+  console.log("Stage 4: real CSV payload and printable export match the visible table.");
+
   assert.equal(
     await evaluate(
       '(() => {\n  const select = Array.from(document.querySelectorAll("select")).find((item) =>\n    document.querySelector(\'label[for="\' + item.id + \'"]\')?.textContent?.trim() === "Date range"\n  );\n  if (!select) return false;\n  Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(select, "custom");\n  select.dispatchEvent(new Event("change", { bubbles: true }));\n  return true;\n})()',
