@@ -733,10 +733,9 @@ export function getReportPreview(session: SessionOverrides = {}, workspace: Demo
         shift.status === "canceled" ||
         shift.startsAt.slice(0, 10) < yearStart ||
         shift.startsAt.slice(0, 10) > today
-      ) return [];
-      return entries.filter((row) =>
-        ["checked_in", "completed", "no_show"].includes(row.status),
-      );
+      )
+        return [];
+      return entries.filter((row) => ["checked_in", "completed", "no_show"].includes(row.status));
     },
   );
   const arrived = attendanceEntries.filter((row) => row.status !== "no_show").length;
