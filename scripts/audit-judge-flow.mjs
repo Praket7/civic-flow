@@ -10,7 +10,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -592,6 +592,80 @@ try {
     "future-only report must contain zero source rows",
   );
   console.log("Stage 4: live report filters and future period passed.");
+  // Stage 6: isolated fixture role switch, then real UI operations. Only the
+  // test identity is seeded; attendance, hours and decisions are UI writes.
+  const evidenceDir = path.join(root, "journey-review");
+  await mkdir(evidenceDir, { recursive: true });
+  async function capture(name) {
+    const shot = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+    await writeFile(path.join(evidenceDir, name + ".png"), Buffer.from(shot.data, "base64"));
+  }
+  async function fixtureRole(id, route) {
+    await evaluate(`localStorage.setItem("civicflow.auth.token", "preview:${id}:demo")`);
+    await send("Page.reload", { ignoreCache: true });
+    await open("/judge/demo/#" + route);
+  }
+  async function clickText(label) {
+    await until(() => evaluate(`(() => {
+      const button = [...document.querySelectorAll("button")].find(b => b.textContent.trim() === ${JSON.stringify(label)} && !b.disabled);
+      if (!button) return false;
+      button.scrollIntoView({block:"center"});
+      button.click();
+      return true;
+    })()`), "click " + label);
+  }
+  async function snapshot() {
+    return evaluate('JSON.parse(localStorage.getItem("civicflow.workflow.v1") || "{}")');
+  }
+  await fixtureRole("user-maya", "/volunteer/check-in");
+  await until(() => evaluate('document.querySelectorAll(\'[aria-label^="Digit "]\').length === 6'), "volunteer check-in inputs");
+  const codeWindow = Math.floor(new Date("2026-10-13T07:45:00-04:00").getTime() / (15 * 60_000));
+  let hash = 0xcbf29ce4;
+  const codeSeed = "sh-tue-pantry:" + codeWindow;
+  for (const character of codeSeed) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  const code = String(hash % 1_000_000).padStart(6, "0");
+  async function enterCode(value) {
+    await evaluate('document.querySelector(\'[aria-label="Digit 1 of 6"]\').focus()');
+    await send("Input.insertText", { text: value });
+    await clickText("Check in");
+  }
+  await enterCode(code === "000000" ? "111111" : "000000");
+  await until(() => evaluate('document.querySelector("#event-code-error")?.textContent.includes("not valid")'), "invalid code stays on form");
+  await capture("01-invalid-checkin");
+  await enterCode(code);
+  await heading("checked in");
+  await capture("02-checked-in");
+  await open("/judge/demo/#/volunteer/shifts/sh-tue-pantry");
+  await heading("Pantry Setup");
+  await clickText("Check out");
+  const service = await until(async () => (await snapshot()).submittedHours?.find(row => row.shiftId === "sh-tue-pantry" && row.volunteerId === "vol-maya"), "one pending service record");
+  assert.equal(service.status, "pending");
+  assert.equal((await snapshot()).submittedHours.filter(row => row.id === service.id).length, 1);
+  await capture("03-checked-out");
+  await open("/judge/demo/#/volunteer/hours");
+  await heading("My hours");
+  await until(() => evaluate('Array.from(document.querySelectorAll("tbody tr")).some(row => row.textContent.includes("Pantry Setup") && row.textContent.includes("Pending"))'), "pending hours visible to volunteer");
+  await capture("04-pending-hours");
+  await fixtureRole("user-praket", "/coordinator/hours");
+  await heading("Hours review");
+  await until(() => evaluate(`(() => {
+    const button = [...document.querySelectorAll('button[class*="queueItem"]')].find(b => b.textContent.includes("Maya Chen") && b.textContent.includes("Pantry Setup") && b.textContent.includes("1m requested"));
+    if (!button) return false;
+    button.click(); return true;
+  })()`), "select newly submitted service");
+  await capture("05-coordinator-review");
+  await clickText("Approve submitted");
+  await until(async () => (await snapshot()).hoursDecisions?.[service.id]?.status === "verified", "coordinator decision persisted");
+  await capture("06-approved-hours");
+  await fixtureRole("user-maya", "/volunteer/hours");
+  await heading("My hours");
+  await until(() => evaluate('Array.from(document.querySelectorAll("tbody tr")).some(row => row.textContent.includes("Pantry Setup") && row.textContent.includes("Verified"))'), "approved record visible to volunteer");
+  await capture("07-volunteer-verified");
+  console.log("Stage 6: invalid code, check-in, checkout, pending record, coordinator approval, volunteer verified history passed.");
+
   console.log(
     "Judge browser flow passed: public review, sample launch, AutoRoster, schedule and reports.",
   );

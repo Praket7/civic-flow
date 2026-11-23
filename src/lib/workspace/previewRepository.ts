@@ -1750,7 +1750,7 @@ export const previewRepository: WorkspaceRepository = {
       ...workspace.mayaEntries,
       ...(state.submittedHours ?? []),
     ].find((row) => row.id === entryId);
-    if (!entry || (state.hoursDecisions[entryId] || entry.status !== "pending"))
+    if (!entry || state.hoursDecisions[entryId] || entry.status !== "pending")
       throw new Error("Only pending hours can be reviewed");
     if (decision.reason.trim().length === 0) throw new Error("Enter a review reason.");
     if (

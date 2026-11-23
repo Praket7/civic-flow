@@ -102,6 +102,7 @@ export function MyHoursPage() {
   const chartData = useMemo(() => {
     const byDate = new Map<string, number>();
     for (const row of rows) {
+      if (row.status === "rejected") continue;
       byDate.set(
         row.date,
         (byDate.get(row.date) ?? 0) + (row.approvedMinutes ?? row.requestedMinutes),

@@ -398,7 +398,8 @@ export function WorkspaceSessionProvider({ children }: { children: ReactNode }) 
         run(() => repository.saveReportView(name, scope, filtersJson)),
       promoteWaitlist: (shiftId, volunteerId) =>
         run(() => repository.promoteWaitlist(shiftId, volunteerId)),
-      reviewHours: (entryId, decision) => run(() => repository.reviewHours(entryId, decision)),
+      reviewHours: (entryId, decision) =>
+        enqueue(() => runChecked(() => repository.reviewHours(entryId, decision))),
       updateSettings: (patch) => run(() => repository.updateSettings(patch)),
       createOpportunity: (input) =>
         enqueue(async () => {

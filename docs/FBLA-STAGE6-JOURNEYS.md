@@ -16,3 +16,5 @@ The sample is isolated and intentionally uses a fixed clock. Its browser solver 
 - Journey tests run in the full frontend suite, alongside existing native lifecycle, waitlist, notification, reporting, and simulated reconnect/convergence tests.
 
 The final acceptance requires green full CI, fresh screenshots, and verification of the actual journey. The test fixture is not proof of a real nonprofit pilot.
+
+The compiled-browser journey additionally exercises a rejected code, successful attendance, checkout, persisted pending service, coordinator approval, and volunteer history after a fixture identity change. Screenshot evidence is uploaded by full CI. No test seeds a successful attendance or approval record.
