@@ -340,12 +340,14 @@ export function AttendancePage() {
                         variant="secondary"
                         disabled={busy}
                         onClick={() =>
-                          void runAction(t("{name} checked in.", { name: row.volunteer.name }), () =>
-                            actions.manualCheckIn(
-                              event.shift.id,
-                              row.volunteer.id,
-                              "Recorded by a coordinator at the attendance board",
-                            ),
+                          void runAction(
+                            t("{name} checked in.", { name: row.volunteer.name }),
+                            () =>
+                              actions.manualCheckIn(
+                                event.shift.id,
+                                row.volunteer.id,
+                                "Recorded by a coordinator at the attendance board",
+                              ),
                           )
                         }
                       >
