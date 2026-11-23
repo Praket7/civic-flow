@@ -65,11 +65,7 @@ describe("pure preview reporting", () => {
   });
 
   it("respects an explicitly selected coverage end date", () => {
-    const result = buildPreviewReport(
-      { ...request, dateEnd: "2026-11-23" },
-      workspace,
-      state,
-    );
+    const result = buildPreviewReport({ ...request, dateEnd: "2026-11-23" }, workspace, state);
     expect(result.rows).toHaveLength(1);
     expect(result.summary).toContainEqual({ label: "Required role slots", value: "3" });
   });
