@@ -8,9 +8,7 @@ import type { Account } from "../../types/domain";
 export const PREVIEW_ACCOUNT_KEY = "civicflow.auth.passwords";
 export const PREVIEW_ACCOUNTS_KEY = "civicflow.auth.accounts";
 
-export function storedPreviewAccounts(
-  storage: Pick<Storage, "getItem"> = localStorage,
-): Account[] {
+export function storedPreviewAccounts(storage: Pick<Storage, "getItem"> = localStorage): Account[] {
   try {
     const raw = storage.getItem(PREVIEW_ACCOUNTS_KEY);
     const parsed: unknown = raw ? JSON.parse(raw) : null;
@@ -27,13 +25,15 @@ export function storedPreviewAccounts(
       ) {
         return [];
       }
-      return [{
-        id: row.id,
-        name: row.name,
-        email: row.email,
-        role: row.role,
-        volunteerId: typeof row.volunteerId === "string" ? row.volunteerId : null,
-      }];
+      return [
+        {
+          id: row.id,
+          name: row.name,
+          email: row.email,
+          role: row.role,
+          volunteerId: typeof row.volunteerId === "string" ? row.volunteerId : null,
+        },
+      ];
     });
   } catch {
     // Evaluation mode still opens with seeded accounts if storage is blocked.

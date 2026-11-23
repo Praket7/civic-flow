@@ -20,7 +20,13 @@ describe("isolated preview account storage", () => {
       ]),
     });
     expect(storedPreviewAccounts(records)).toEqual([
-      { id: "p-1", name: "A Volunteer", email: "v@example.org", role: "volunteer", volunteerId: null },
+      {
+        id: "p-1",
+        name: "A Volunteer",
+        email: "v@example.org",
+        role: "volunteer",
+        volunteerId: null,
+      },
     ]);
   });
 
@@ -37,7 +43,11 @@ describe("isolated preview account storage", () => {
   });
 
   it("keeps the evaluation UI available if storage cannot be read", () => {
-    const denied = { getItem: (): string => { throw new Error("blocked"); } };
+    const denied = {
+      getItem: (): string => {
+        throw new Error("blocked");
+      },
+    };
     expect(storedPreviewAccounts(denied)).toEqual([]);
     expect(previewPasswords(denied)).toEqual({});
   });

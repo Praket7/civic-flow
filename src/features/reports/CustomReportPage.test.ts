@@ -28,7 +28,11 @@ describe("custom report cause summary", () => {
   it("aggregates only the rows passed by the selected filters", () => {
     const food = { ...row("2026-10-03", 60), opportunity: { cause: "food" } } as HourRow;
     const education = { ...row("2026-10-03", 90), opportunity: { cause: "education" } } as HourRow;
-    const points = buildCausePoints([food, education, { ...food, id: "another", approvedMinutes: 30 }]);
+    const points = buildCausePoints([
+      food,
+      education,
+      { ...food, id: "another", approvedMinutes: 30 },
+    ]);
     expect(points.find((entry) => entry.label === "Food security")?.value).toBe(90);
     expect(points.find((entry) => entry.label === "Education")?.value).toBe(90);
     expect(points).toHaveLength(2);

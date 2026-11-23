@@ -62,7 +62,10 @@ describe("opportunity validation", () => {
 
   it("rejects unreasonably long or numerous requirements", () => {
     expect(
-      validateOpportunityDraft({ ...good, requirements: Array.from({ length: 13 }, (_, i) => `Skill ${i}`).join(",") }).valid,
+      validateOpportunityDraft({
+        ...good,
+        requirements: Array.from({ length: 13 }, (_, i) => `Skill ${i}`).join(","),
+      }).valid,
     ).toBe(false);
     expect(validateOpportunityDraft({ ...good, requirements: "X".repeat(61) }).valid).toBe(false);
   });
