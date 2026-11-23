@@ -212,6 +212,8 @@ try {
     { width: 1024, height: 620, collapsed: true },
     { width: 1280, height: 520, collapsed: false },
     { width: 1280, height: 520, collapsed: true },
+    { width: 1280, height: 440, collapsed: false },
+    { width: 1280, height: 440, collapsed: true },
     { width: 1024, height: 440, collapsed: false },
     { width: 1024, height: 440, collapsed: true },
   ]) {
@@ -272,7 +274,9 @@ try {
     assert.ok(bounds.accessBottom <= height + 2, "Accessibility clipped by viewport");
     assert.ok(bounds.signOutBottom <= height + 2, "Sign out clipped by viewport");
     assert.ok(bounds.personBottom <= height + 2, "Account avatar clipped by viewport");
-    if (!collapsed) {
+    // At tablet-width desktop sizes the rail intentionally hides the name
+    // until hover/focus, even when the stored collapsed preference is false.
+    if (!collapsed && width > 1180) {
       assert.ok(
         bounds.identityBottom > 0 && bounds.identityBottom <= height + 2,
         "Coordinator identity clipped by viewport",
