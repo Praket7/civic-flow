@@ -167,10 +167,23 @@ fn optimizer_preserves_a_specialist_for_the_role_only_they_can_fill() {
     let options = RosterOptions::default();
     let greedy = first_eligible_baseline(&candidates, &slots, &policy, &options);
     let optimized = plan(&candidates, &slots, &policy, &options);
-    assert_eq!(greedy, 1, "the first-fit reference uses the scarce specialist first");
-    assert_eq!(optimized.assignments.len(), 2, "both overlapping seats have feasible volunteers");
-    assert_eq!(optimized.assignments.len() + optimized.unfilled.len(), slots.len());
-    assert!(optimized.assignments.iter().all(|a| a.explanation.eligible && a.explanation.selected));
+    assert_eq!(
+        greedy, 1,
+        "the first-fit reference uses the scarce specialist first"
+    );
+    assert_eq!(
+        optimized.assignments.len(),
+        2,
+        "both overlapping seats have feasible volunteers"
+    );
+    assert_eq!(
+        optimized.assignments.len() + optimized.unfilled.len(),
+        slots.len()
+    );
+    assert!(optimized
+        .assignments
+        .iter()
+        .all(|a| a.explanation.eligible && a.explanation.selected));
 }
 
 #[test]

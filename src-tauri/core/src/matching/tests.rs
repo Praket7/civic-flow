@@ -393,10 +393,23 @@ fn matches_brute_force_across_skill_scarcity_cases() {
 
         let actual = plan(&candidates, &slots, &policy(), &options());
         let expected = brute_force(&candidates, &slots, &options());
-        assert_eq!(actual.assignments.len(), expected.0, "fill differs for skill mask {mask}");
-        assert_eq!(actual.total_score, expected.1, "score differs for skill mask {mask}");
-        assert_eq!(actual.assignments.len() + actual.unfilled.len(), slots.len());
-        assert!(actual.assignments.iter().all(|a| a.explanation.eligible && a.explanation.selected));
+        assert_eq!(
+            actual.assignments.len(),
+            expected.0,
+            "fill differs for skill mask {mask}"
+        );
+        assert_eq!(
+            actual.total_score, expected.1,
+            "score differs for skill mask {mask}"
+        );
+        assert_eq!(
+            actual.assignments.len() + actual.unfilled.len(),
+            slots.len()
+        );
+        assert!(actual
+            .assignments
+            .iter()
+            .all(|a| a.explanation.eligible && a.explanation.selected));
     }
 }
 
