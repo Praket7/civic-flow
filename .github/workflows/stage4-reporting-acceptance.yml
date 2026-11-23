@@ -1,0 +1,62 @@
+name: Stage 4 Reporting Acceptance
+
+on:
+  push:
+    branches: [stage4-reporting-accuracy-impact]
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/features/reports/**"
+      - "src/lib/workspace/preview/reports*"
+      - "src/lib/workspace/selectors.ts"
+      - "src-tauri/core/src/reports.rs"
+      - "src-tauri/core/tests/reports.rs"
+      - "scripts/audit-judge-flow.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  reporting-frontend:
+    name: Report model, UI and browser acceptance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format
+      - run: pnpm test -- src/lib/workspace/preview/reports.test.ts src/features/reports/CustomReportPage.test.ts src/lib/workspace/selectors.test.ts
+      - name: Build isolated public judging sample
+        env:
+          VITE_SUPABASE_URL: https://imzdblvljdcbnxtwbmbw.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_ci_only_dummy_key
+        run: |
+          pnpm build:hosted
+          node scripts/check-judge-build.mjs
+          node scripts/audit-judge-flow.mjs
+
+  reporting-native:
+    name: SQLite source and export reconciliation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri/core -> target
+      - name: Native formatting, lints and known-answer tests
+        working-directory: src-tauri/core
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test --test reports
