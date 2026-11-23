@@ -196,27 +196,15 @@ export function CustomReportPage() {
     period &&
     (!validIsoDate(period.start) || !validIsoDate(period.end) || period.start > period.end),
   );
-  const request = useMemo<ReportRequest>(
-    () => ({
-      template: templateId,
-      fields,
-      dateStart: supportsActivityFilters ? periodStart : null,
-      dateEnd: supportsActivityFilters ? periodEnd : null,
-      cause: supportsActivityFilters && cause !== "all" ? cause : null,
-      programId: supportsActivityFilters && programId !== "all" ? programId : null,
-      groupBy: grouping,
-    }),
-    [
-      templateId,
-      fields,
-      supportsActivityFilters,
-      periodStart,
-      periodEnd,
-      cause,
-      programId,
-      grouping,
-    ],
-  );
+  const request: ReportRequest = {
+    template: templateId,
+    fields,
+    dateStart: supportsActivityFilters ? periodStart : null,
+    dateEnd: supportsActivityFilters ? periodEnd : null,
+    cause: supportsActivityFilters && cause !== "all" ? cause : null,
+    programId: supportsActivityFilters && programId !== "all" ? programId : null,
+    groupBy: grouping,
+  };
   const requestKey = JSON.stringify(request);
 
   const programs = useMemo(() => {
@@ -238,7 +226,7 @@ export function CustomReportPage() {
     if (invalidPeriod) return;
     let active = true;
     void getWorkspaceRepository()
-      .generateReport(request)
+      .generateReport(JSON.parse(requestKey) as ReportRequest)
       .then((document) => {
         if (active)
           setReportState({ key: requestKey, sourceSession: session, document, error: "" });
@@ -255,7 +243,7 @@ export function CustomReportPage() {
     return () => {
       active = false;
     };
-  }, [request, requestKey, invalidPeriod, session]);
+  }, [requestKey, invalidPeriod, session]);
 
   const currentReport = reportState?.key === requestKey && reportState.sourceSession === session;
   const report = !invalidPeriod && currentReport ? reportState.document : null;
