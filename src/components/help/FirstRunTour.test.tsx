@@ -18,7 +18,9 @@ function renderTour(role: "coordinator" | "volunteer" = "coordinator") {
 describe("first-run tour", () => {
   it("starts at the first step and moves forward", async () => {
     renderTour();
-    expect(screen.queryByRole("heading", { name: "Start with Mission Control" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Start with Mission Control" }),
+    ).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Guided tour/ }));
     expect(screen.getByRole("heading", { name: "Start with Mission Control" })).toBeInTheDocument();
     expect(screen.getByText("Guided tour · 1 of 5")).toBeInTheDocument();

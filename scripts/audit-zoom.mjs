@@ -28,7 +28,23 @@ const bestEffort = args.includes("--best-effort");
 const explicitBase = flag("base", null);
 const OUT = flag("out", "zoom-report.json");
 const SCREENSHOTS = flag("screenshots", null);
-const REVIEW_ROUTES = new Set(["01", "02", "04", "09", "10", "11", "17", "24", "28", "30", "32", "34", "35", "37", "42"]);
+const REVIEW_ROUTES = new Set([
+  "01",
+  "02",
+  "04",
+  "09",
+  "10",
+  "11",
+  "17",
+  "24",
+  "28",
+  "30",
+  "32",
+  "34",
+  "35",
+  "37",
+  "42",
+]);
 const PORT = Number(flag("port", "9334"));
 const SERVER_PORT = Number(flag("server-port", "5200"));
 const CHROME_CANDIDATES = [
@@ -312,10 +328,17 @@ try {
           mobile: viewport.mobile,
         });
         await sleep(300);
-        const { result: viewportResult } = await send("Runtime.evaluate", { expression: AUDIT, returnByValue: true });
+        const { result: viewportResult } = await send("Runtime.evaluate", {
+          expression: AUDIT,
+          returnByValue: true,
+        });
         const measured = viewportResult.value;
         const viewportBad = measured.horizontalOverflow || !measured.heading;
-        report[number + "-" + viewport.name] = { path: routePath, ...measured, passed: !viewportBad };
+        report[number + "-" + viewport.name] = {
+          path: routePath,
+          ...measured,
+          passed: !viewportBad,
+        };
         if (viewportBad) failures += 1;
         const shot = await send("Page.captureScreenshot", {
           format: "png",
@@ -342,7 +365,9 @@ try {
     console.error(`\n${failures} viewport checks failed. See ${OUT}.`);
     process.exitCode = 1;
   } else {
-    console.log(`\nAll tested route/viewport combinations render without document-level horizontal overflow. Report: ${OUT}`);
+    console.log(
+      `\nAll tested route/viewport combinations render without document-level horizontal overflow. Report: ${OUT}`,
+    );
   }
 } finally {
   chrome?.kill();

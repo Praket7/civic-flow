@@ -81,11 +81,7 @@ export function HelpProvider({ children }: { children: ReactNode }) {
         {children}
       </div>
       {open ? (
-        <HelpDialog
-          pathname={location.pathname}
-          onClose={closeHelp}
-          returnFocus={returnFocus}
-        />
+        <HelpDialog pathname={location.pathname} onClose={closeHelp} returnFocus={returnFocus} />
       ) : null}
     </HelpContext.Provider>
   );
