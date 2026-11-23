@@ -143,3 +143,32 @@
     white-space: nowrap;
   }
 }
+
+@media (max-width: 760px) {
+  .topbar {
+    gap: 8px;
+  }
+
+  .left {
+    flex: 1;
+  }
+
+  .actions {
+    gap: 6px;
+    flex: none;
+  }
+
+  .menuButton {
+    flex: none;
+    width: 44px;
+    height: 44px;
+  }
+
+  .search {
+    min-width: 0;
+  }
+
+  .search svg {
+    flex: none;
+  }
+}

@@ -1007,3 +1007,43 @@
     min-height: 30px;
   }
 }
+
+/* Navigation alone scrolls; keep account actions in the viewport. */
+.nav {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(248, 241, 227, 0.32) transparent;
+}
+
+.nav::-webkit-scrollbar {
+  display: block;
+  width: 5px;
+}
+
+.menuItem {
+  height: auto;
+  min-height: 32px;
+  padding-block: 5px;
+}
+
+.item:focus-visible {
+  outline-offset: -3px;
+}
+
+@media (max-width: 760px) {
+  .sidebar:not([data-mobile-open="true"]) {
+    visibility: hidden;
+  }
+
+  .sidebar[data-mobile-open="true"] {
+    visibility: visible;
+  }
+
+  .sidebar .item {
+    min-height: 44px;
+    height: auto;
+  }
+
+  .sidebar .workspaceMenu {
+    max-height: min(60dvh, 460px);
+  }
+}

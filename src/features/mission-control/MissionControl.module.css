@@ -538,9 +538,8 @@
   font-family: var(--font-mono);
   font-size: 10.5px;
   color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .criticalTag {
@@ -1172,4 +1171,36 @@
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+/* Operational cards should follow their content rather than fill arbitrary space. */
+@media (max-width: 760px) {
+  .heroFigure {
+    min-height: 160px;
+  }
+
+  .heroFacts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .heroCopy {
+    padding: 20px;
+  }
+
+  .cardHead,
+  .errorState {
+    flex-wrap: wrap;
+  }
+
+  .bars {
+    gap: 5px;
+  }
+
+  .barDayName {
+    font-size: 9px;
+  }
+}
+
+.hero[data-cover="false"] {
+  grid-template-columns: minmax(0, 1fr);
 }

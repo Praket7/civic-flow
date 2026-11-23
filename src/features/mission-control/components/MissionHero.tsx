@@ -44,7 +44,7 @@ export function MissionHero({ data }: MissionHeroProps) {
     : "";
 
   return (
-    <section className={styles.hero} aria-labelledby="mc-greeting">
+    <section className={styles.hero} aria-labelledby="mc-greeting" data-cover={Boolean(!ownWorkspace || cover)}>
       <div className={styles.heroCopy}>
         <p className={styles.eyebrow}>
           <span>{formatLongDate(now)}</span>
@@ -109,6 +109,7 @@ export function MissionHero({ data }: MissionHeroProps) {
         </dl>
       </div>
 
+      {!ownWorkspace || cover ? (
       <figure className={styles.heroFigure}>
         <img
           className={styles.heroImage}
@@ -127,6 +128,7 @@ export function MissionHero({ data }: MissionHeroProps) {
           {ownWorkspace ? null : <span>Photo: Pexels / 6646918</span>}
         </figcaption>
       </figure>
+      ) : null}
     </section>
   );
 }

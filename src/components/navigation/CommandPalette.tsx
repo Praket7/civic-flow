@@ -117,6 +117,7 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
           className={styles.input}
           type="text"
           role="combobox"
+          aria-label="Search CivicFlow"
           aria-expanded="true"
           aria-controls={listId}
           aria-autocomplete="list"
@@ -130,7 +131,7 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
           onKeyDown={(event) => {
             if (event.key === "ArrowDown") {
               event.preventDefault();
-              setActiveIndex((index) => Math.min(index + 1, results.length - 1));
+              setActiveIndex((index) => Math.max(0, Math.min(index + 1, results.length - 1)));
             } else if (event.key === "ArrowUp") {
               event.preventDefault();
               setActiveIndex((index) => Math.max(index - 1, 0));
@@ -144,7 +145,7 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className={styles.results}>
-        <p className={styles.groupLabel}>{query.trim() ? "Matching surfaces" : "Jump to"}</p>
+        <p className={styles.groupLabel} role="status">{query.trim() ? "Matching surfaces" : "Jump to"}</p>
         {results.length === 0 ? (
           <p className={styles.empty}>
             No surface matches “{query.trim()}”. Try “coverage” or “hours”.

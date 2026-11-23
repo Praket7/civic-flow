@@ -28,13 +28,14 @@ function Field({
         {label}
       </label>
       {children}
+      {hint ? (
+        <p id={`${htmlFor}-hint`} className={styles.hint}>
+          {hint}
+        </p>
+      ) : null}
       {error ? (
         <p id={`${htmlFor}-error`} className={styles.error} role="alert">
           {error}
-        </p>
-      ) : hint ? (
-        <p id={`${htmlFor}-hint`} className={styles.hint}>
-          {hint}
         </p>
       ) : null}
     </div>
@@ -48,8 +49,9 @@ function describedBy(
   hint: ReactNode,
   existing: string | undefined,
 ): string | undefined {
-  const message = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
-  return [existing, message].filter(Boolean).join(" ") || undefined;
+  return [existing, hint ? `${id}-hint` : undefined, error ? `${id}-error` : undefined]
+    .filter(Boolean)
+    .join(" ") || undefined;
 }
 
 export function TextField({
@@ -68,7 +70,7 @@ export function TextField({
         {...rest}
         id={inputId}
         className={styles.input}
-        aria-invalid={error ? true : undefined}
+        aria-invalid={error ? true : rest["aria-invalid"]}
         aria-describedby={describedBy(inputId, error, hint, describedById)}
       />
     </Field>
@@ -95,7 +97,7 @@ export function TextareaField({
         {...rest}
         id={inputId}
         className={styles.textarea}
-        aria-invalid={error ? true : undefined}
+        aria-invalid={error ? true : rest["aria-invalid"]}
         aria-describedby={describedBy(inputId, error, hint, describedById)}
       />
     </Field>
@@ -124,7 +126,7 @@ export function SelectField({
         {...rest}
         id={inputId}
         className={styles.select}
-        aria-invalid={error ? true : undefined}
+        aria-invalid={error ? true : rest["aria-invalid"]}
         aria-describedby={describedBy(inputId, error, hint, describedById)}
       >
         {children}

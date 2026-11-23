@@ -113,7 +113,7 @@ export function MissionControlPage() {
             Fill next week in one pass.
           </h2>
           <p className={styles.autorosterBody}>
-            Ranked assignments from skills, availability, and fairness. Review the plan before
+            Ranked assignments from skills, availability, and workload balance. Review the plan before
             anything is applied.
           </p>
         </div>

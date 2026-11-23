@@ -26,7 +26,12 @@ export function DataTable<T extends { id: string }>({
   className?: string;
 }) {
   return (
-    <div className={[styles.tableWrap, className].filter(Boolean).join(" ")}>
+    <div
+      className={[styles.tableWrap, className].filter(Boolean).join(" ")}
+      role="region"
+      aria-label={caption}
+      tabIndex={0}
+    >
       <table className={`${styles.table} ${onRowClick ? styles.tableClickable : ""}`}>
         <caption>{caption}</caption>
         <thead>
