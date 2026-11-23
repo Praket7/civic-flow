@@ -5,7 +5,7 @@
 import { csvText } from "../../csv";
 import type { Cause, DayKey, PeriodKey, VolunteerImportPreview } from "../../../types/domain";
 
-const IMPORT_COLUMNS: [string, string][] = [
+export const IMPORT_COLUMNS: [string, string][] = [
   ["name", "Name"],
   ["email", "Email"],
   ["phone", "Phone"],
