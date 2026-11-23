@@ -1403,3 +1403,24 @@
   overflow-wrap: anywhere;
   font-size: 12.5px;
 }
+
+@media (max-width: 560px) {
+  .scopeBar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .scopeOptions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scopeButton {
+    min-height: 44px;
+  }
+
+  .scopeMeta {
+    flex-wrap: wrap;
+  }
+}

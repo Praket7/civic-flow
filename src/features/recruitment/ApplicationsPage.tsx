@@ -97,7 +97,7 @@ export function ApplicationsPage() {
         }
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
+      <div className={styles.statStrip}>
         <StatCard
           icon={Users}
           value={applicants.length}

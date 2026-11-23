@@ -44,3 +44,7 @@ Record participant ID, viewport, input method, task success, time, wrong turns, 
 ## Exit gate
 
 Full six-job CI, targeted browser interaction acceptance, visual review of desktop/tablet/mobile/zoom captures, manual keyboard and screen-reader review, and independent participant task results. Automated checks are not WCAG certification. No live backend changes are part of this stage.
+
+## Screenshot-driven follow-up
+
+The first Stage 5 screenshot matrix produced 60 captures. Review found recruitment metrics clipped on a 390px viewport (13px of main-content overflow). The responsive metric grid and wrapping fixes address the observed defect; the visual matrix now fails on main-content overflow as well as document overflow. AutoRoster’s narrow scope controls also stack to avoid squeezing the date and role count. Re-run the matrix on the final commit before merging.

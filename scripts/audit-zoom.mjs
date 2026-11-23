@@ -333,7 +333,10 @@ try {
           returnByValue: true,
         });
         const measured = viewportResult.value;
-        const viewportBad = measured.horizontalOverflow || !measured.heading;
+        const viewportBad =
+          measured.horizontalOverflow ||
+          measured.mainScrollWidth > measured.mainWidth + 2 ||
+          !measured.heading;
         report[number + "-" + viewport.name] = {
           path: routePath,
           ...measured,
@@ -366,7 +369,7 @@ try {
     process.exitCode = 1;
   } else {
     console.log(
-      `\nAll tested route/viewport combinations render without document-level horizontal overflow. Report: ${OUT}`,
+      `\nAll tested route/viewport combinations render without document or main-content horizontal overflow in the captured viewports. Report: ${OUT}`,
     );
   }
 } finally {
