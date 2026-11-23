@@ -1,0 +1,43 @@
+name: Stage 5 Prepare Once
+on:
+  push:
+    branches: [stage5-visual-interaction-excellence]
+    paths: [".github/workflows/stage5-prepare-once.yml"]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: |
+          node scripts/i18n-extract.mjs
+          pnpm exec prettier --write $(git diff --name-only --diff-filter=ACM 2fde217b4822cf0ca97ff9b67887790e7c55a291 HEAD -- src scripts docs | tr '\n' ' ')
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src scripts docs
+          if ! git diff --cached --quiet; then
+            git commit -m "Format Stage 5 changes and regenerate interface catalog"
+            git push origin HEAD:stage5-visual-interaction-excellence
+          fi
+      - run: pnpm typecheck && pnpm lint && pnpm format && pnpm check:copy && pnpm check:i18n && pnpm docs:check
+      - run: pnpm test -- src/components/ui/Form.test.tsx src/components/ui/Charts.test.tsx src/features/mission-control/MissionControl.test.tsx
+      - name: Build and verify real interactions
+        env:
+          VITE_SUPABASE_URL: https://imzdblvljdcbnxtwbmbw.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_ci_only_dummy_key
+        run: |
+          pnpm build:hosted
+          node scripts/check-judge-build.mjs
+          node scripts/audit-judge-flow.mjs
