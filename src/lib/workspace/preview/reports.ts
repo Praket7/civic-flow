@@ -74,7 +74,9 @@ export function buildPreviewReport(
   const programId = request.programId ?? "";
   const hasPeriod = Boolean(request.dateStart || request.dateEnd);
   const inRange = (date: string) => date >= start && date <= end;
-  const opportunities = new Map(workspace.opportunities.map((row) => [row.id, row]));
+  const opportunities = new Map(
+    [...workspace.opportunities, ...(state.createdOpportunities ?? [])].map((row) => [row.id, row]),
+  );
   const matches = (opportunityId: string) => {
     const opportunity = opportunities.get(opportunityId);
     return Boolean(
