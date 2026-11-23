@@ -31,6 +31,7 @@ const ALLOWED = [
   /\.test\.[cm]?[jt]sx?$/,
   /^src-tauri\/core\/migrations\//,
   /^src-tauri\/core\/src\/db\.rs$/, // embeds the authored seed, does not invent ids
+  /^src-tauri\/core\/src\/matching\/tests\.rs$/, // Rust unit-test module, cfg(test) only
 ];
 
 const RULES = [
