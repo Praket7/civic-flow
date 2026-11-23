@@ -64,4 +64,29 @@ export const ROLE_COLORS = [
   "var(--color-violet)",
 ];
 
-export const AVAILABILITY_POINTS = 2¶»§q«^
+export const AVAILABILITY_POINTS = 25;
+
+export function availabilityLabel(state: AvailabilityState): string {
+  if (state === "available") return "Available for this shift";
+  if (state === "partial") return "Partial availability this day";
+  if (state === "unknown") return "Availability not confirmed";
+  return "No availability listed for this day";
+}
+
+/** Show why someone is *ineligible* as well as compare eligible contenders. */
+export function rankAlternativesForRole(
+  candidates: Candidate[],
+  role: string,
+  selectedId: string,
+  limit = 4,
+): Candidate[] {
+  return candidates
+    .filter((candidate) => candidate.volunteer.id !== selectedId)
+    .sort(
+      (left, right) =>
+        Number(right.eligibleRoles.includes(role)) - Number(left.eligibleRoles.includes(role)) ||
+        (right.scores[role] ?? right.score) - (left.scores[role] ?? left.score) ||
+        left.volunteer.id.localeCompare(right.volunteer.id),
+    )
+    .slice(0, Math.max(0, limit));
+}
