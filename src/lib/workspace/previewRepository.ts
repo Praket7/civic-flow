@@ -1723,8 +1723,8 @@ export const previewRepository: WorkspaceRepository = {
     const backups = ensureBackups();
     const target = backups.find((entry) => entry.meta.id === id);
     if (!target) throw new Error("That snapshot is not available in this workspace.");
-    if (!validSnapshot(target.snapshot)) {
-      throw new Error("That backup is incomplete or foreign and was not restored.");
+    if (!validSnapshot(target.snapshot) || target.meta.integrity !== "ok") {
+      throw new Error("That backup failed its integrity check and was not restored.");
     }
 
     const safety = makeBackup(state, "automatic", `Before restoring ${id}`);

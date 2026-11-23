@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { PriorityLevel } from "../../../types/domain";
+import type { PriorityLevel, RosterPolicy } from "../../../types/domain";
 import { createPreviewRosterPolicyStore } from "./rosterPolicyStore";
 
 const levels: PriorityLevel[] = [
@@ -34,6 +34,25 @@ describe("preview policy storage and semantic validation", () => {
     { maxMinutesPerDay: NaN },
   ])("rejects malformed policy values %j", (patch) => {
     expect(() => store.validateRosterPolicy({ ...store.readRosterPolicy(), ...patch })).toThrow();
+  });
+  it.each([
+    { version: 0 },
+    { version: 1.5 },
+    { unknownAgeBehavior: "unchecked" },
+    { unknownCredentialBehavior: "bypass" },
+    { waitlistPreference: "true" },
+  ])("rejects invalid policy state and enum values %j", (patch) => {
+    const invalid = { ...store.readRosterPolicy(), ...patch } as RosterPolicy;
+    expect(() => store.validateRosterPolicy(invalid)).toThrow();
+    expect(() => store.writeRosterPolicy(invalid)).toThrow();
+    expect(localStorage.getItem("A:civicflow.roster-policy.v1")).toBeNull();
+  });
+  it("falls back rather than retaining unsafe stored behavior settings", () => {
+    const key = "A:civicflow.roster-policy.v1";
+    localStorage.setItem(key, '{"unknownAgeBehavior":"unchecked","waitlistPreference":"true"}');
+    const recovered = store.readRosterPolicy();
+    expect(recovered.unknownAgeBehavior).toBe("block");
+    expect(recovered.waitlistPreference).toBe(false);
   });
   it("falls back to safe defaults for corrupt or obsolete saved policies", () => {
     const key = "A:civicflow.roster-policy.v1";

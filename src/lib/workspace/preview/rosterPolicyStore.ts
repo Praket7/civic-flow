@@ -40,6 +40,8 @@ export function createPreviewRosterPolicyStore(
   }
 
   function writeRosterPolicy(policy: RosterPolicy): void {
+    // Never persist a malformed policy even when called outside the settings form.
+    validateRosterPolicy(policy);
     try {
       localStorage.setItem(scoped(POLICY_KEY), JSON.stringify(policy));
     } catch {
@@ -48,6 +50,18 @@ export function createPreviewRosterPolicyStore(
   }
 
   function validateRosterPolicy(policy: RosterPolicy): void {
+    if (!Number.isSafeInteger(policy.version) || policy.version < 1) {
+      throw new Error("The matching policy version must be a positive integer.");
+    }
+    if (
+      (policy.unknownAgeBehavior !== "block" && policy.unknownAgeBehavior !== "allow") ||
+      (policy.unknownCredentialBehavior !== "block" && policy.unknownCredentialBehavior !== "allow")
+    ) {
+      throw new Error("Choose a supported behavior for unknown age and credentials.");
+    }
+    if (typeof policy.waitlistPreference !== "boolean") {
+      throw new Error("Waitlist preference must be enabled or disabled.");
+    }
     const limits: [string, number | null, number, number][] = [
       ["Maximum shifts a day", policy.maxShiftsPerDay, 1, 12],
       ["Maximum shifts a week", policy.maxShiftsPerWeek, 1, 40],

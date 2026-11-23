@@ -126,15 +126,24 @@ export function createPreviewBackupStore(
             isRecord(meta.counts)
           );
         })
-        .map((entry) => ({
-          ...entry,
-          meta: {
-            ...entry.meta,
-            sha256: entry.meta.sha256 || previewChecksum(JSON.stringify(entry.snapshot)),
-            schemaVersion: entry.meta.schemaVersion || 3,
-            integrity: entry.meta.integrity || "ok",
-          },
-        }));
+        .map((entry) => {
+          // This lightweight browser-only checksum detects accidental edits;
+          // it is not an authentication signature or encrypted backup.
+          const checksum = previewChecksum(JSON.stringify(entry.snapshot));
+          const intact =
+            validSnapshot(entry.snapshot) &&
+            (!entry.meta.sha256 || entry.meta.sha256 === checksum) &&
+            entry.meta.integrity !== "failed";
+          return {
+            ...entry,
+            meta: {
+              ...entry.meta,
+              sha256: entry.meta.sha256 || checksum,
+              schemaVersion: entry.meta.schemaVersion || 3,
+              integrity: intact ? "ok" : "failed",
+            },
+          };
+        });
     } catch {
       return [];
     }
