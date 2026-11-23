@@ -74,7 +74,7 @@ import type {
 import * as previewOrganizations from "../organizations/preview";
 import { buildMissionControl } from "./compute";
 import { buildPreviewReport } from "./preview/reports";
-import { previewVolunteerCsv } from "./preview/volunteerImport";
+import { IMPORT_COLUMNS, previewVolunteerCsv } from "./preview/volunteerImport";
 import { demoWorkspace } from "./dataset";
 import { blankWorkspaceForOrganization, withRoster } from "./organizationWorkspace";
 import type { OrganizationScope } from "./organizationWorkspace";
