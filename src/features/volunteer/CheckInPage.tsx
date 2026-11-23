@@ -9,7 +9,7 @@ import {
   Clock3,
   ShieldCheck,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { CheckInQr } from "../../components/checkin/CheckInQr";
 import { Avatar, Button, ButtonLink } from "../../components/ui";
 import { t } from "../../lib/i18n";
@@ -59,9 +59,10 @@ type LiveEvent = NonNullable<ReturnType<typeof getLiveEvent>>;
 
 export function CheckInPage() {
   const { workspace, session } = useWorkspace();
-  const liveEvent = getLiveEvent(session, workspace);
+  const [params] = useSearchParams();
+  const liveEvent = getLiveEvent(session, workspace, params.get("shift") || undefined);
   if (!liveEvent) return <NoEventPanel />;
-  return <CheckInBody liveEvent={liveEvent} />;
+  return <CheckInBody key={liveEvent.shift.id} liveEvent={liveEvent} />;
 }
 
 function CheckInBody({ liveEvent }: { liveEvent: LiveEvent }) {

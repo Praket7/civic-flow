@@ -221,6 +221,8 @@ export interface WaitlistEntry {
   status: WaitlistStatus;
   position: number;
   eligibleRole: string;
+  /** An open-seat application entered into the same review queue. */
+  requestReview?: boolean;
 }
 
 export type AttendanceStatus = "expected" | "checked_in" | "completed" | "no_show";

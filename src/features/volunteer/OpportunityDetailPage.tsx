@@ -101,7 +101,7 @@ export function OpportunityDetailPage() {
     () =>
       opportunity
         ? getShiftRowsForOpportunity(opportunity.id, workspace).filter(
-            (row) => row.shift.status === "scheduled" && row.shift.startsAt > workspace.now,
+            (row) => row.shift.status === "scheduled" && new Date(row.shift.startsAt) > new Date(workspace.now),
           )
         : [],
     [opportunity, workspace],
@@ -205,15 +205,15 @@ export function OpportunityDetailPage() {
     }
   }
 
-  async function handleJoinWaitlist() {
+  async function handleJoinWaitlist(requestReview = false) {
     if (!opportunity || !activeShift || busy) return;
     setBusy(true);
     setConfirmation("");
     setProblem("");
     try {
-      await actions.joinWaitlist(activeShift.id, volunteer.id, effectiveRole);
+      await actions.joinWaitlist(activeShift.id, volunteer.id, effectiveRole, requestReview);
       setConfirmation(
-        `You're on the waitlist for ${formatDate(activeShift.startsAt)}. We'll notify you if a seat opens.`,
+        requestReview ? `Your request for ${effectiveRole} was submitted for coordinator review. No seat is reserved yet.` : `You're on the waitlist for ${formatDate(activeShift.startsAt)}. We'll notify you if a seat opens.`,
       );
     } catch (caught) {
       setProblem(messageOf(caught));
@@ -764,18 +764,23 @@ export function OpportunityDetailPage() {
               </Button>
             ) : null}
 
+            {!isFull && activeShift && !isRegistered ? (
+              <Button size="large" variant="secondary" className={styles.signupButton} onClick={() => void handleJoinWaitlist(true)} disabled={isWaitlisted || busy}>
+                {isWaitlisted ? "Request pending" : "Request coordinator review"}
+              </Button>
+            ) : null}
             {isRegistered ? (
               <div className={styles.registeredActions}>
                 <ButtonLink to="/volunteer/schedule" size="small">
                   My schedule
                 </ButtonLink>
-                <ButtonLink to="/volunteer/check-in" size="small" variant="ghost">
+                <ButtonLink to={`/volunteer/check-in?shift=${encodeURIComponent(activeShift?.id ?? "")}`} size="small" variant="ghost">
                   Check in
                 </ButtonLink>
               </div>
             ) : (
               <p className={styles.signupNote}>
-                Free to cancel until 12 hours before the shift. No account fees, ever.
+                A request for review does not reserve a seat. Check your schedule for confirmed assignments.
               </p>
             )}
 

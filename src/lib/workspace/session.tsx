@@ -71,7 +71,7 @@ interface WorkspaceSessionValue {
     checkOut(shiftId: string, volunteerId: string): Promise<void>;
     markNoShow(shiftId: string, volunteerId: string): Promise<void>;
     cancelRegistration(shiftId: string, volunteerId: string, reason?: string): Promise<void>;
-    joinWaitlist(shiftId: string, volunteerId: string, role: string): Promise<void>;
+    joinWaitlist(shiftId: string, volunteerId: string, role: string, requestReview?: boolean): Promise<void>;
     getCheckinCode(shiftId: string): Promise<CheckinCode>;
     checkinWindow(shiftId: string): Promise<CheckinWindow>;
     autoRoster(shiftIds: string[], options: RosterOptions): Promise<RosterPlan>;
@@ -347,8 +347,8 @@ export function WorkspaceSessionProvider({ children }: { children: ReactNode }) 
         enqueue(() =>
           runChecked(() => repository.cancelRegistration(shiftId, volunteerId, reason)),
         ),
-      joinWaitlist: (shiftId, volunteerId, role) =>
-        enqueue(() => runChecked(() => repository.joinWaitlist(shiftId, volunteerId, role))),
+      joinWaitlist: (shiftId, volunteerId, role, requestReview) =>
+        enqueue(() => runChecked(() => repository.joinWaitlist(shiftId, volunteerId, role, requestReview))),
       getCheckinCode: (shiftId) => repository.getCheckinCode(shiftId),
       checkinWindow: (shiftId) => repository.checkinWindow(shiftId),
       autoRoster: (shiftIds, options) => repository.autoRoster(shiftIds, options),

@@ -1144,7 +1144,7 @@ export const previewRepository: WorkspaceRepository = {
       audit: [...auditEvents, ...state.audit],
     });
   },
-  async joinWaitlist(shiftId, volunteerId, role) {
+  async joinWaitlist(shiftId, volunteerId, role, requestReview = false) {
     if (
       state.waitlist.some(
         (row) =>
@@ -1183,16 +1183,17 @@ export const previewRepository: WorkspaceRepository = {
           ...state.waitlist.filter((row) => row.shiftId === shiftId).map((row) => row.position),
         ) + 1,
       eligibleRole: role,
+      requestReview,
     };
     return persist({
       ...state,
-      waitlist: [...state.waitlist, entry],
+      waitlist: [...state.waitlist.filter(row => row.shiftId !== shiftId || row.volunteerId !== volunteerId), entry],
       audit: [
         audit(
           "waitlist.join",
           "shift",
           shiftId,
-          `Added ${volunteerName(volunteerId)} to the waitlist`,
+          requestReview ? `Requested coordinator review for ${volunteerName(volunteerId)} as ${role}` : `Added ${volunteerName(volunteerId)} to the waitlist`,
         ),
         ...state.audit,
       ],
@@ -1244,7 +1245,7 @@ export const previewRepository: WorkspaceRepository = {
     const events: AuditEvent[] = [];
     for (const assignment of assignments) {
       validateJourneySeat(next, assignment.shiftId, assignment.candidateId, assignment.role);
-      if (assignment.promoteWaitlist) {
+      if (next.waitlist.some(row => row.shiftId === assignment.shiftId && row.volunteerId === assignment.candidateId && row.status === "waiting")) {
         next = {
           ...next,
           waitlist: next.waitlist.map((row) =>
@@ -1321,7 +1322,7 @@ export const previewRepository: WorkspaceRepository = {
     const events: AuditEvent[] = [];
     for (const assignment of assignments) {
       validateJourneySeat(next, shiftId, assignment.candidateId, assignment.role);
-      if (assignment.promoteWaitlist) {
+      if (next.waitlist.some(row => row.shiftId === shiftId && row.volunteerId === assignment.candidateId && row.status === "waiting")) {
         next = {
           ...next,
           waitlist: next.waitlist.map((row) =>

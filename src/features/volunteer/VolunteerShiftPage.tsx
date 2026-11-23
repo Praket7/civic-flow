@@ -309,7 +309,7 @@ export function VolunteerShiftPage() {
               Check out
             </Button>
           ) : !myRosterRow || !checkinWindow || status === "completed" ? null : checkInOpen ? (
-            <ButtonLink to="/volunteer/check-in" variant="primary" icon={<FileCheck2 size={14} />}>
+            <ButtonLink to={`/volunteer/check-in?shift=${encodeURIComponent(activeShift.id)}`} variant="primary" icon={<FileCheck2 size={14} />}>
               Check in
             </ButtonLink>
           ) : (
