@@ -78,9 +78,27 @@ describe("pure preview reporting", () => {
     const data = {
       ...state,
       impactMetrics: [
-        { opportunityId: "opp-a", name: "Meals", unit: "meals", value: 200, recordedAt: "2026-11-12T12:00:00Z" },
-        { opportunityId: "opp-b", name: "Students", unit: "students", value: 20, recordedAt: "2026-11-12T12:00:00Z" },
-        { opportunityId: "opp-a", name: "Meals", unit: "meals", value: 50, recordedAt: "2026-10-01T12:00:00Z" },
+        {
+          opportunityId: "opp-a",
+          name: "Meals",
+          unit: "meals",
+          value: 200,
+          recordedAt: "2026-11-12T12:00:00Z",
+        },
+        {
+          opportunityId: "opp-b",
+          name: "Students",
+          unit: "students",
+          value: 20,
+          recordedAt: "2026-11-12T12:00:00Z",
+        },
+        {
+          opportunityId: "opp-a",
+          name: "Meals",
+          unit: "meals",
+          value: 50,
+          recordedAt: "2026-10-01T12:00:00Z",
+        },
       ],
     } as unknown as SessionSnapshot;
     const result = buildPreviewReport(
