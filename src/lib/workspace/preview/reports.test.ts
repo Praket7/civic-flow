@@ -36,7 +36,8 @@ const request: ReportRequest = {
   fields: [],
   dateStart: "2026-11-01",
   dateEnd: "2026-11-30",
-} as ReportRequest;
+  groupBy: "none",
+};
 
 describe("pure preview reporting", () => {
   it("computes coverage and coordinator-ready summary without side effects", () => {
