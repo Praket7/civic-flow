@@ -21,6 +21,7 @@ import {
   formatHours,
   getCauseHours,
   getHoursTrend,
+  getReportPreview,
   REPORT_TEMPLATES,
   type ReportTemplate,
 } from "../../lib/workspace/selectors";
@@ -44,14 +45,15 @@ export function ReportsPage() {
   const [category, setCategory] = useState<Category>("all");
   const trend = getHoursTrend(session, workspace);
   const causes = getCauseHours(session, workspace);
+  const impact = getReportPreview(session, workspace);
   const filtered =
     category === "all"
       ? REPORT_TEMPLATES
       : REPORT_TEMPLATES.filter((template) => template.category === category);
   const savedViews = session.savedViews.map((view) => {
-    let filters: Record<string, string[] | undefined>;
+    let filters: Record<string, unknown>;
     try {
-      filters = JSON.parse(view.filtersJson) as Record<string, string[] | undefined>;
+      filters = JSON.parse(view.filtersJson) as Record<string, unknown>;
     } catch {
       filters = {};
     }
@@ -84,19 +86,19 @@ export function ReportsPage() {
       <div className={styles.statStrip}>
         <StatCard
           icon={Users}
-          value={workspace.impact.uniqueVolunteersYtd}
+          value={impact.totals.uniqueVolunteersYtd}
           label="Volunteers this year"
           tone="cobalt"
         />
         <StatCard
           icon={HeartHandshake}
-          value={formatHours(workspace.impact.hoursYtd)}
+          value={formatHours(impact.totals.hoursYtd)}
           label="Verified hours"
           tone="violet"
         />
         <StatCard
           icon={ShieldCheck}
-          value={`${workspace.impact.attendanceRate}%`}
+          value={impact.attendanceObservations ? `${impact.totals.attendanceRate}%` : "N/A"}
           label="Attendance rate"
           tone="green"
         />
@@ -163,7 +165,7 @@ export function ReportsPage() {
             <Card className={styles.chartCard}>
               <SectionHeader
                 title="Volunteer hours over time"
-                subtitle="Verified hours, January – October"
+                subtitle={`Verified hours through ${workspace.now.slice(0, 10)}`}
                 action={<Link to="/coordinator/impact">Full analytics</Link>}
               />
               <AreaChart
@@ -185,8 +187,8 @@ export function ReportsPage() {
                   value: cause.hours,
                   color: CAUSE_COLORS[cause.cause] ?? "var(--color-cobalt)",
                 }))}
-                centerValue={`${workspace.impact.hoursThisMonth}`}
-                centerLabel="hours this month"
+                centerValue={formatHours(impact.totals.hoursYtd)}
+                centerLabel="verified hours YTD"
                 size={136}
                 label="Impact by cause"
                 valueFormatter={(value) => `${value} h`}
@@ -211,7 +213,7 @@ export function ReportsPage() {
                 <p className={styles.templateCopy}>
                   Saved filter set:{" "}
                   {Object.entries(view.filters)
-                    .map(([key, values]) => `${key}: ${values?.join(", ") ?? "any"}`)
+                    .map(([key, values]) => `${key}: ${Array.isArray(values) ? values.join(", ") : typeof values === "string" ? values : "any"}`)
                     .join(" · ")}
                 </p>
               </div>
