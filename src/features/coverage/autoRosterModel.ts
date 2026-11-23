@@ -64,11 +64,4 @@ export const ROLE_COLORS = [
   "var(--color-violet)",
 ];
 
-export const AVAILABILITY_POINTS = 25;
-
-export function availabilityLabel(state: AvailabilityState): string {
-  if (state === "available") return "Available for this shift";
-  if (state === "partial") return "Partial availability this day";
-  if (state === "unknown") return "Availability not confirmed";
-  return "No availability listed for this day";
-}
+export const AVAILABILITY_POINTS = 2¶»§q«^
