@@ -443,21 +443,28 @@ try {
     (button) => button.textContent.trim() === "Export CSV"
   ).click()`);
   const csv = await until(() => evaluate("window.__reportCsv"), "CSV export payload");
-  const expectedCsv = reportRows.map((row) =>
-    row.map((cell) => {
-      const safe = /^[=@]/.test(cell) ||
-        (/^[+-]/.test(cell) && !/^[+-][0-9\s().-]*$/.test(cell))
-        ? "'" + cell : cell;
-      return /[",\r\n]/.test(safe) ? '"' + safe.replaceAll('"', '""') + '"' : safe;
-    }).join(",")
-  ).join("\r\n") + "\r\n";
+  const expectedCsv =
+    reportRows
+      .map((row) =>
+        row
+          .map((cell) => {
+            const safe =
+              /^[=@]/.test(cell) || (/^[+-]/.test(cell) && !/^[+-][0-9\s().-]*$/.test(cell))
+                ? "'" + cell
+                : cell;
+            return /[",\r\n]/.test(safe) ? '"' + safe.replaceAll('"', '""') + '"' : safe;
+          })
+          .join(","),
+      )
+      .join("\r\n") + "\r\n";
   assert.equal(csv.replace(/^\uFEFF/, ""), expectedCsv, "CSV must match every visible source row");
 
   await evaluate(`Array.from(document.querySelectorAll("button")).find(
     (button) => button.textContent.trim() === "Export PDF"
   ).click()`);
   const printRows = await until(
-    () => evaluate(`(() => {
+    () =>
+      evaluate(`(() => {
       const table = window.__reportPrint?.document.querySelector("table");
       if (!table) return null;
       return Array.from(table.rows, (row) =>
