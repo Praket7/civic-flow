@@ -1385,3 +1385,21 @@
 .auditErrors {
   color: var(--color-red);
 }
+
+/* Preserve full eligibility explanations and make them usable without hover. */
+.checkRow span:first-child {
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+
+.planWhy summary,
+.whyNotButton {
+  min-height: 28px;
+  padding-block: 4px;
+  font-size: 12px;
+}
+
+.answerCard {
+  overflow-wrap: anywhere;
+  font-size: 12.5px;
+}

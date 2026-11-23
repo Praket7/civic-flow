@@ -1,4 +1,4 @@
-name: Stage 5 Prepare Once
+name: Stage 5 Prepare Once (interaction refinements)
 on:
   push:
     branches: [stage5-visual-interaction-excellence]
@@ -32,7 +32,7 @@ jobs:
             git push origin HEAD:stage5-visual-interaction-excellence
           fi
       - run: pnpm typecheck && pnpm lint && pnpm format && pnpm check:copy && pnpm check:i18n && pnpm docs:check
-      - run: pnpm test -- src/components/ui/Form.test.tsx src/components/ui/Charts.test.tsx src/features/mission-control/MissionControl.test.tsx
+      - run: pnpm test -- src/components/ui/Form.test.tsx src/components/ui/Charts.test.tsx src/components/ui/Tabs.test.tsx src/components/help/HelpDialog.test.tsx src/features/mission-control/MissionControl.test.tsx
       - name: Build and verify real interactions
         env:
           VITE_SUPABASE_URL: https://imzdblvljdcbnxtwbmbw.supabase.co

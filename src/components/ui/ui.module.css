@@ -1049,3 +1049,30 @@
     flex-wrap: wrap;
   }
 }
+
+.tabs,
+.underlineTabs {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.tab,
+.underlineTab {
+  min-height: 30px;
+}
+
+.switch {
+  width: 42px;
+  height: 26px;
+}
+
+.switch::after {
+  top: 4px;
+  left: 4px;
+  width: 18px;
+  height: 18px;
+}
+
+.switch[aria-checked="true"]::after {
+  transform: translateX(16px);
+}

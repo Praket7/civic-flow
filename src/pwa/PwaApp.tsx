@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   Navigate,
   NavLink,
@@ -56,14 +56,20 @@ const NAV: NavEntry[] = [
 export function PwaApp() {
   const { phase, error, workspace, view, conflicts, signOut } = useCloud();
   const location = useLocation();
+  const previousPath = useRef(location.pathname);
+  const mainRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
+    if (previousPath.current === location.pathname) return;
+    previousPath.current = location.pathname;
+    const frame = requestAnimationFrame(() => mainRef.current?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(frame);
   }, [location.pathname]);
 
   if (phase === "loading") {
     return (
-      <main className={styles.splash}>
+      <main className={styles.splash} aria-busy="true" role="status">
         <span className={styles.brandMark} aria-hidden>
           CF
         </span>
@@ -105,7 +111,7 @@ export function PwaApp() {
               ? "Your account needs a workspace invitation"
               : "This workspace could not open"}
           </h1>
-          <p className={styles.body}>{error}</p>
+          <p className={styles.body} role="alert">{error}</p>
           <div className={styles.rowActions}>
             <Button variant="secondary" onClick={() => void signOut()}>
               Sign out
@@ -134,7 +140,7 @@ export function PwaApp() {
   return (
     <div className={styles.shell}>
       <TopBar />
-      <main className={styles.main}>
+      <main ref={mainRef} className={styles.main} tabIndex={-1}>
         <Routes>
           <Route path="/" element={<HomeScreen />} />
           <Route path="/discover" element={<DiscoverScreen />} />

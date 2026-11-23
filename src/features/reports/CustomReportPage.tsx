@@ -352,140 +352,7 @@ export function CustomReportPage() {
         }
       />
       <div className={styles.builder}>
-        <Card className={styles.builderRail}>
-          <h2 className={styles.railTitle}>Fields</h2>
-          {templateId === "custom" || templateId === "participation" ? (
-            <>
-              <div className={styles.fieldList}>
-                {FIELD_OPTIONS.map((field) => (
-                  <label className={styles.fieldOption} key={field.id}>
-                    <input
-                      type="checkbox"
-                      checked={fields.includes(field.id)}
-                      onChange={(event) =>
-                        setFields((current) =>
-                          event.target.checked
-                            ? [...current, field.id]
-                            : current.length > 1
-                              ? current.filter((id) => id !== field.id)
-                              : current,
-                        )
-                      }
-                    />
-                    {field.label}
-                  </label>
-                ))}
-              </div>
-              <SelectField
-                label="Group rows by"
-                value={grouping}
-                onChange={(event) => setGrouping(event.target.value as ReportRequest["groupBy"])}
-              >
-                <option value="none">Date order</option>
-                <option value="cause">Cause</option>
-                <option value="program">Program</option>
-              </SelectField>
-            </>
-          ) : (
-            <p className={styles.tableNote}>
-              This report uses a fixed set of fields specific to {template?.title.toLowerCase()}.
-            </p>
-          )}
-          <p className={styles.tableNote}>
-            Source record IDs let you verify individual entries against the service ledger.
-          </p>
-        </Card>
-
-        <Card className={styles.canvas}>
-          <div className={styles.paper}>
-            <div className={styles.paperHeader}>
-              <div>
-                <h2 className={styles.paperTitle}>{report?.title ?? "Report preview"}</h2>
-                <p className={styles.paperMeta}>
-                  {report?.organization ?? workspace.organization.name} ·{" "}
-                  {report?.period ?? "Preparing report"}
-                </p>
-              </div>
-              <Badge tone="cobalt">Source-backed</Badge>
-            </div>
-            {loading ? <p role="status">Calculating report from source records…</p> : null}
-            {previewError ? (
-              <p role="alert" style={{ color: "var(--tone-red-ink)" }}>
-                {previewError}
-              </p>
-            ) : null}
-            {report ? (
-              <>
-                <div style={{ marginTop: 14, display: "flex", gap: 18, flexWrap: "wrap" }}>
-                  {report.summary.map((item) => (
-                    <div key={item.label}>
-                      <strong style={{ display: "block" }}>{item.value}</strong>
-                      <span className={styles.tableNote}>{item.label}</span>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ marginTop: 14 }}>
-                  <Tabs
-                    items={[
-                      { id: "table", label: "Table" },
-                      { id: "trend", label: "Approved hours trend" },
-                      { id: "cause", label: "By cause" },
-                    ]}
-                    value={chart}
-                    onChange={setChart}
-                    label="Report visualization"
-                  />
-                </div>
-                <div style={{ marginTop: 14 }}>
-                  {chart === "trend" ? (
-                    points.trend.length ? (
-                      <AreaChart
-                        data={points.trend}
-                        height={176}
-                        label="Approved service time by date from current report rows"
-                        formatValue={formatMinutes}
-                      />
-                    ) : (
-                      <p className={styles.tableNote}>
-                        To chart approved hours, include Service date and Approved minutes in a
-                        participation report.
-                      </p>
-                    )
-                  ) : null}
-                  {chart === "cause" ? (
-                    points.causes.length ? (
-                      <DonutChart
-                        data={points.causes}
-                        centerValue={formatMinutes(
-                          points.causes.reduce((sum, point) => sum + point.value, 0),
-                        )}
-                        centerLabel="approved time"
-                        label="Approved time by cause"
-                        valueFormatter={formatMinutes}
-                      />
-                    ) : (
-                      <p className={styles.tableNote}>
-                        To analyze causes, include Cause and Approved minutes in a participation
-                        report.
-                      </p>
-                    )
-                  ) : null}
-                  <DataTable
-                    columns={columns}
-                    rows={rows}
-                    caption="Report source records"
-                    empty="No records match these filters. The empty report is valid."
-                  />
-                </div>
-                <p className={styles.tableNote}>
-                  {rows.length} source rows · Generated {report.generatedAt.slice(0, 10)} ·
-                  Summaries and exports are calculated from the same report request.
-                </p>
-              </>
-            ) : null}
-          </div>
-        </Card>
-
+        <div className={styles.builderControls}>
         <Card className={styles.builderRail}>
           <h2 className={styles.railTitle}>
             <Filter size={14} aria-hidden="true" style={{ marginRight: 5 }} />
@@ -591,6 +458,140 @@ export function CustomReportPage() {
               {saved}
             </p>
           ) : null}
+        </Card>
+        <Card className={styles.builderRail}>
+          <h2 className={styles.railTitle}>Fields</h2>
+          {templateId === "custom" || templateId === "participation" ? (
+            <>
+              <div className={styles.fieldList}>
+                {FIELD_OPTIONS.map((field) => (
+                  <label className={styles.fieldOption} key={field.id}>
+                    <input
+                      type="checkbox"
+                      checked={fields.includes(field.id)}
+                      onChange={(event) =>
+                        setFields((current) =>
+                          event.target.checked
+                            ? [...current, field.id]
+                            : current.length > 1
+                              ? current.filter((id) => id !== field.id)
+                              : current,
+                        )
+                      }
+                    />
+                    {field.label}
+                  </label>
+                ))}
+              </div>
+              <SelectField
+                label="Group rows by"
+                value={grouping}
+                onChange={(event) => setGrouping(event.target.value as ReportRequest["groupBy"])}
+              >
+                <option value="none">Date order</option>
+                <option value="cause">Cause</option>
+                <option value="program">Program</option>
+              </SelectField>
+            </>
+          ) : (
+            <p className={styles.tableNote}>
+              This report uses a fixed set of fields specific to {template?.title.toLowerCase()}.
+            </p>
+          )}
+          <p className={styles.tableNote}>
+            Source record IDs let you verify individual entries against the service ledger.
+          </p>
+        </Card>
+        </div>
+
+        <Card className={styles.canvas}>
+          <div className={styles.paper}>
+            <div className={styles.paperHeader}>
+              <div>
+                <h2 className={styles.paperTitle}>{report?.title ?? "Report preview"}</h2>
+                <p className={styles.paperMeta}>
+                  {report?.organization ?? workspace.organization.name} ·{" "}
+                  {report?.period ?? "Preparing report"}
+                </p>
+              </div>
+              {report ? <Badge tone="cobalt">Source-backed</Badge> : null}
+            </div>
+            {loading ? <p role="status">Calculating report from source records…</p> : null}
+            {previewError ? (
+              <p role="alert" style={{ color: "var(--tone-red-ink)" }}>
+                {previewError}
+              </p>
+            ) : null}
+            {report ? (
+              <>
+                <div style={{ marginTop: 14, display: "flex", gap: 18, flexWrap: "wrap" }}>
+                  {report.summary.map((item) => (
+                    <div key={item.label}>
+                      <strong style={{ display: "block" }}>{item.value}</strong>
+                      <span className={styles.tableNote}>{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: 14 }}>
+                  <Tabs
+                    items={[
+                      { id: "table", label: "Table" },
+                      { id: "trend", label: "Approved hours trend" },
+                      { id: "cause", label: "By cause" },
+                    ]}
+                    value={chart}
+                    onChange={setChart}
+                    label="Report visualization"
+                  />
+                </div>
+                <div style={{ marginTop: 14 }}>
+                  {chart === "trend" ? (
+                    points.trend.length ? (
+                      <AreaChart
+                        data={points.trend}
+                        height={176}
+                        label="Approved service time by date from current report rows"
+                        formatValue={formatMinutes}
+                      />
+                    ) : (
+                      <p className={styles.tableNote}>
+                        To chart approved hours, include Service date and Approved minutes in a
+                        participation report.
+                      </p>
+                    )
+                  ) : null}
+                  {chart === "cause" ? (
+                    points.causes.length ? (
+                      <DonutChart
+                        data={points.causes}
+                        centerValue={formatMinutes(
+                          points.causes.reduce((sum, point) => sum + point.value, 0),
+                        )}
+                        centerLabel="approved time"
+                        label="Approved time by cause"
+                        valueFormatter={formatMinutes}
+                      />
+                    ) : (
+                      <p className={styles.tableNote}>
+                        To analyze causes, include Cause and Approved minutes in a participation
+                        report.
+                      </p>
+                    )
+                  ) : null}
+                  <DataTable
+                    columns={columns}
+                    rows={rows}
+                    caption="Report source records"
+                    empty="No records match these filters. The empty report is valid."
+                  />
+                </div>
+                <p className={styles.tableNote} role="status">
+                  {rows.length} source rows · Generated {report.generatedAt.slice(0, 10)} ·
+                  Summaries and exports are calculated from the same report request.
+                </p>
+              </>
+            ) : null}
+          </div>
         </Card>
       </div>
     </Page>

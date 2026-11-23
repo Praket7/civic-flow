@@ -129,7 +129,8 @@ export function Sidebar({
     role: isCoordinator ? t("Coordinator") : t("Volunteer"),
     photo: isCoordinator ? undefined : (volunteer?.photo ?? session.volunteerProfile.photo),
   };
-  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [workspacePath, setWorkspacePath] = useState<string | null>(null);
+  const workspaceOpen = workspacePath === location.key && (!narrow || mobileOpen);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -142,14 +143,41 @@ export function Sidebar({
   }, [mobileOpen]);
 
   useEffect(() => {
+    if (!mobileOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      const sidebar = sidebarRef.current;
+      if (!sidebar?.contains(document.activeElement) || event.defaultPrevented) return;
+      if (event.key === "Escape" && !workspaceOpen) {
+        event.preventDefault();
+        onDismissMobile();
+      }
+      if (event.key !== "Tab") return;
+      const controls = Array.from(
+        sidebar.querySelectorAll<HTMLElement>("a[href], button:not(:disabled)"),
+      ).filter((control) => control.getClientRects().length > 0);
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [mobileOpen, workspaceOpen, onDismissMobile]);
+
+  useEffect(() => {
     if (!workspaceOpen) return;
     function onPointerDown(event: PointerEvent) {
-      if (!workspaceRef.current?.contains(event.target as Node)) setWorkspaceOpen(false);
+      if (!workspaceRef.current?.contains(event.target as Node)) setWorkspacePath(null);
     }
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
-        setWorkspaceOpen(false);
+        setWorkspacePath(null);
         workspaceTriggerRef.current?.focus();
       }
     }
@@ -161,8 +189,13 @@ export function Sidebar({
     };
   }, [workspaceOpen]);
 
+  function closeMobile() {
+    setWorkspacePath(null);
+    onDismissMobile();
+  }
+
   function dismissOnNavigate() {
-    setWorkspaceOpen(false);
+    setWorkspacePath(null);
     onNavigate();
   }
 
@@ -180,7 +213,7 @@ export function Sidebar({
         className={styles.mobileBackdrop}
         data-open={mobileOpen}
         aria-hidden="true"
-        onClick={onDismissMobile}
+        onClick={closeMobile}
       />
       <aside
         ref={sidebarRef}
@@ -190,27 +223,6 @@ export function Sidebar({
         role={mobileOpen ? "dialog" : undefined}
         aria-modal={mobileOpen ? true : undefined}
         inert={narrow && !mobileOpen}
-        onKeyDown={(event) => {
-          if (!mobileOpen) return;
-          if (event.key === "Escape" && !workspaceOpen) {
-            event.preventDefault();
-            onDismissMobile();
-          }
-          if (event.key !== "Tab") return;
-          const controls = Array.from(
-            sidebarRef.current?.querySelectorAll<HTMLElement>("a[href], button:not(:disabled)") ??
-              [],
-          ).filter((control) => control.getClientRects().length > 0);
-          const first = controls[0];
-          const last = controls.at(-1);
-          if (event.shiftKey && document.activeElement === first) {
-            event.preventDefault();
-            last?.focus();
-          } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault();
-            first?.focus();
-          }
-        }}
         data-mobile-open={mobileOpen}
         data-collapsed={collapsed}
         data-rail="true"
@@ -242,7 +254,7 @@ export function Sidebar({
               type="button"
               ref={closeRef}
               className={styles.frameButton}
-              onClick={onDismissMobile}
+              onClick={closeMobile}
               aria-label="Close navigation"
             >
               <X size={16} />
@@ -269,7 +281,7 @@ export function Sidebar({
             aria-label={`${t("Workspace")}: ${organizationName}. ${t("Open workspace menu")}`}
             aria-expanded={workspaceOpen}
             aria-controls={workspaceOpen ? "workspace-navigation" : undefined}
-            onClick={() => setWorkspaceOpen((open) => !open)}
+            onClick={() => setWorkspacePath(workspaceOpen ? null : location.key)}
           >
             <span className={styles.orgBadge} aria-hidden="true">
               {organizationInitials}

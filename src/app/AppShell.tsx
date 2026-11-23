@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { HelpProvider } from "../components/help/HelpDialog";
 import { FirstRunTour } from "../components/help/FirstRunTour";
@@ -25,7 +25,7 @@ export function AppShell() {
   });
   const [mobilePath, setMobilePath] = useState<string | null>(null);
   const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 760px)").matches);
-  const mobileOpen = narrow && mobilePath === location.pathname;
+  const mobileOpen = narrow && mobilePath === location.key;
   const mainRef = useRef<HTMLElement>(null);
   const previousPath = useRef(location.pathname);
   const sidebarTriggerRef = useRef<HTMLButtonElement>(null);
@@ -61,16 +61,17 @@ export function AppShell() {
     return () => cancelAnimationFrame(frame);
   }, [location.pathname]);
 
-  function dismissMobile() {
+  const dismissMobile = useCallback(() => {
     setMobilePath(null);
     requestAnimationFrame(() => sidebarTriggerRef.current?.focus());
-  }
+  }, []);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (
         !mobileOpen &&
         !event.defaultPrevented &&
+        !(event.target instanceof HTMLElement && event.target.closest('[aria-modal="true"]')) &&
         (event.metaKey || event.ctrlKey) &&
         event.key.toLowerCase() === "k"
       ) {
@@ -124,7 +125,7 @@ export function AppShell() {
             <TopBar
               key={`topbar-${copyKey}`}
               onOpenPalette={() => setPaletteOpen(true)}
-              onOpenSidebar={() => setMobilePath(location.pathname)}
+              onOpenSidebar={() => setMobilePath(location.key)}
               sidebarTriggerRef={sidebarTriggerRef}
               sidebarOpen={mobileOpen}
             />

@@ -2,7 +2,7 @@
 
 ## Objective
 
-Make the coordinator and volunteer workflows usable without sacrificing the verified Stage 4 records, exports, or AutoRoster decisions. The FBLA Coding & Programming 2026–27 rubric rewards intuitive interfaces with clear instructions. This is evidence for judging, not a claim that the application has won or passed a human evaluation.
+Make the coordinator and volunteer workflows usable without sacrificing the verified Stage 4 records, exports, or AutoRoster decisions. The official FBLA Coding & Programming 2026–27 rubric allocates 10 points to UX design, 5 to intuitiveness, 5 to navigation, and 5 to validation. Source: https://greektrack-fbla-public.s3.us-east-1.amazonaws.com/files/1/High%20School%20Competitive%20Events%20Resources/Individual%20Guidelines/Presentation%20Events/Coding-and-Programming.pdf. This is evidence for judging, not a claim that the application has won or passed a human evaluation.
 
 ## Research and decisions
 
@@ -21,6 +21,8 @@ Make the coordinator and volunteer workflows usable without sacrificing the veri
 | Data tables        | Named keyboard-scrollable regions; no page-wide overflow required to access wide records                                             |
 | Charts             | True zero-height bars, no zero donut wedges, distinct SVG gradient identifiers, accessible chart tables                              |
 | Mission Control    | Full attention details, compact mobile cards, no unrelated demo stock cover for real workspaces, accurate workload-balance wording   |
+| Report layout | Filters and fields precede a wide source-record preview at all viewport sizes |
+| Hosted volunteer PWA | Busy state, route focus, scroll margins around fixed controls, larger navigation targets |
 | Notification panel | Scrollable within the viewport and readable text after marking an item read                                                          |
 | Responsive checks  | Existing route zoom, screenshot, contrast, accessibility-tree and browser audits; added interactive focus containment test           |
 

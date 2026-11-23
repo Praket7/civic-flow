@@ -225,3 +225,10 @@
     padding: 18px 18px 14px;
   }
 }
+
+@media (max-width: 760px) {
+  .trigger,
+  .close {
+    min-height: 40px;
+  }
+}

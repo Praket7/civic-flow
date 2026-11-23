@@ -19,6 +19,7 @@ export function Button({
       {...rest}
       className={[styles.button, styles[variant], className].filter(Boolean).join(" ")}
       disabled={rest.disabled || loading}
+      aria-busy={loading || rest["aria-busy"]}
     >
       {loading ? <Loader2 aria-hidden size={17} className={styles.spin} /> : null}
       {children}
