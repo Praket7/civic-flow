@@ -687,6 +687,7 @@ try {
       ),
     "pending hours visible to volunteer",
   );
+  await evaluate(`Array.from(document.querySelectorAll("tbody tr")).find(row => row.textContent.includes("Pantry Setup") && row.textContent.includes("Pending"))?.scrollIntoView({block:"center"})`);
   await capture("04-pending-hours");
   await fixtureRole("user-praket", "/coordinator/hours");
   await heading("Hours review");
@@ -715,6 +716,7 @@ try {
       ),
     "approved record visible to volunteer",
   );
+  await evaluate(`Array.from(document.querySelectorAll("tbody tr")).find(row => row.textContent.includes("Pantry Setup") && row.textContent.includes("Verified"))?.scrollIntoView({block:"center"})`);
   await capture("07-volunteer-verified");
   await fixtureRole("user-praket", "/coordinator/opportunities/new");
   await heading("Create an opportunity");
@@ -722,7 +724,11 @@ try {
     await until(
       () =>
         evaluate(`(() => {
-      const label = [...document.querySelectorAll("label")].find(node => node.textContent.trim() === ${JSON.stringify(label)});
+      const label = [...document.querySelectorAll("label")].find(node => {
+        const copy = node.cloneNode(true);
+        copy.querySelectorAll("input, textarea, select, button").forEach(child => child.remove());
+        return copy.textContent.trim() === ${JSON.stringify(label)};
+      });
       const field = label?.control ?? label?.querySelector("input, textarea, select");
       if (!field) return false;
       const proto = field instanceof HTMLSelectElement ? HTMLSelectElement.prototype : field instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
