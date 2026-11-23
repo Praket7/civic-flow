@@ -59,8 +59,9 @@ describe("hosted welcome and account entry", () => {
         <PwaApp />
       </MemoryRouter>,
     );
-    expect(screen.getByRole("link", { name: /interactive demo without signing in/i }))
-      .toHaveAttribute("href", "/judge/demo/#/welcome");
+    expect(
+      screen.getByRole("link", { name: /interactive demo without signing in/i }),
+    ).toHaveAttribute("href", "/judge/demo/#/welcome");
   });
 
   it("opens a create-account form without requiring an existing login", async () => {

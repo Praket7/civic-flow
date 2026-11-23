@@ -2566,6 +2566,7 @@
   "This plan adds {points} points of role coverage.",
   "This program could not be found",
   "This program has no upcoming dates. Save it and we will surface the next opening.",
+  "This proposal failed independent verification. Do not apply it. Rebuild the plan after reviewing the reported role, availability, or schedule discrepancies.",
   "this queue",
   "This screen",
   "This screen has no separate guide. The full help page covers every workflow.",

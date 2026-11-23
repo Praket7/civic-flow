@@ -169,7 +169,7 @@ try {
   );
   await heading("Service, organized");
   assert.equal(
-    await evaluate('Boolean(document.querySelector(\'input[type="password"]\'))'),
+    await evaluate("Boolean(document.querySelector('input[type=\"password\"]'))"),
     false,
     "the sample must never start at sign in",
   );

@@ -245,7 +245,8 @@ export function useAutoRoster() {
   }, [data.candidates, plan, shiftPlans]);
 
   const planAudit = useMemo(
-    () => (plan ? auditRosterPlan(plan, data.candidates, { evaluation, shifts: shiftPlans }) : null),
+    () =>
+      plan ? auditRosterPlan(plan, data.candidates, { evaluation, shifts: shiftPlans }) : null,
     [plan, data.candidates, evaluation, shiftPlans],
   );
   const requiredSlots = shiftPlans.reduce((total, row) => total + row.required, 0);

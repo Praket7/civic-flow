@@ -32,7 +32,9 @@ export function auditRosterPlan(
   const volunteerShifts = new Set<string>();
   const plannedByVolunteer = new Map<string, number>();
   const knownCandidates = new Map(candidates.map((row) => [row.volunteer.id, row]));
-  const expectedShifts = new Map((context.shifts ?? []).map((entry) => [entry.row.shift.id, entry]));
+  const expectedShifts = new Map(
+    (context.shifts ?? []).map((entry) => [entry.row.shift.id, entry]),
+  );
   const proposedByRole = new Map<string, number>();
   const scheduledByVolunteer = new Map<string, { start: number; end: number }[]>();
   const evaluatedCandidates = new Map(
