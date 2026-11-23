@@ -157,14 +157,14 @@ try {
   await open("/#/create-account");
   await heading("Get started with CivicFlow");
   assert.equal(
-    await evaluate('Boolean(document.querySelector("input[autocomplete=\"new-password\"]"))'),
+    await evaluate(`Boolean(document.querySelector('input[autocomplete="new-password"]'))`),
     true,
     "account creation must have a password field",
   );
   await open("/#/sign-in");
   await heading("Your next shift is waiting.");
   assert.equal(
-    await evaluate('Boolean(document.querySelector("a[href=\"#/create-account\"]"))'),
+    await evaluate(`Boolean(document.querySelector('a[href="#/create-account"]'))`),
     true,
     "sign in must link back to registration",
   );
