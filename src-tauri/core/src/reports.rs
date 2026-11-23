@@ -25,6 +25,8 @@ pub struct ReportRequest {
     pub date_start: Option<String>,
     pub date_end: Option<String>,
     pub cause: Option<String>,
+    #[serde(default)]
+    pub program_id: Option<String>,
     #[serde(default = "default_grouping")]
     pub group_by: String,
 }
@@ -144,7 +146,7 @@ const DEFAULT_FIELDS: [&str; 6] = [
     "verification",
 ];
 
-const FIELD_LABELS: [(&str, &str); 8] = [
+const FIELD_LABELS: [(&str, &str); 10] = [
     ("volunteer", "Volunteer"),
     ("program", "Program"),
     ("date", "Service date"),
@@ -153,6 +155,8 @@ const FIELD_LABELS: [(&str, &str); 8] = [
     ("verification", "Verification"),
     ("cause", "Cause"),
     ("role", "Role"),
+    ("requested", "Requested minutes"),
+    ("recordId", "Record ID"),
 ];
 
 fn normalize_fields(request: &ReportRequest) -> Vec<String> {
@@ -196,22 +200,26 @@ fn participation(
 ) -> Result<ReportTable> {
     let fields = normalize_fields(request);
     let cause = request.cause.clone().unwrap_or_default();
+    let program = request.program_id.as_deref().unwrap_or("");
     let mut statement = conn.prepare(
         "SELECT v.name, o.title, h.date, h.status,
-                COALESCE(h.approved_minutes, h.minutes), h.verification_id, o.cause,
-                COALESCE(reg.role, '')
+                CASE WHEN h.status = 'verified' THEN COALESCE(h.approved_minutes, h.minutes) ELSE NULL END,
+                h.verification_id, o.cause,
+                COALESCE(reg.role, ''), h.minutes, h.id
          FROM hour_entries h
          JOIN volunteers v ON v.id = h.volunteer_id
          JOIN opportunities o ON o.id = h.opportunity_id
          LEFT JOIN registrations reg
            ON reg.shift_id = h.source_shift_id AND reg.volunteer_id = h.volunteer_id
          WHERE h.date >= ?1 AND h.date <= ?2 AND (?3 = '' OR o.cause = ?3)
-           AND (?4 IS NULL OR o.organization_id = ?4)
-         ORDER BY h.date DESC, v.name",
+           AND (?4 = '' OR o.id = ?4)
+           AND (?5 IS NULL OR o.organization_id = ?5)
+         ORDER BY CASE WHEN ?6 = 'cause' THEN o.cause WHEN ?6 = 'program' THEN o.title ELSE '' END, h.date DESC, v.name",
     )?;
-    let mut rows = statement.query(params![start, end, cause, crate::scope::current(conn)?])?;
+    let mut rows = statement.query(params![start, end, cause, program, crate::scope::current(conn)?, request.group_by])?;
     let mut output = Vec::new();
-    let mut total_minutes = 0_i64;
+    let mut pending_minutes = 0_i64;
+    let mut rejected = 0_i64;
     let mut verified_minutes = 0_i64;
     let mut volunteers = std::collections::BTreeSet::new();
     while let Some(row) = rows.next()? {
@@ -219,14 +227,18 @@ fn participation(
         let program: String = row.get(1)?;
         let date: String = row.get(2)?;
         let status: String = row.get(3)?;
-        let minutes_value: i64 = row.get(4)?;
+        let approved_value: Option<i64> = row.get(4)?;
         let verification: Option<String> = row.get(5)?;
         let cause_value: String = row.get(6)?;
         let role: String = row.get(7)?;
-        total_minutes += minutes_value;
-        if status == "verified" {
-            verified_minutes += minutes_value;
-            volunteers.insert(volunteer.clone());
+        let requested: i64 = row.get(8)?;
+        let record_id: String = row.get(9)?;
+        let approved = if status == "verified" { approved_value.unwrap_or(0).max(0) } else { 0 };
+        match status.as_str() {
+            "verified" => { verified_minutes += approved; volunteers.insert(volunteer.clone()); },
+            "pending" => pending_minutes += requested.max(0),
+            "rejected" => rejected += 1,
+            _ => {},
         }
         let mut values = Vec::with_capacity(fields.len());
         for field in &fields {
@@ -234,7 +246,9 @@ fn participation(
                 "volunteer" => volunteer.clone(),
                 "program" => program.clone(),
                 "date" => date.clone(),
-                "hours" => minutes_value.to_string(),
+                "hours" => if status == "verified" { approved.to_string() } else { String::new() },
+                "requested" => requested.to_string(),
+                "recordId" => record_id.clone(),
                 "status" => status.clone(),
                 "verification" => verification.clone().unwrap_or_default(),
                 "cause" => cause_value.clone(),
@@ -244,47 +258,26 @@ fn participation(
         }
         output.push(values);
     }
-    if request.group_by == "cause" {
-        let mut indexed: Vec<(String, Vec<String>)> = output
-            .iter()
-            .map(|row| {
-                let index = fields.iter().position(|field| field == "cause");
-                let key = index
-                    .and_then(|index| row.get(index))
-                    .cloned()
-                    .unwrap_or_default();
-                (key, row.clone())
-            })
-            .collect();
-        indexed.sort_by(|a, b| a.0.cmp(&b.0));
-        output = indexed.into_iter().map(|(_, row)| row).collect();
-    } else if request.group_by == "program" {
-        let mut indexed: Vec<(String, Vec<String>)> = output
-            .iter()
-            .map(|row| {
-                let index = fields.iter().position(|field| field == "program");
-                let key = index
-                    .and_then(|index| row.get(index))
-                    .cloned()
-                    .unwrap_or_default();
-                (key, row.clone())
-            })
-            .collect();
-        indexed.sort_by(|a, b| a.0.cmp(&b.0));
-        output = indexed.into_iter().map(|(_, row)| row).collect();
-    }
     let summary = vec![
         ReportSummaryItem {
             label: "Records".into(),
             value: output.len().to_string(),
         },
         ReportSummaryItem {
-            label: "Approved or recorded".into(),
-            value: minutes(total_minutes),
+            label: "Approved service".into(),
+            value: minutes(verified_minutes),
         },
         ReportSummaryItem {
             label: "Verified".into(),
             value: minutes(verified_minutes),
+        },
+        ReportSummaryItem {
+            label: "Pending requested".into(),
+            value: minutes(pending_minutes),
+        },
+        ReportSummaryItem {
+            label: "Rejected records".into(),
+            value: rejected.to_string(),
         },
         ReportSummaryItem {
             label: "Volunteers".into(),
