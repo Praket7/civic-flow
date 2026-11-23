@@ -76,7 +76,7 @@ describe("connected sample journey", () => {
       dateStart: "2026-10-13",
       dateEnd: "2026-10-13",
       programId: opportunity.id,
-      groupBy: "none",
+      groupBy: "none" as const,
     };
     expect((await repository.generateReport(request)).rows).toEqual([
       [service?.id, opportunity.title, "pending", ""],
