@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { ArrowRight, CircleHelp, X } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
@@ -83,7 +84,7 @@ export function HelpProvider({ children }: { children: ReactNode }) {
         <HelpDialog
           pathname={location.pathname}
           onClose={closeHelp}
-          returnFocus={returnFocus.current}
+          returnFocus={returnFocus}
         />
       ) : null}
     </HelpContext.Provider>
@@ -117,7 +118,7 @@ function HelpDialog({
 }: {
   pathname: string;
   onClose: () => void;
-  returnFocus: HTMLElement | null;
+  returnFocus: RefObject<HTMLElement | null>;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -125,6 +126,7 @@ function HelpDialog({
   const topic = topicForPath(pathname);
 
   useEffect(() => {
+    const opener = returnFocus.current;
     closeRef.current?.focus();
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -151,7 +153,7 @@ function HelpDialog({
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       requestAnimationFrame(() => {
-        if (returnFocus?.isConnected) returnFocus.focus();
+        if (opener?.isConnected) opener.focus();
       });
     };
   }, [onClose, returnFocus]);

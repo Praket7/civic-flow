@@ -26,7 +26,7 @@ Make the coordinator and volunteer workflows usable without sacrificing the veri
 | Notification panel   | Scrollable within the viewport and readable text after marking an item read                                                          |
 | Responsive checks    | Existing route zoom, screenshot, contrast, accessibility-tree and browser audits; added interactive focus containment test           |
 
-Baseline: Stage 4 main commit `2fde217b4822cf0ca97ff9b67887790e7c55a291`. Prior CI screenshots are available in run 45281193766. Capture and compare the new artifacts from the exact Stage 5 head; do not treat screenshot creation as visual approval.
+Baseline: Stage 4 main commit `2fde217b4822cf0ca97ff9b67887790e7c55a291`. Prior CI screenshots are available in run 45281193766. Inspected the 21 baseline captures (seven screens across desktop, mobile, and zoom). On mobile the guided tour obscured a significant portion of the working screen, Reports showed four squeezed metrics, and work-area navigation hid later links beyond the frame. The new design addresses these issues; capture and compare new artifacts from the exact Stage 5 head. Do not treat screenshot creation as visual approval.
 
 ## Independent task testing (not yet performed)
 

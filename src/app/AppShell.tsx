@@ -137,6 +137,7 @@ export function AppShell() {
             data-surface={surface}
             tabIndex={-1}
           >
+            {showTour && !surface ? <FirstRunTour key={role} role={role} /> : null}
             <div key={location.pathname} className={styles.pageTransition}>
               <Fragment key={copyKey}>
                 <Outlet />
@@ -149,7 +150,6 @@ export function AppShell() {
           open={paletteOpen}
           onClose={() => setPaletteOpen(false)}
         />
-        {showTour ? <FirstRunTour role={role} /> : null}
       </div>
     </HelpProvider>
   );

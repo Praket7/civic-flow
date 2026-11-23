@@ -1,4 +1,4 @@
-name: Stage 5 Prepare Once (interaction refinements)
+name: Stage 5 Prepare Once (visual audit)
 on:
   push:
     branches: [stage5-visual-interaction-excellence]
@@ -32,7 +32,7 @@ jobs:
             git push origin HEAD:stage5-visual-interaction-excellence
           fi
       - run: pnpm typecheck && pnpm lint && pnpm format && pnpm check:copy && pnpm check:i18n && pnpm docs:check
-      - run: pnpm test -- src/components/ui/Form.test.tsx src/components/ui/Charts.test.tsx src/components/ui/Tabs.test.tsx src/components/help/HelpDialog.test.tsx src/features/mission-control/MissionControl.test.tsx
+      - run: pnpm test -- src/components/ui/Form.test.tsx src/components/ui/Charts.test.tsx src/components/ui/Tabs.test.tsx src/components/help/HelpDialog.test.tsx src/components/help/FirstRunTour.test.tsx src/features/mission-control/MissionControl.test.tsx
       - name: Build and verify real interactions
         env:
           VITE_SUPABASE_URL: https://imzdblvljdcbnxtwbmbw.supabase.co
@@ -41,3 +41,11 @@ jobs:
           pnpm build:hosted
           node scripts/check-judge-build.mjs
           node scripts/audit-judge-flow.mjs
+      - name: Capture visual regression evidence
+        run: node scripts/audit-zoom.mjs --screenshots stage5-ui --out stage5-ui/viewport-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stage5-visual-evidence
+          path: stage5-ui/
+          if-no-files-found: ignore

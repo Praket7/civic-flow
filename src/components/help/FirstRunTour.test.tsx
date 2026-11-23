@@ -18,6 +18,8 @@ function renderTour(role: "coordinator" | "volunteer" = "coordinator") {
 describe("first-run tour", () => {
   it("starts at the first step and moves forward", async () => {
     renderTour();
+    expect(screen.queryByRole("heading", { name: "Start with Mission Control" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Guided tour/ }));
     expect(screen.getByRole("heading", { name: "Start with Mission Control" })).toBeInTheDocument();
     expect(screen.getByText("Guided tour · 1 of 5")).toBeInTheDocument();
 
@@ -26,9 +28,10 @@ describe("first-run tour", () => {
     expect(localStorage.getItem(key("coordinator"))).toBe("1");
   });
 
-  it("resumes from the saved step after a relaunch", () => {
+  it("resumes from the saved step after a relaunch", async () => {
     localStorage.setItem(key("coordinator"), "3");
     renderTour();
+    await userEvent.click(screen.getByRole("button", { name: /Guided tour/ }));
     expect(screen.getByRole("heading", { name: "The door works offline" })).toBeInTheDocument();
     expect(screen.getByText("Guided tour · 4 of 5")).toBeInTheDocument();
   });
@@ -36,29 +39,31 @@ describe("first-run tour", () => {
   it("finishes on the last step and stays closed", async () => {
     localStorage.setItem(key("coordinator"), "4");
     renderTour();
+    await userEvent.click(screen.getByRole("button", { name: /Guided tour/ }));
     await userEvent.click(screen.getByRole("button", { name: "Finish" }));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Guided tour" })).not.toBeInTheDocument();
     expect(localStorage.getItem(key("coordinator"))).toBe("done");
   });
 
   it("skips from any step", async () => {
     renderTour();
-    await userEvent.click(screen.getByRole("button", { name: "Skip" }));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Skip the tour" }));
+    expect(screen.queryByRole("region", { name: "Guided tour" })).not.toBeInTheDocument();
     expect(localStorage.getItem(key("coordinator"))).toBe("done");
   });
 
   it("replays on request after the tour is finished", () => {
     localStorage.setItem(key("coordinator"), "done");
     renderTour();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Guided tour" })).not.toBeInTheDocument();
 
     act(() => replayTour("coordinator"));
     expect(screen.getByRole("heading", { name: "Start with Mission Control" })).toBeInTheDocument();
   });
 
-  it("shows the shorter volunteer tour", () => {
+  it("shows the shorter volunteer tour", async () => {
     renderTour("volunteer");
+    await userEvent.click(screen.getByRole("button", { name: /Guided tour/ }));
     expect(screen.getByRole("heading", { name: "Find a shift that fits" })).toBeInTheDocument();
     expect(screen.getByText("Guided tour · 1 of 4")).toBeInTheDocument();
   });

@@ -46,3 +46,15 @@
     margin-bottom: 14px;
   }
 }
+
+@media (max-width: 760px) {
+  .tabs {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .tab {
+    min-height: 34px;
+    padding: 8px 10px;
+  }
+}
