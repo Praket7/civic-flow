@@ -340,18 +340,29 @@ describe("workspace repository", () => {
       reviewedAt: "2026-10-13T07:45:00-04:00",
     });
     expect(reviewed.hoursDecisions["hours-maya-4"]?.status).toBe("verified");
-    const plan = await previewRepository.autoRoster(["sh-sat-food"], { preferSpanish: false, blockConflicts: true, capWeekly: true, includeWaitlist: true });
+    const plan = await previewRepository.autoRoster(["sh-sat-food"], {
+      preferSpanish: false,
+      blockConflicts: true,
+      capWeekly: true,
+      includeWaitlist: true,
+    });
     const assignment = plan.assignments[0];
     expect(assignment).toBeDefined();
     const applied = await previewRepository.applyRoster("sh-sat-food", [
-      { candidateId: assignment.candidateId, role: assignment.role, promoteWaitlist: assignment.promoteWaitlist },
+      {
+        candidateId: assignment.candidateId,
+        role: assignment.role,
+        promoteWaitlist: assignment.promoteWaitlist,
+      },
     ]);
     expect(
       applied.registrations.find(
         (row) => row.shiftId === "sh-sat-food" && row.volunteerId === assignment.candidateId,
       )?.role,
     ).toBe(assignment.role);
-    expect(applied.audit[0]?.action).toBe(assignment.promoteWaitlist ? "waitlist.promote" : "autoroster.apply");
+    expect(applied.audit[0]?.action).toBe(
+      assignment.promoteWaitlist ? "waitlist.promote" : "autoroster.apply",
+    );
     await previewRepository.resetDemo();
   });
 });

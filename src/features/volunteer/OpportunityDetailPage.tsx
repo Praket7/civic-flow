@@ -119,7 +119,10 @@ export function OpportunityDetailPage() {
   const isFull = Boolean(activeShift && (spotsOpen === 0 || roles.length === 0));
   const registration = activeShift
     ? session.registrations.find(
-        (row) => row.shiftId === activeShift.id && row.volunteerId === volunteer.id && row.status === "registered",
+        (row) =>
+          row.shiftId === activeShift.id &&
+          row.volunteerId === volunteer.id &&
+          row.status === "registered",
       )
     : undefined;
   const isRegistered = Boolean(registration);
@@ -731,7 +734,11 @@ export function OpportunityDetailPage() {
               </div>
             ) : null}
 
-            {problem ? <p role="alert" className={styles.spotsMeta}>{problem}</p> : null}
+            {problem ? (
+              <p role="alert" className={styles.spotsMeta}>
+                {problem}
+              </p>
+            ) : null}
             <Button
               size="large"
               variant="primary"

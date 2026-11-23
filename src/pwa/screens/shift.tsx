@@ -95,8 +95,16 @@ export function ShiftDetailScreen() {
         </Card>
       ) : null}
 
-      {message ? <p className={styles.queuedNote} role="status">{message}</p> : null}
-      {problem ? <p className={styles.error} role="alert">{problem}</p> : null}
+      {message ? (
+        <p className={styles.queuedNote} role="status">
+          {message}
+        </p>
+      ) : null}
+      {problem ? (
+        <p className={styles.error} role="alert">
+          {problem}
+        </p>
+      ) : null}
       {pending ? (
         <p className={styles.queuedNote}>
           <TriangleAlert aria-hidden size={15} /> Saved on this device. It will send when you're
@@ -145,9 +153,13 @@ export function ShiftDetailScreen() {
         {shift.status === "canceled" ? (
           <p className={styles.actionTitle}>This shift is canceled.</p>
         ) : shift.attendance?.status === "completed" ? (
-          <p className={styles.actionTitle}>Service completed. View your hours for the review status.</p>
+          <p className={styles.actionTitle}>
+            Service completed. View your hours for the review status.
+          </p>
         ) : shift.attendance?.status === "no_show" ? (
-          <p className={styles.actionTitle}>No show recorded. Contact your coordinator if this is incorrect.</p>
+          <p className={styles.actionTitle}>
+            No show recorded. Contact your coordinator if this is incorrect.
+          </p>
         ) : shift.registration ? (
           <>
             <p className={styles.actionTitle}>
@@ -174,10 +186,7 @@ export function ShiftDetailScreen() {
                   loading={busy === "CANCEL_REGISTRATION"}
                   disabled={pending || busy !== null}
                   onClick={() =>
-                    void run(
-                      "CANCEL_REGISTRATION",
-                      { reason: "Canceled from the volunteer app" },
-                    )
+                    void run("CANCEL_REGISTRATION", { reason: "Canceled from the volunteer app" })
                   }
                 >
                   Cancel my seat
@@ -194,13 +203,8 @@ export function ShiftDetailScreen() {
             <Button
               variant="ghost"
               loading={busy === "CANCEL_REGISTRATION"}
-                  disabled={pending || busy !== null}
-              onClick={() =>
-                void run(
-                  "CANCEL_REGISTRATION",
-                  { reason: "Left the waitlist" },
-                )
-              }
+              disabled={pending || busy !== null}
+              onClick={() => void run("CANCEL_REGISTRATION", { reason: "Left the waitlist" })}
             >
               Leave waitlist
             </Button>
@@ -217,12 +221,12 @@ export function ShiftDetailScreen() {
             <div className={styles.rowActions}>
               <Button
                 loading={busy === "REGISTER_FOR_SHIFT"}
-                  disabled={pending || busy !== null}
+                disabled={pending || busy !== null}
                 onClick={() =>
-                  void run(
-                    "REGISTER_FOR_SHIFT",
-                    { role: shift.roles[0]?.name ?? "", allowWaitlist: true },
-                  )
+                  void run("REGISTER_FOR_SHIFT", {
+                    role: shift.roles[0]?.name ?? "",
+                    allowWaitlist: true,
+                  })
                 }
               >
                 {shift.seatsLeft === 0 ? "Join the waitlist" : "Register"}
@@ -232,12 +236,7 @@ export function ShiftDetailScreen() {
                   variant="secondary"
                   loading={busy === "JOIN_WAITLIST"}
                   disabled={pending || busy !== null}
-                  onClick={() =>
-                    void run(
-                      "JOIN_WAITLIST",
-                      { role: shift.roles[0]?.name ?? "" },
-                    )
-                  }
+                  onClick={() => void run("JOIN_WAITLIST", { role: shift.roles[0]?.name ?? "" })}
                 >
                   Waitlist instead
                 </Button>

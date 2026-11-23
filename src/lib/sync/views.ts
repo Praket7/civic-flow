@@ -253,8 +253,20 @@ export function buildVolunteerView(input: ViewInput): VolunteerView {
           registrationOpen(input.now, endsAt) &&
           registration === null &&
           waitlist === null,
-        canCancel: status === "scheduled" && registration !== null && ["registered", "confirmed"].includes(text(registration.status)) && !window.ended && !checkedIn && !checkedOut,
-        canCheckIn: status === "scheduled" && registration !== null && ["registered", "confirmed"].includes(text(registration.status)) && window.canCheckIn && !checkedIn && !checkedOut,
+        canCancel:
+          status === "scheduled" &&
+          registration !== null &&
+          ["registered", "confirmed"].includes(text(registration.status)) &&
+          !window.ended &&
+          !checkedIn &&
+          !checkedOut,
+        canCheckIn:
+          status === "scheduled" &&
+          registration !== null &&
+          ["registered", "confirmed"].includes(text(registration.status)) &&
+          window.canCheckIn &&
+          !checkedIn &&
+          !checkedOut,
         canCheckOut: checkedIn && window.canCheckOut,
         seatsLeft: Math.max(capacity - confirmed, 0),
         pending: pending.has(id),

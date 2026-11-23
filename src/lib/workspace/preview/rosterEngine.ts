@@ -89,7 +89,9 @@ export function createPreviewRosterEngine(context: {
 
   function previewSeats(shiftIds: string[]): PreviewSeat[] {
     const seats: PreviewSeat[] = [];
-    for (const shift of workspace.shifts.filter((row) => shiftIds.includes(row.id) && row.status === "scheduled")) {
+    for (const shift of workspace.shifts.filter(
+      (row) => shiftIds.includes(row.id) && row.status === "scheduled",
+    )) {
       const opportunity = workspace.opportunities.find((row) => row.id === shift.opportunityId);
       const live = state.registrations.filter(
         (row) => row.shiftId === shift.id && row.status === "registered",
@@ -210,7 +212,10 @@ export function createPreviewRosterEngine(context: {
           row.volunteerId === volunteer.id &&
           row.name.toLowerCase() === seat.requiredCredential!.toLowerCase(),
       );
-      const current = held.some((row) => row.verifiedAt && row.validFrom.slice(0, 10) <= on && row.validThrough.slice(0, 10) >= on);
+      const current = held.some(
+        (row) =>
+          row.verifiedAt && row.validFrom.slice(0, 10) <= on && row.validThrough.slice(0, 10) >= on,
+      );
       const expired = !current && held.length > 0;
       checks.push({
         name: "Required credential",

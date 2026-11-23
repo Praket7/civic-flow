@@ -293,7 +293,10 @@ export function blankWorkspaceForOrganization(
 }
 
 /** Merge runtime-created programs and shifts by stable ID, not display name. */
-export function withCreatedPrograms(workspace: DemoWorkspace, created: DemoWorkspace["opportunities"]): DemoWorkspace {
+export function withCreatedPrograms(
+  workspace: DemoWorkspace,
+  created: DemoWorkspace["opportunities"],
+): DemoWorkspace {
   if (created.length === 0) return workspace;
   const opportunities = new Map(workspace.opportunities.map((row) => [row.id, row]));
   for (const row of created) opportunities.set(row.id, row);
