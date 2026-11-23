@@ -1004,6 +1004,6 @@
   .sidebar .accessibilityLink,
   .sidebar[data-collapsed="true"]:not(:hover):not(:focus-within) .accessibilityLink,
   .sidebar:not(:hover):not(:focus-within) .accessibilityLink {
-    min-height: 28px;
+    min-height: 30px;
   }
 }
