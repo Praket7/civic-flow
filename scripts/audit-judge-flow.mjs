@@ -687,7 +687,9 @@ try {
       ),
     "pending hours visible to volunteer",
   );
-  await evaluate(`Array.from(document.querySelectorAll("tbody tr")).find(row => row.textContent.includes("Pantry Setup") && row.textContent.includes("Pending"))?.scrollIntoView({block:"center"})`);
+  await evaluate(
+    `Array.from(document.querySelectorAll("tbody tr")).find(row => row.textContent.includes("Pantry Setup") && row.textContent.includes("Pending"))?.scrollIntoView({block:"center"})`,
+  );
   await capture("04-pending-hours");
   await fixtureRole("user-praket", "/coordinator/hours");
   await heading("Hours review");
@@ -716,7 +718,9 @@ try {
       ),
     "approved record visible to volunteer",
   );
-  await evaluate(`Array.from(document.querySelectorAll("tbody tr")).find(row => row.textContent.includes("Pantry Setup") && row.textContent.includes("Verified"))?.scrollIntoView({block:"center"})`);
+  await evaluate(
+    `Array.from(document.querySelectorAll("tbody tr")).find(row => row.textContent.includes("Pantry Setup") && row.textContent.includes("Verified"))?.scrollIntoView({block:"center"})`,
+  );
   await capture("07-volunteer-verified");
   await fixtureRole("user-praket", "/coordinator/opportunities/new");
   await heading("Create an opportunity");
