@@ -25,10 +25,12 @@ export function AppShell() {
   });
   const [mobilePath, setMobilePath] = useState<string | null>(null);
   const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 760px)").matches);
-  const mobileOpen = narrow && mobilePath === location.key;
+  const routeIdentity = `${location.key}:${location.pathname}`;
+  const mobileOpen = narrow && mobilePath === routeIdentity;
   const mainRef = useRef<HTMLElement>(null);
   const previousPath = useRef(location.pathname);
   const sidebarTriggerRef = useRef<HTMLButtonElement>(null);
+  const restoreDrawerFocus = useRef(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const role: "coordinator" | "volunteer" =
     user?.role === "coordinator" ? "coordinator" : "volunteer";
@@ -62,9 +64,15 @@ export function AppShell() {
   }, [location.pathname]);
 
   const dismissMobile = useCallback(() => {
+    restoreDrawerFocus.current = true;
     setMobilePath(null);
-    requestAnimationFrame(() => sidebarTriggerRef.current?.focus());
   }, []);
+
+  useEffect(() => {
+    if (mobileOpen || !restoreDrawerFocus.current) return;
+    restoreDrawerFocus.current = false;
+    sidebarTriggerRef.current?.focus({ preventScroll: true });
+  }, [mobileOpen]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -117,7 +125,7 @@ export function AppShell() {
           onToggleCollapsed={toggleCollapsed}
           onDismissMobile={dismissMobile}
           onNavigate={() => {
-            if (mobileOpen) dismissMobile();
+            if (mobileOpen) setMobilePath(null);
           }}
         />
         <div className={styles.main} data-surface={surface} inert={mobileOpen}>
@@ -125,7 +133,7 @@ export function AppShell() {
             <TopBar
               key={`topbar-${copyKey}`}
               onOpenPalette={() => setPaletteOpen(true)}
-              onOpenSidebar={() => setMobilePath(location.key)}
+              onOpenSidebar={() => setMobilePath(routeIdentity)}
               sidebarTriggerRef={sidebarTriggerRef}
               sidebarOpen={mobileOpen}
             />

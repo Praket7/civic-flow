@@ -402,8 +402,9 @@ try {
     "closed mobile navigation is inert",
   );
   const key = async (name, modifiers = 0) => {
-    await send("Input.dispatchKeyEvent", { type: "keyDown", key: name, code: name, modifiers });
-    await send("Input.dispatchKeyEvent", { type: "keyUp", key: name, code: name, modifiers });
+    const windowsVirtualKeyCode = name === "Escape" ? 27 : 9;
+    await send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: name, code: name, modifiers, windowsVirtualKeyCode });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key: name, code: name, modifiers, windowsVirtualKeyCode });
   };
   await evaluate("document.querySelector('button[aria-label=\"Open navigation\"]').focus()");
   await evaluate("document.querySelector('button[aria-label=\"Open navigation\"]').click()");
@@ -426,6 +427,7 @@ try {
     "Tab wraps from the last drawer control to the first",
   );
   await key("Escape");
+  console.log("Drawer after Escape:", await evaluate(`JSON.stringify({ focus: document.activeElement?.getAttribute("aria-label"), inert: document.querySelector("#primary-navigation")?.inert, background: document.querySelector("main")?.parentElement.inert, workspace: Boolean(document.querySelector("#workspace-navigation")) })`));
   await until(
     () => evaluate('document.activeElement?.getAttribute("aria-label") === "Open navigation"'),
     "Escape restores the opener",

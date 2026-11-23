@@ -130,7 +130,8 @@ export function Sidebar({
     photo: isCoordinator ? undefined : (volunteer?.photo ?? session.volunteerProfile.photo),
   };
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
-  const workspaceOpen = workspacePath === location.key && (!narrow || mobileOpen);
+  const routeIdentity = `${location.key}:${location.pathname}:${narrow}`;
+  const workspaceOpen = workspacePath === routeIdentity && (!narrow || mobileOpen);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -147,9 +148,16 @@ export function Sidebar({
     function onKeyDown(event: KeyboardEvent) {
       const sidebar = sidebarRef.current;
       if (!sidebar?.contains(document.activeElement) || event.defaultPrevented) return;
-      if (event.key === "Escape" && !workspaceOpen) {
+      if (event.key === "Escape") {
         event.preventDefault();
-        onDismissMobile();
+        if (workspaceOpen && workspaceRef.current?.contains(document.activeElement)) {
+          setWorkspacePath(null);
+          workspaceTriggerRef.current?.focus();
+        } else {
+          setWorkspacePath(null);
+          onDismissMobile();
+        }
+        return;
       }
       if (event.key !== "Tab") return;
       const controls = Array.from(
@@ -165,8 +173,8 @@ export function Sidebar({
         first?.focus();
       }
     }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [mobileOpen, workspaceOpen, onDismissMobile]);
 
   useEffect(() => {
@@ -175,7 +183,7 @@ export function Sidebar({
       if (!workspaceRef.current?.contains(event.target as Node)) setWorkspacePath(null);
     }
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !event.defaultPrevented) {
         event.preventDefault();
         setWorkspacePath(null);
         workspaceTriggerRef.current?.focus();
@@ -281,7 +289,7 @@ export function Sidebar({
             aria-label={`${t("Workspace")}: ${organizationName}. ${t("Open workspace menu")}`}
             aria-expanded={workspaceOpen}
             aria-controls={workspaceOpen ? "workspace-navigation" : undefined}
-            onClick={() => setWorkspacePath(workspaceOpen ? null : location.key)}
+            onClick={() => setWorkspacePath(workspaceOpen ? null : routeIdentity)}
           >
             <span className={styles.orgBadge} aria-hidden="true">
               {organizationInitials}
