@@ -1,4 +1,4 @@
-name: Stage 6 Prepare Once
+name: Stage 6 Prepare Once (role and credential review)
 on:
   push:
     branches: [stage6-connected-journeys]
@@ -31,7 +31,7 @@ jobs:
             git push origin HEAD:stage6-connected-journeys
           fi
       - run: pnpm typecheck && pnpm lint && pnpm format && pnpm check:copy && pnpm check:i18n && pnpm docs:check
-      - run: pnpm test -- src/lib/workspace/preview/journeys.test.ts src/lib/workspace/repository.test.ts src/lib/workspace/preview/rosterEngine.golden.test.ts src/lib/sync/views.test.ts src/lib/sync/multiDeviceConvergence.test.ts
+      - run: pnpm exec vitest run src/lib/workspace/preview/journeys.test.ts src/lib/workspace/repository.test.ts src/lib/workspace/preview/rosterEngine.golden.test.ts src/lib/sync/views.test.ts src/lib/sync/multiDeviceConvergence.test.ts
       - name: Compiled sample journey
         env:
           VITE_SUPABASE_URL: https://imzdblvljdcbnxtwbmbw.supabase.co

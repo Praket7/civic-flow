@@ -779,11 +779,10 @@ export const previewRepository: WorkspaceRepository = {
   async transferOrganizationOwnership(organizationId, userId) {
     return previewOrganizations.transferOwnership(requirePreviewAccount(), organizationId, userId);
   },
-  async openDemoWorkspace(): Promise<AuthSession> {
-    const demo = previewAccounts.find(
-      (row) => row.email.toLowerCase() === "praket@rivergate.example",
-    );
+  async openDemoWorkspace(role = "coordinator"): Promise<AuthSession> {
+    const demo = seededAccounts.find((row) => row.role === role);
     if (!demo) throw new Error("The browser preview has no demo workspace to open.");
+    previewOrganizations.select(demo, DEMO_ORGANIZATION_ID);
     const live = withLiveRole(demo);
     activePreviewAccount = live;
     return {
@@ -1155,7 +1154,7 @@ export const previewRepository: WorkspaceRepository = {
       return state;
     }
     const shift = journeyWorkspace().shifts.find((row) => row.id === shiftId);
-    if (!shift || shift.status !== "scheduled" || shift.startsAt <= workspace.now)
+    if (!shift || shift.status !== "scheduled" || new Date(shift.startsAt) <= new Date(workspace.now))
       throw new Error("This shift is not accepting waitlist requests.");
     if (!journeyWorkspace().volunteers.some((row) => row.id === volunteerId))
       throw new Error("Volunteer not found.");

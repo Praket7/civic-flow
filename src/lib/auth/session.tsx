@@ -35,7 +35,7 @@ interface AuthValue {
   loading: boolean;
   signIn(email: string, password: string, remember: boolean): Promise<AuthSession>;
   /** Opens the bundled demo workspace. The only action that creates fixtures. */
-  openDemo(remember: boolean): Promise<AuthSession>;
+  openDemo(remember: boolean, role?: "coordinator" | "volunteer"): Promise<AuthSession>;
   signUp(name: string, email: string, password: string, remember: boolean): Promise<AuthSession>;
   signOut(): Promise<void>;
   refresh(): Promise<void>;
@@ -167,8 +167,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return session;
   }, []);
 
-  const openDemo = useCallback(async (remember: boolean) => {
-    const session = await repository.openDemoWorkspace();
+  const openDemo = useCallback(async (remember: boolean, role?: "coordinator" | "volunteer") => {
+    const session = await repository.openDemoWorkspace(role);
     setExpired(false);
     setRepositoryToken(session.token);
     if (remember) rememberToken(session.token);

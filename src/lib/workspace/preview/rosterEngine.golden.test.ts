@@ -8,6 +8,8 @@ import { previewRepository } from "../previewRepository";
  * SHA-256 golden fixtures were captured by executing unmodified main and
  * refactored preview repositories side by side, comparing their complete
  * evaluations, plans, and selection explanations for fourteen shifts.
+ * Stage 6 fingerprints reflect the corrected credential-validity start date.
+ * Explicit negative tests in journeys.test.ts protect that constraint.
  */
 const cases: { options: RosterOptions; expected: string }[] = [
   {
@@ -17,11 +19,11 @@ const cases: { options: RosterOptions; expected: string }[] = [
       capWeekly: true,
       includeWaitlist: false,
     },
-    expected: "e0adefbea26a0d039a39791ba5ad21ec415d768362afee86d292cee471c51f10",
+    expected: "c000b765fd8d62962dd252f2555a4f209b7d9b74b42a731b9c1e8e533901ef94",
   },
   {
     options: { preferSpanish: true, blockConflicts: true, capWeekly: true, includeWaitlist: true },
-    expected: "81a3a14e975dffa24dfe775766ef1ff7aad43b556bcf79ae75596ad0599a92bd",
+    expected: "ffcd3708ac3b82043a5cdfc1488674c3dfaad065bbb311276b6ed7e2bad79e57",
   },
   {
     options: {
@@ -30,13 +32,13 @@ const cases: { options: RosterOptions; expected: string }[] = [
       capWeekly: false,
       includeWaitlist: true,
     },
-    expected: "caf745842a735a3ac900200f7acf1decbef3d2548eeb7903ea7189095b8f8557",
+    expected: "645bfe5ce25124aac6f63dfbc8ac536bc8c4e6e372cff060245f1e24faa6f32f",
   },
 ];
-describe("preview AutoRoster preserves previous behavior exactly", () => {
+describe("preview AutoRoster deterministic credential-valid plan", () => {
   for (const { options, expected } of cases) {
     it(
-      "matches the original full plan and explanations for " + JSON.stringify(options),
+      "matches the credential-valid plan and explanations for " + JSON.stringify(options),
       async () => {
         await previewRepository.resetDemo();
         const ids = demoWorkspace.shifts

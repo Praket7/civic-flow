@@ -144,6 +144,16 @@ describe("connected sample journey", () => {
     ).toBe(true);
   });
 
+  it("rejects credentials whose validity starts after the shift", async () => {
+    const evaluation = await repository.evaluateRoster(["sh-sat-food"], options);
+    const futureDriver = evaluation.candidates.find((candidate) => candidate.candidateId === "vol-014");
+    expect(futureDriver).toBeDefined();
+    const driver = futureDriver!.slots.find((slot) => slot.role === "Driver");
+    expect(driver?.checks.find((check) => check.name === "Required credential")?.passed).toBe(false);
+    expect(driver?.eligible).toBe(false);
+    await expect(repository.registerForShift("sh-sat-food", "vol-014", "Driver")).rejects.toThrow();
+  });
+
   it("rejects an ineligible driver and does not mutate the snapshot", async () => {
     const before = await repository.getSnapshot();
     await expect(
