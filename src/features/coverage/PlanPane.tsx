@@ -13,6 +13,7 @@ export function PlanPane({
   applied,
   appliedCount,
   plan,
+  planAudit,
   activePlan,
   afterRolePercent,
   beforeRolePercent,
@@ -180,6 +181,51 @@ export function PlanPane({
             </li>
             <li data-tone="good">Load spread across {distinctPeople}</li>
           </ul>
+          {planAudit ? (
+            <details className={styles.planAudit}>
+              <summary>Verify plan and workload</summary>
+              <p>
+                Proposed coverage: {planAudit.proposed} of {planAudit.openSeats} open role seats
+                {planAudit.fillRate === null ? "" : " (" + planAudit.fillRate + "%)"}. The weighted
+                match score is a relative ranking, not a probability.
+              </p>
+              <ul className={styles.auditList}>
+                <li>
+                  <strong>{planAudit.safeToApply ? "Verified" : "Review required"}</strong> -
+                  independent eligibility, seat uniqueness, and score reconciliation
+                </li>
+                <li>
+                  <strong>{planAudit.distinctPeople} people</strong> across {planAudit.proposed}{" "}
+                  proposed assignments
+                </li>
+                {planAudit.workload ? (
+                  <li>
+                    Projected weekly shifts: {planAudit.workload.minimum} to{" "}
+                    {planAudit.workload.maximum} across {planAudit.workload.candidates} candidates.
+                    This measures workload spread, not demographic fairness.
+                  </li>
+                ) : null}
+                {planAudit.provisionalAvailability > 0 ? (
+                  <li>
+                    <strong>{planAudit.provisionalAvailability} assignment(s)</strong> have
+                    unconfirmed availability: confirm with volunteers before publishing.
+                  </li>
+                ) : null}
+                {planAudit.unfilledReasons.slice(0, 3).map((gap) => (
+                  <li key={gap.reason}>
+                    {gap.count} unfilled: {gap.reason}
+                  </li>
+                ))}
+              </ul>
+              {planAudit.issues.length > 0 ? (
+                <ul className={styles.auditErrors} role="alert">
+                  {planAudit.issues.map((issue) => (
+                    <li key={issue}>{issue}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </details>
+          ) : null}
           {planGroups.map((group) => (
             <div key={group.row.shift.id} className={styles.planGroup}>
               <div className={styles.planGroupHead}>
@@ -235,7 +281,7 @@ export function PlanPane({
             <Button
               className={styles.applyButton}
               onClick={() => void applyPlan()}
-              disabled={applying}
+              disabled={applying || !planAudit?.safeToApply}
               icon={applying ? <CheckCircle2 size={16} /> : <ArrowRight size={16} />}
             >
               {applying

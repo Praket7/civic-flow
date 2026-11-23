@@ -144,6 +144,54 @@ fn first_eligible_baseline(
     filled
 }
 
+/// A specialist scarcity fixture in which naive first-fit strands the only
+/// Food Safety volunteer in a general role. Both seats overlap on one day.
+#[test]
+fn optimizer_preserves_a_specialist_for_the_role_only_they_can_fill() {
+    let (candidates, mut slots) = fixture(2, 2);
+    let start = slots[0].starts_at;
+    for slot in &mut slots {
+        slot.starts_at = start;
+        slot.ends_at = start + Duration::hours(2);
+        slot.day_key = day_key(start.date_naive());
+        slot.minimum_age = None;
+    }
+    slots[0].role = "General Support".into();
+    slots[0].required_skill = None;
+    slots[0].mandatory = false;
+    slots[1].role = "Food Safety".into();
+    slots[1].required_skill = Some("Food Safety".into());
+    slots[1].mandatory = true;
+
+    let policy = RosterPolicy::default();
+    let options = RosterOptions::default();
+    let greedy = first_eligible_baseline(&candidates, &slots, &policy, &options);
+    let optimized = plan(&candidates, &slots, &policy, &options);
+    assert_eq!(
+        greedy, 1,
+        "the first-fit reference uses the scarce specialist first"
+    );
+    assert_eq!(
+        optimized.assignments.len(),
+        2,
+        "both overlapping seats have feasible volunteers"
+    );
+    assert_eq!(
+        optimized.assignments.len() + optimized.unfilled.len(),
+        slots.len()
+    );
+    assert!(optimized
+        .assignments
+        .iter()
+        .all(|a| a.explanation.eligible && a.explanation.selected));
+}
+
+#[test]
+#[ignore = "large exploratory fixture; run manually with hardware recorded"]
+fn thousand_volunteer_capacity_and_repeatability() {
+    verify_equivalent(1_000, 250);
+}
+
 #[test]
 #[ignore = "manual benchmark; report CPU, Rust profile, fixtures, scores and timings"]
 fn compare_optimized_and_first_eligible_baseline() {

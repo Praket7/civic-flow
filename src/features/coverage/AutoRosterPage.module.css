@@ -1354,3 +1354,34 @@
 .answerCard .reasonList {
   margin-top: 5px;
 }
+
+/* Stage 3: audit evidence stays compact until a coordinator opens it. */
+.planAudit {
+  margin: 12px 0 20px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-default, var(--border-color));
+  border-radius: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.planAudit summary {
+  color: var(--text-primary);
+  font-weight: 700;
+  cursor: pointer;
+}
+.planAudit p {
+  margin: 10px 0 6px;
+}
+.auditList,
+.auditErrors {
+  margin: 7px 0;
+  padding-left: 18px;
+}
+.auditList li,
+.auditErrors li {
+  margin-top: 4px;
+}
+.auditErrors {
+  color: var(--color-red);
+}

@@ -362,6 +362,57 @@ fn matches_the_brute_force_optimum_on_a_known_case() {
     assert_eq!(plan.total_score, oracle.1);
 }
 
+/// Exhaustively compare small, simultaneous volunteer-skill instances
+/// against an independent combinatorial oracle. Required skills remain hard
+/// constraints; all seats have equal priority so objective scores are comparable.
+#[test]
+fn matches_brute_force_across_skill_scarcity_cases() {
+    for mask in 0u8..64 {
+        let mut candidates = vec![
+            candidate("a", &["Food Safety"], &["sat:morning"]),
+            candidate("b", &["Food Safety"], &["sat:morning"]),
+            candidate("c", &["Food Safety"], &["sat:morning"]),
+        ];
+        for (index, candidate) in candidates.iter_mut().enumerate() {
+            if mask & (1 << index) == 0 {
+                candidate.skills.clear();
+            }
+        }
+        let starts_at = "2026-10-17T09:00:00-04:00";
+        let mut slots = vec![
+            slot("s1", "Role 1", None, starts_at),
+            slot("s2", "Role 2", None, starts_at),
+            slot("s3", "Role 3", None, starts_at),
+        ];
+        for (index, slot) in slots.iter_mut().enumerate() {
+            if mask & (1 << (index + 3)) != 0 {
+                slot.required_skill = Some("Food Safety".into());
+            }
+            slot.mandatory = false;
+        }
+
+        let actual = plan(&candidates, &slots, &policy(), &options());
+        let expected = brute_force(&candidates, &slots, &options());
+        assert_eq!(
+            actual.assignments.len(),
+            expected.0,
+            "fill differs for skill mask {mask}"
+        );
+        assert_eq!(
+            actual.total_score, expected.1,
+            "score differs for skill mask {mask}"
+        );
+        assert_eq!(
+            actual.assignments.len() + actual.unfilled.len(),
+            slots.len()
+        );
+        assert!(actual
+            .assignments
+            .iter()
+            .all(|a| a.explanation.eligible && a.explanation.selected));
+    }
+}
+
 #[test]
 fn plan_is_deterministic_for_identical_inputs() {
     let candidates = vec![

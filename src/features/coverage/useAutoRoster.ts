@@ -9,10 +9,12 @@ import type {
   RosterPlan,
   RosterPolicyView,
 } from "../../types/domain";
+import { auditRosterPlan } from "./planAudit";
 import {
   AVAILABILITY_POINTS,
   DEFAULT_OPTIONS,
   availabilityLabel,
+  rankAlternativesForRole,
   type Candidate,
   type EngineOptions,
   type PlanRow,
@@ -242,6 +244,10 @@ export function useAutoRoster() {
     });
   }, [data.candidates, plan, shiftPlans]);
 
+  const planAudit = useMemo(
+    () => (plan ? auditRosterPlan(plan, data.candidates) : null),
+    [plan, data.candidates],
+  );
   const requiredSlots = shiftPlans.reduce((total, row) => total + row.required, 0);
   const filledSlots = shiftPlans.reduce((total, row) => total + row.filled, 0);
   const rosterTotal = shiftPlans.reduce((total, row) => total + row.rosterCount, 0);
@@ -319,14 +325,9 @@ export function useAutoRoster() {
     }
   }
 
-  /** The people who could arguably take this seat, besides the one holding it. */
+  /** Compare the most relevant people, including hard-rule rejections. */
   function alternativesFor(role: string, holderId: string): Candidate[] {
-    return data.candidates
-      .filter(
-        (candidate) =>
-          candidate.volunteer.id !== holderId && candidate.eligibleRoles.includes(role),
-      )
-      .slice(0, 4);
+    return rankAlternativesForRole(data.candidates, role, holderId);
   }
 
   function updateOption(key: keyof EngineOptions, value: boolean) {
@@ -353,6 +354,12 @@ export function useAutoRoster() {
 
   async function applyPlan() {
     if (applied || applying || !plan) return;
+    if (!planAudit?.safeToApply || activePlan.length !== plan.assignments.length) {
+      setError(
+        "This plan did not pass independent verification. Rebuild the plan before applying.",
+      );
+      return;
+    }
     setApplying(true);
     setError("");
     try {
@@ -418,6 +425,7 @@ export function useAutoRoster() {
     setShowAll,
     options,
     plan,
+    planAudit,
     planning,
     applying,
     applied,
