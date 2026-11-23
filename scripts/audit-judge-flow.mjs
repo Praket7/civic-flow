@@ -175,16 +175,110 @@ try {
       accessVisible: Boolean(access && access.getBoundingClientRect().height > 0),
       aboveIdentity: Boolean(access && identity && (access.compareDocumentPosition(identity) & Node.DOCUMENT_POSITION_FOLLOWING)),
       weekHeight: week?.getBoundingClientRect().height ?? 0,
+      attentionHeight:
+        document.querySelector('[aria-labelledby="mc-attention"]')?.getBoundingClientRect()
+          .height ?? 0,
+      barsCentered: (() => {
+        if (!week) return false;
+        const bars = week.querySelector('ul[aria-label="Seat fill by day"]');
+        const summary = week.querySelector('[aria-label="Weekly staffing summary"]');
+        const head = week.querySelector('[class*="cardHead"]');
+        if (!bars || !summary || !head) return false;
+        const availableCenter =
+          (head.getBoundingClientRect().bottom + summary.getBoundingClientRect().top) / 2;
+        const barsCenter =
+          (bars.getBoundingClientRect().top + bars.getBoundingClientRect().bottom) / 2;
+        return Math.abs(availableCenter - barsCenter) < 30;
+      })(),
       summaryPresent: Boolean(week?.querySelector('[aria-label="Weekly staffing summary"]')),
     };
   })()`);
   assert.equal(sidebarAudit.accessVisible, true, "Accessibility control must be visible");
   assert.equal(sidebarAudit.aboveIdentity, true, "Accessibility must precede account identity");
   assert.ok(
-    sidebarAudit.weekHeight > 0 && sidebarAudit.weekHeight < 410,
-    "Weekly chart must be compact",
+    sidebarAudit.weekHeight > 300 &&
+      Math.abs(sidebarAudit.weekHeight - sidebarAudit.attentionHeight) < 3,
+    "Weekly coverage and Needs Attention must share the same card height",
   );
+  assert.equal(sidebarAudit.barsCentered, true, "Bars should be vertically centered");
   assert.equal(sidebarAudit.summaryPresent, true, "Weekly chart must include staffing totals");
+
+  // A CSS-only check is insufficient: prove all navigation actions fit in the
+  // actual Chromium viewport, in the full sidebar and in the icon rail.
+  for (const { width, height, collapsed } of [
+    { width: 1280, height: 740, collapsed: false },
+    { width: 1280, height: 620, collapsed: true },
+    { width: 1024, height: 700, collapsed: false },
+    { width: 1024, height: 620, collapsed: true },
+  ]) {
+    await send("Emulation.setDeviceMetricsOverride", {
+      width,
+      height,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    await evaluate(`(() => {
+      const sidebar = document.querySelector('aside[aria-label="Primary"]');
+      const shell = document.querySelector('.shell[data-collapsed]');
+      if (sidebar) sidebar.dataset.collapsed = "${collapsed}";
+      if (shell) shell.dataset.collapsed = "${collapsed}";
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    })()`);
+    // Simulate a cursor over the content, not the sidebar's hover-to-expand rail.
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: Math.min(width - 80, 850),
+      y: Math.min(height - 80, 300),
+      button: "none",
+    });
+    await sleep(160);
+    const bounds = await evaluate(`(() => {
+      const aside = document.querySelector('aside[aria-label="Primary"]');
+      const nav = aside?.querySelector('nav');
+      const footer = aside?.querySelector('[class*="footer"]');
+      const access = aside?.querySelector('[aria-label="Accessibility settings"]');
+      const signOut = aside?.querySelector('button[aria-label="Sign out"]');
+      const identity = aside?.querySelector('[class*="personName"]');
+      const org = aside?.querySelector('button[aria-label^="Workspace:"]');
+      const controls = [org, access, signOut, ...Array.from(nav?.querySelectorAll('a') ?? [])]
+        .filter(Boolean)
+        .map((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            label: element.getAttribute("aria-label") ?? element.textContent?.trim(),
+            visible: rect.width > 0 && rect.height >= 30 &&
+              rect.top >= -1 && rect.bottom <= window.innerHeight + 1,
+          };
+        });
+      return {
+        viewport: window.innerHeight,
+        sidebarBottom: aside?.getBoundingClientRect().bottom,
+        footerBottom: footer?.getBoundingClientRect().bottom,
+        accessBottom: access?.getBoundingClientRect().bottom,
+        signOutBottom: signOut?.getBoundingClientRect().bottom,
+        identityBottom: identity?.getBoundingClientRect().bottom,
+        navigationOverflow: nav ? nav.scrollHeight - nav.clientHeight : Infinity,
+        controls,
+      };
+    })()`);
+    assert.ok(bounds.sidebarBottom <= height + 2, "Sidebar extends below viewport");
+    assert.ok(bounds.footerBottom <= height + 2, "Account footer extends below viewport");
+    assert.ok(bounds.accessBottom <= height + 2, "Accessibility clipped by viewport");
+    assert.ok(bounds.signOutBottom <= height + 2, "Sign out clipped by viewport");
+    assert.ok(bounds.navigationOverflow <= 2, "Desktop navigation must fit without scrolling");
+    assert.ok(
+      bounds.controls.length >= 9 && bounds.controls.every((item) => item.visible),
+      `All sidebar actions must be visible at ${width}×${height}: ${JSON.stringify(bounds)}`,
+    );
+    console.log(`Sidebar viewport passed: ${width}×${height}, collapsed=${collapsed}`);
+  }
+  await send("Emulation.clearDeviceMetricsOverride");
+  await evaluate(`(() => {
+    const sidebar = document.querySelector('aside[aria-label="Primary"]');
+    const shell = document.querySelector('.shell[data-collapsed]');
+    if (sidebar) sidebar.dataset.collapsed = "false";
+    if (shell) shell.dataset.collapsed = "false";
+  })()`);
   await evaluate("document.querySelector('button[aria-label^=\"Workspace:\"]')?.click()");
   assert.equal(
     await evaluate('Boolean(document.querySelector(\'[role="menu"] [href*="accessibility"]\'))'),

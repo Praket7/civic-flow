@@ -1,10 +1,13 @@
 .sidebar {
   position: relative;
   z-index: 40;
-  display: flex;
-  flex-direction: column;
+  /* Four independently sized tracks keep the account controls on screen.
+     The navigation may scroll only when text zoom makes fitting impossible. */
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   min-height: 0;
   height: 100%;
+  max-height: 100dvh;
   padding: 0 14px 14px;
   overflow: visible;
   isolation: isolate;
@@ -292,8 +295,8 @@
 }
 
 .nav {
-  flex: 1;
   min-height: 0;
+  align-self: stretch;
   padding-bottom: 8px;
   overflow-y: auto;
   scrollbar-width: none;
@@ -412,8 +415,9 @@
 }
 
 .footer {
-  flex: none;
-  padding-top: 12px;
+  min-width: 0;
+  align-self: end;
+  padding-top: 10px;
   border-top: 1px solid rgba(255, 255, 255, 0.09);
 }
 
@@ -487,14 +491,20 @@
 .footerActions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 6px;
 }
 
 .signOut {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 34px;
+  min-height: 34px;
   gap: 5px;
-  margin-left: auto;
+  margin-left: 0;
   padding: 5px 8px;
   border: 0;
   border-radius: 6px;
@@ -513,10 +523,12 @@
 
 .status {
   display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   flex-wrap: wrap;
   gap: 2px 5px;
-  padding: 0 10px;
+  padding: 0 6px;
   font-size: 11.5px;
   line-height: 1.4;
   color: rgba(255, 255, 255, 0.56);
@@ -586,6 +598,17 @@
   .sidebar[data-collapsed="true"]:not(:hover):not(:focus-within) .person {
     justify-content: center;
     padding: 4px 0 6px;
+  }
+
+  .sidebar[data-collapsed="true"]:not(:hover):not(:focus-within) .footerActions {
+    justify-content: center;
+  }
+
+  .sidebar[data-collapsed="true"]:not(:hover):not(:focus-within) .signOut {
+    margin: 0;
+    width: 38px;
+    min-height: 38px;
+    padding: 8px;
   }
 
   .sidebar[data-collapsed="true"]:not(:hover):not(:focus-within) .frameButton {
@@ -709,6 +732,17 @@
     padding: 4px 0 6px;
   }
 
+  .sidebar:not(:hover):not(:focus-within) .footerActions {
+    justify-content: center;
+  }
+
+  .sidebar:not(:hover):not(:focus-within) .signOut {
+    margin: 0;
+    width: 38px;
+    min-height: 38px;
+    padding: 8px;
+  }
+
   .sidebar:hover,
   .sidebar:focus-within {
     z-index: 45;
@@ -779,5 +813,59 @@
 
   .workspaceMenu {
     width: 100%;
+  }
+}
+
+/* On notebook-height screens, retain every navigation action and the full
+   account footer without making users scroll an icon rail. Larger text/zoom
+   can still scroll the navigation independently while the footer stays put. */
+@media (min-width: 761px) and (max-height: 760px) {
+  .sidebar,
+  .sidebar[data-collapsed="true"]:hover,
+  .sidebar[data-collapsed="true"]:focus-within {
+    padding-bottom: 8px;
+  }
+
+  .sidebar .brandRow,
+  .sidebar[data-collapsed="true"]:hover .brandRow,
+  .sidebar[data-collapsed="true"]:focus-within .brandRow {
+    padding-top: 11px;
+    padding-bottom: 10px;
+  }
+
+  .sidebar .orgSwitcher {
+    margin-bottom: 3px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+
+  .sidebar .group,
+  .sidebar[data-collapsed="true"]:not(:hover):not(:focus-within) .group,
+  .sidebar:not(:hover):not(:focus-within) .group {
+    margin-top: 8px;
+  }
+
+  .sidebar .group ul {
+    gap: 0;
+  }
+
+  .sidebar .item {
+    height: 32px;
+  }
+
+  .sidebar .footer {
+    padding-top: 7px;
+  }
+
+  .sidebar .accessibilityLink {
+    min-height: 34px;
+    margin-bottom: 6px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+
+  .sidebar .person {
+    padding-top: 2px;
+    padding-bottom: 2px;
   }
 }
