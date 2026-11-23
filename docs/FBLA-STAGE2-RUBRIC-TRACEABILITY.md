@@ -54,3 +54,11 @@ needed before relying on that demonstration at NLC.
 - Green automated checks do not establish a perfect rubric score, manual keyboard
   navigation, voiceover performance, real-user task success or a trusted installer.
 - Keep `main` protected and review this branch's CI before merging.
+
+## New York prejudging is a separate 200-point gate
+
+For NYS FBLA, the program URL is assessed before the state presentation. The project sheet assigns 30 points each to dynamically correct results and customizable reports, and 20 to storage including dynamic backup. Other 20-point criteria cover identifiers, helpful comments, documentation, concise if-then logic, logical workflows and intelligent navigation.
+
+Source: [NYS official 2026–27 Coding & Programming guidelines](https://www.nysfbla.org/wp-content/uploads/2026/10/26-27-NYS-FBLA-Complete-Competitive-Events-Guidelines.pdf). The project URL must be accessible to prejudging judges without private credentials. Check the judging page and its interactive sample in a clean browser and on another device. Local sample data is not production-secure cloud storage.
+
+The [2027 NYS SLC mailing](https://www.nysfbla.org/wp-content/uploads/2026/09/SLC-HS-Mailing-Email-Blast-2.pdf) states a January 15, 2027, 11:59 p.m. ET Blue Panda upload deadline, correcting the apparent 2026 typo in the state event overview. See the detailed 200-point rubric and tests in the Stage 2 Quality guide. National judging uses the distinct 110-point presentation sheet.

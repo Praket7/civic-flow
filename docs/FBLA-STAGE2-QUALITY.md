@@ -1,7 +1,7 @@
 # CivicFlow — Stage 2 architecture and rubric evidence
 
 **Scope:** Stage 2 engineering quality; November 22, 2026.  
-**Base:** reviewed `main` (`f6f3538`). **Target:** draft PR #9, not production.  
+**Base:** reviewed `main` (`f6f3538`). **Target:** consolidated draft PR #10, not production.  
 **Release decision:** not approved for real nonprofit records or signed public installers.
 
 ## Why these changes matter
@@ -81,3 +81,26 @@ The preliminary round permits **3 minutes setup, 7 minutes speaking, 3 minutes Q
 Stage 2 does **not** change production Supabase tables, migrate customer data, release unsigned installers, or secretly turn the judging sample into a real multiuser hosted coordinator. The Stage 1 ledger at [FBLA-STAGE1-JUDGING.md](FBLA-STAGE1-JUDGING.md) remains binding: RLS staging-account acceptance, legacy encrypted upgrades, real restore rehearsal, reminder delivery, signed releases, browser QA on a dedicated hostname and branch protection still require separate evidence.
 
 Treat a green CI run as necessary, not sufficient. Before submission, have multiple people perform coordinator/volunteer tasks with real devices and record failures. Follow the actual FBLA honor-code and school submission requirements.
+
+## New York State prejudged asset — separate 200-point project rubric
+
+New York's 2026–27 State Leadership Conference evaluates the working URL in a **200-point prejudged project** before selecting a maximum of five finalists. The national **110-point presentation** is a separate evaluation. An inaccessible program URL earns **zero** for the state prejudged portion.
+
+| NYS prejudged criterion                   |  Points | Specific acceptance evidence                                                               |
+| ----------------------------------------- | ------: | ------------------------------------------------------------------------------------------ |
+| Identifiers, constants, objects and types |      20 | Inspect typed models, names, pure validation and scope in source                           |
+| Useful comments                           |      20 | Review matching eligibility, validation, backups and permission invariants                 |
+| Clear program documentation               |      20 | Follow README, help topics, installation notes and licensing records                       |
+| Conditional logic that saves steps        |      20 | Try draft opportunity planning, AutoRoster and eligibility rules                           |
+| Secure storage and dynamic backup         |      20 | Verify desktop SQLCipher and backup/restore; local browser sample is not production-secure |
+| Logical sequence                          |      20 | Follow registration, staffing, attendance, hours approval and reporting                    |
+| Intelligent navigation                    |      20 | Test interactive help, keyboard access and AutoRoster explanations                         |
+| Accurate, dynamically updated results     |      30 | Change shift and volunteer data and reconcile status, hours and totals                     |
+| Customizable analytical reports           |      30 | Filter by cause/date/fields and compare chart, table and export totals                     |
+| **Total**                                 | **200** | No claim of judging points or independent accessibility certification                      |
+
+Source: [official NYS Coding & Programming event and project sheet, pages 47–49](https://www.nysfbla.org/wp-content/uploads/2026/10/26-27-NYS-FBLA-Complete-Competitive-Events-Guidelines.pdf).
+
+**Deadline:** [official NYS 2027 SLC mailing](https://www.nysfbla.org/wp-content/uploads/2026/09/SLC-HS-Mailing-Email-Blast-2.pdf) says **January 15, 2027, 11:59 p.m. ET** for Blue Panda uploads. The state event overview appears to have a 2026 date typo. Confirm with the adviser/portal. Check the public URL from a clean browser without a saved session and from a second device. A project that scores well on the presentation but cannot be accessed for prejudging will not advance.
+
+The browser judging workspace contains only invented data, stored locally. It does not prove secure real-user authentication, encryption or trusted public desktop distribution. Those must be tested on the native app separately.
