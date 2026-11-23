@@ -58,7 +58,9 @@ export function buildTrendPoints(rows: HourRow[]): { label: string; value: numbe
 }
 
 /** The summary and chart must use the exact same filters as the table. */
-export function buildCausePoints(rows: HourRow[]): { label: string; value: number; color: string }[] {
+export function buildCausePoints(
+  rows: HourRow[],
+): { label: string; value: number; color: string }[] {
   const totals = new Map<string, number>();
   for (const row of rows) {
     const cause = row.opportunity.cause;
@@ -113,7 +115,8 @@ export function CustomReportPage() {
     .slice(0, 12);
   const causePoints = buildCausePoints(filteredRows);
   const totalMinutes = filteredRows.reduce(
-    (sum, row) => sum + (row.approvedMinutes ?? row.requestedMinutes), 0,
+    (sum, row) => sum + (row.approvedMinutes ?? row.requestedMinutes),
+    0,
   );
 
   const columns: Column<Row>[] = [];
