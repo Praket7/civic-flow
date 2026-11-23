@@ -592,8 +592,7 @@ try {
     "future-only report must contain zero source rows",
   );
   console.log("Stage 4: live report filters and future period passed.");
-  // Stage 6: isolated fixture role switch, then real UI operations. Only the
-  // test identity is seeded; attendance, hours and decisions are UI writes.
+  // Stage 6: public sample role switching and actual UI writes.
   const evidenceDir = path.join(root, "journey-review");
   await mkdir(evidenceDir, { recursive: true });
   async function capture(name) {
@@ -604,8 +603,13 @@ try {
     await writeFile(path.join(evidenceDir, name + ".png"), Buffer.from(shot.data, "base64"));
   }
   async function fixtureRole(id, route) {
-    await evaluate(`localStorage.setItem("civicflow.auth.token", "preview:${id}:demo")`);
-    await send("Page.reload", { ignoreCache: true });
+    await open("/judge/demo/#/welcome");
+    await heading("Service, organized");
+    await clickText(id === "user-maya" ? "Explore as volunteer" : "Explore as coordinator");
+    await until(
+      () => evaluate('location.hash.startsWith(' + JSON.stringify(id === "user-maya" ? "#/volunteer/" : "#/coordinator/") + ')'),
+      "sample role changed",
+    );
     await open("/judge/demo/#" + route);
   }
   async function clickText(label) {
@@ -639,7 +643,11 @@ try {
   const code = String(hash % 1_000_000).padStart(6, "0");
   async function enterCode(value) {
     await evaluate("document.querySelector('[aria-label=\"Digit 1 of 6\"]').focus()");
-    await send("Input.insertText", { text: value });
+    for (let i = 0; i < value.length; i++) {
+      const selector = '[aria-label="Digit ' + (i + 1) + ' of 6"]';
+      await evaluate("document.querySelector(" + JSON.stringify(selector) + ").focus()");
+      await send("Input.insertText", { text: value[i] });
+    }
     await clickText("Check in");
   }
   await enterCode(code === "000000" ? "111111" : "000000");
