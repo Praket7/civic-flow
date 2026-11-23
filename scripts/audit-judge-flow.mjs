@@ -210,6 +210,12 @@ try {
     { width: 1280, height: 620, collapsed: true },
     { width: 1024, height: 700, collapsed: false },
     { width: 1024, height: 620, collapsed: true },
+    { width: 1280, height: 520, collapsed: false },
+    { width: 1280, height: 520, collapsed: true },
+    { width: 1280, height: 440, collapsed: false },
+    { width: 1280, height: 440, collapsed: true },
+    { width: 1024, height: 440, collapsed: false },
+    { width: 1024, height: 440, collapsed: true },
   ]) {
     await send("Emulation.setDeviceMetricsOverride", {
       width,
@@ -239,6 +245,7 @@ try {
       const access = aside?.querySelector('[aria-label="Accessibility settings"]');
       const signOut = aside?.querySelector('button[aria-label="Sign out"]');
       const identity = aside?.querySelector('[class*="personName"]');
+      const person = aside?.querySelector('[class*="person"]');
       const org = aside?.querySelector('button[aria-label^="Workspace:"]');
       const controls = [org, access, signOut, ...Array.from(nav?.querySelectorAll('a') ?? [])]
         .filter(Boolean)
@@ -257,6 +264,7 @@ try {
         accessBottom: access?.getBoundingClientRect().bottom,
         signOutBottom: signOut?.getBoundingClientRect().bottom,
         identityBottom: identity?.getBoundingClientRect().bottom,
+        personBottom: person?.getBoundingClientRect().bottom,
         navigationOverflow: nav ? nav.scrollHeight - nav.clientHeight : Infinity,
         controls,
       };
@@ -265,6 +273,15 @@ try {
     assert.ok(bounds.footerBottom <= height + 2, "Account footer extends below viewport");
     assert.ok(bounds.accessBottom <= height + 2, "Accessibility clipped by viewport");
     assert.ok(bounds.signOutBottom <= height + 2, "Sign out clipped by viewport");
+    assert.ok(bounds.personBottom <= height + 2, "Account avatar clipped by viewport");
+    // At tablet-width desktop sizes the rail intentionally hides the name
+    // until hover/focus, even when the stored collapsed preference is false.
+    if (!collapsed && width > 1180) {
+      assert.ok(
+        bounds.identityBottom > 0 && bounds.identityBottom <= height + 2,
+        "Coordinator identity clipped by viewport",
+      );
+    }
     assert.ok(bounds.navigationOverflow <= 2, "Desktop navigation must fit without scrolling");
     assert.ok(
       bounds.controls.length >= 9 && bounds.controls.every((item) => item.visible),
