@@ -222,7 +222,7 @@ Applications* (1993), Chapter 9.
 | `const-random` | 0.1.18 | MIT OR Apache-2.0 | no |
 | `const-random-macro` | 0.1.16 | MIT OR Apache-2.0 | no |
 | `constant_time_eq` | 0.6.1 | CC0-1.0 OR MIT-0 OR Apache-2.0 | no |
-| `cookie` | 0.18.2 | MIT OR Apache-2.0 | no |
+| `cookie` | 0.18.3 | MIT OR Apache-2.0 | no |
 | `core-foundation` | 0.10.1 | MIT OR Apache-2.0 | no |
 | `core-foundation` | 0.9.4 | MIT OR Apache-2.0 | no |
 | `core-foundation-sys` | 0.8.7 | MIT OR Apache-2.0 | no |
