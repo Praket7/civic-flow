@@ -138,3 +138,98 @@ describe("pure preview reporting", () => {
     expect(JSON.stringify(workspace)).toBe(before);
   });
 });
+
+
+describe("Stage 4 known-answer reporting ledger", () => {
+  const ledger = {
+    now: "2026-11-22T12:00:00-05:00",
+    organization: { name: "Community Partners" },
+    currentVolunteerId: "demo-volunteer",
+    volunteers: [
+      { id: "alice", name: "Alice", skills: [] },
+      { id: "bob", name: "Bob", skills: [] },
+    ],
+    opportunities: [
+      { id: "pantry", title: "Food Pantry", cause: "food" },
+      { id: "school", title: "Tutoring", cause: "education" },
+    ],
+    shifts: [
+      { id: "earlier", opportunityId: "pantry", startsAt: "2026-10-10T09:00:00-05:00", status: "completed", roles: [{ name: "Distribution", required: 2, filled: 1 }] },
+      { id: "cancelled", opportunityId: "pantry", startsAt: "2026-10-11T09:00:00-05:00", status: "canceled", roles: [{ name: "Distribution", required: 1, filled: 1 }] },
+      { id: "future", opportunityId: "school", startsAt: "2026-12-02T09:00:00-05:00", status: "scheduled", roles: [{ name: "Tutor", required: 3, filled: 2 }] },
+    ],
+    hourEntries: [
+      { id: "a-verified", volunteerId: "alice", opportunityId: "pantry", date: "2026-10-10", minutes: 90, status: "pending", verificationId: "a-verification" },
+      { id: "b-pending", volunteerId: "bob", opportunityId: "pantry", date: "2026-10-10", minutes: 100, status: "pending", verificationId: null },
+      { id: "c-rejected", volunteerId: "bob", opportunityId: "pantry", date: "2026-10-11", minutes: 60, status: "rejected", verificationId: null },
+      { id: "d-verified", volunteerId: "bob", opportunityId: "school", date: "2026-10-12", minutes: 30, status: "verified", verificationId: "d-verification" },
+      { id: "e-outside", volunteerId: "alice", opportunityId: "school", date: "2026-08-15", minutes: 120, status: "verified", verificationId: "e-verification" },
+    ],
+    mayaEntries: [],
+  } as unknown as DemoWorkspace;
+  const decisions = {
+    ...state,
+    hoursDecisions: {
+      "a-verified": { status: "verified", approvedMinutes: 45, reason: "Corrected against check-out", reviewedAt: "2026-11-01" },
+      "c-rejected": { status: "rejected", approvedMinutes: 600, reason: "Duplicate claim", reviewedAt: "2026-11-02" },
+    },
+    registrations: [{ shiftId: "earlier", volunteerId: "alice", role: "Distribution", status: "completed" }],
+  } as unknown as SessionSnapshot;
+  const q: ReportRequest = {
+    template: "custom",
+    fields: ["recordId", "hours", "requested", "status", "cause"],
+    dateStart: "2026-10-01",
+    dateEnd: "2026-10-31",
+    groupBy: "none",
+  };
+
+  it("reconciles corrected, pending, rejected and outside-period records exactly", () => {
+    const report = buildPreviewReport(q, ledger, decisions);
+    expect(report.headers).toEqual(["Record ID", "Approved minutes", "Requested minutes", "Status", "Cause"]);
+    expect(report.rows).toEqual([
+      ["d-verified", "30", "30", "verified", "education"],
+      ["c-rejected", "", "60", "rejected", "food"],
+      ["a-verified", "45", "90", "verified", "food"],
+      ["b-pending", "", "100", "pending", "food"],
+    ]);
+    expect(report.summary).toContainEqual({ label: "Approved service", value: "1h 15m" });
+    expect(report.summary).toContainEqual({ label: "Pending requested", value: "1h 40m" });
+    expect(report.summary).toContainEqual({ label: "Rejected records", value: "1" });
+    expect(report.summary).toContainEqual({ label: "Verified volunteers", value: "2" });
+  });
+
+  it("filters by exact program and cause without losing the approved-hour invariant", () => {
+    const report = buildPreviewReport({ ...q, cause: "food", programId: "pantry" }, ledger, decisions);
+    expect(report.rows).toHaveLength(3);
+    expect(report.summary).toContainEqual({ label: "Approved service", value: "0h 45m" });
+    expect(report.rows.every((row) => row[4] === "food")).toBe(true);
+    expect(buildPreviewReport({ ...q, programId: "does-not-exist" }, ledger, decisions).rows).toEqual([]);
+  });
+
+  it("supports history and upcoming capacity and excludes canceled shifts", () => {
+    const history = buildPreviewReport({ ...q, template: "coverage" }, ledger, decisions);
+    expect(history.rows).toHaveLength(1);
+    expect(history.summary).toContainEqual({ label: "Role coverage", value: "50%" });
+    const upcoming = buildPreviewReport(
+      { ...q, template: "coverage", dateStart: null, dateEnd: null },
+      ledger,
+      decisions,
+    );
+    expect(upcoming.rows).toHaveLength(1);
+    expect(upcoming.summary).toContainEqual({ label: "Open slots", value: "1" });
+    expect(upcoming.period).toContain("Upcoming");
+  });
+
+  it("rejects reversed, malformed and impossible date ranges", () => {
+    expect(() => buildPreviewReport({ ...q, dateEnd: "2026-09-01" }, ledger, decisions)).toThrow("start date");
+    expect(() => buildPreviewReport({ ...q, dateStart: "2026-02-30" }, ledger, decisions)).toThrow("real calendar");
+    expect(() => buildPreviewReport({ ...q, dateStart: "yesterday" }, ledger, decisions)).toThrow("YYYY-MM-DD");
+  });
+
+  it("sorts by actual program values even if the group column is hidden", () => {
+    const report = buildPreviewReport({ ...q, groupBy: "program", fields: ["recordId"] }, ledger, decisions);
+    expect(report.rows.map((row) => row[0])).toEqual([
+      "c-rejected", "a-verified", "b-pending", "d-verified",
+    ]);
+  });
+});
