@@ -47,7 +47,8 @@ export function HelpProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const returnFocus = useRef<HTMLElement | null>(null);
   const openHelp = useCallback(() => {
-    returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    returnFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setOpen(true);
   }, []);
   const closeHelp = useCallback(() => setOpen(false), []);
@@ -60,7 +61,8 @@ export function HelpProvider({ children }: { children: ReactNode }) {
         event.ctrlKey ||
         event.altKey ||
         event.defaultPrevented ||
-        (event.target instanceof HTMLElement && event.target.closest('[aria-modal="true"], dialog[open]')) ||
+        (event.target instanceof HTMLElement &&
+          event.target.closest('[aria-modal="true"], dialog[open]')) ||
         isTypingTarget(event.target)
       ) {
         return;
@@ -74,8 +76,16 @@ export function HelpProvider({ children }: { children: ReactNode }) {
 
   return (
     <HelpContext.Provider value={{ available: true, openHelp }}>
-      <div inert={open} style={{ display: "contents" }}>{children}</div>
-      {open ? <HelpDialog pathname={location.pathname} onClose={closeHelp} returnFocus={returnFocus.current} /> : null}
+      <div inert={open} style={{ display: "contents" }}>
+        {children}
+      </div>
+      {open ? (
+        <HelpDialog
+          pathname={location.pathname}
+          onClose={closeHelp}
+          returnFocus={returnFocus.current}
+        />
+      ) : null}
     </HelpContext.Provider>
   );
 }
@@ -100,7 +110,15 @@ export function HelpButton() {
   );
 }
 
-function HelpDialog({ pathname, onClose, returnFocus }: { pathname: string; onClose: () => void; returnFocus: HTMLElement | null }) {
+function HelpDialog({
+  pathname,
+  onClose,
+  returnFocus,
+}: {
+  pathname: string;
+  onClose: () => void;
+  returnFocus: HTMLElement | null;
+}) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
@@ -132,7 +150,9 @@ function HelpDialog({ pathname, onClose, returnFocus }: { pathname: string; onCl
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      requestAnimationFrame(() => { if (returnFocus?.isConnected) returnFocus.focus(); });
+      requestAnimationFrame(() => {
+        if (returnFocus?.isConnected) returnFocus.focus();
+      });
     };
   }, [onClose, returnFocus]);
 

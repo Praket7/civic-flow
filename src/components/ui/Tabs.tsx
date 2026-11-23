@@ -70,7 +70,9 @@ export function Tabs({
             type="button"
             role="tab"
             aria-selected={active}
-            tabIndex={active || (!items.some((entry) => entry.id === value) && index === 0) ? 0 : -1}
+            tabIndex={
+              active || (!items.some((entry) => entry.id === value) && index === 0) ? 0 : -1
+            }
             className={className}
             onClick={() => onChange(item.id)}
             onKeyDown={(event) => move(event, index)}

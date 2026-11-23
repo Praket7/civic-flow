@@ -5,7 +5,18 @@ import { Tabs } from "./Tabs";
 
 function Example() {
   const [value, setValue] = useState("a");
-  return <Tabs label="View" items={[{ id: "a", label: "First" }, { id: "b", label: "Second" }, { id: "c", label: "Third" }]} value={value} onChange={setValue} />;
+  return (
+    <Tabs
+      label="View"
+      items={[
+        { id: "a", label: "First" },
+        { id: "b", label: "Second" },
+        { id: "c", label: "Third" },
+      ]}
+      value={value}
+      onChange={setValue}
+    />
+  );
 }
 
 describe("tab keyboard navigation", () => {

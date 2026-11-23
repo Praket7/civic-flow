@@ -353,155 +353,155 @@ export function CustomReportPage() {
       />
       <div className={styles.builder}>
         <div className={styles.builderControls}>
-        <Card className={styles.builderRail}>
-          <h2 className={styles.railTitle}>
-            <Filter size={14} aria-hidden="true" style={{ marginRight: 5 }} />
-            Filters
-          </h2>
-          {supportsActivityFilters ? (
-            <div className={styles.filters}>
-              <SelectField
-                label="Date range"
-                value={range}
-                onChange={(event) => setRange(event.target.value as PeriodSelection)}
-              >
-                <option value="week">Last 7 days</option>
-                <option value="month">This month</option>
-                <option value="year">Year to date</option>
-                <option value="all">All available dates</option>
-                <option value="custom">Custom dates</option>
-                {templateId === "coverage" ? (
-                  <option value="upcoming">Upcoming shifts</option>
+          <Card className={styles.builderRail}>
+            <h2 className={styles.railTitle}>
+              <Filter size={14} aria-hidden="true" style={{ marginRight: 5 }} />
+              Filters
+            </h2>
+            {supportsActivityFilters ? (
+              <div className={styles.filters}>
+                <SelectField
+                  label="Date range"
+                  value={range}
+                  onChange={(event) => setRange(event.target.value as PeriodSelection)}
+                >
+                  <option value="week">Last 7 days</option>
+                  <option value="month">This month</option>
+                  <option value="year">Year to date</option>
+                  <option value="all">All available dates</option>
+                  <option value="custom">Custom dates</option>
+                  {templateId === "coverage" ? (
+                    <option value="upcoming">Upcoming shifts</option>
+                  ) : null}
+                </SelectField>
+                {range === "custom" ? (
+                  <>
+                    <label className={styles.tableNote}>
+                      Start date
+                      <input
+                        aria-label="Report start date"
+                        type="date"
+                        value={customStart}
+                        onChange={(event) => setCustomStart(event.target.value)}
+                      />
+                    </label>
+                    <label className={styles.tableNote}>
+                      End date
+                      <input
+                        aria-label="Report end date"
+                        type="date"
+                        value={customEnd}
+                        onChange={(event) => setCustomEnd(event.target.value)}
+                      />
+                    </label>
+                  </>
                 ) : null}
-              </SelectField>
-              {range === "custom" ? (
-                <>
-                  <label className={styles.tableNote}>
-                    Start date
-                    <input
-                      aria-label="Report start date"
-                      type="date"
-                      value={customStart}
-                      onChange={(event) => setCustomStart(event.target.value)}
-                    />
-                  </label>
-                  <label className={styles.tableNote}>
-                    End date
-                    <input
-                      aria-label="Report end date"
-                      type="date"
-                      value={customEnd}
-                      onChange={(event) => setCustomEnd(event.target.value)}
-                    />
-                  </label>
-                </>
-              ) : null}
-              <SelectField
-                label="Cause"
-                value={cause}
-                onChange={(event) => {
-                  setCause(event.target.value);
-                  setProgramId("all");
-                }}
-              >
-                <option value="all">All causes</option>
-                {Object.entries(CAUSE_LABELS).map(([id, label]) => (
-                  <option key={id} value={id}>
-                    {label}
-                  </option>
-                ))}
-              </SelectField>
-              <SelectField
-                label="Program"
-                value={programId}
-                onChange={(event) => setProgramId(event.target.value)}
-              >
-                <option value="all">All programs</option>
-                {programs
-                  .filter((program) => cause === "all" || program.cause === cause)
-                  .map((program) => (
-                    <option key={program.id} value={program.id}>
-                      {program.title}
+                <SelectField
+                  label="Cause"
+                  value={cause}
+                  onChange={(event) => {
+                    setCause(event.target.value);
+                    setProgramId("all");
+                  }}
+                >
+                  <option value="all">All causes</option>
+                  {Object.entries(CAUSE_LABELS).map(([id, label]) => (
+                    <option key={id} value={id}>
+                      {label}
                     </option>
                   ))}
-              </SelectField>
-            </div>
-          ) : (
-            <p className={styles.tableNote}>
-              Cohort and credential inventory reports are snapshots. Program, cause and service-date
-              filters do not apply.
-            </p>
-          )}
-          <div style={{ marginTop: 16 }}>
-            <Button
-              variant="secondary"
-              size="small"
-              icon={<Save size={12} />}
-              onClick={() => void saveView()}
-            >
-              Save this view
-            </Button>
-          </div>
-          <Link
-            to="/coordinator/reports"
-            style={{ display: "block", marginTop: 12, fontSize: 12.5 }}
-          >
-            Back to templates
-          </Link>
-          {error ? (
-            <p role="alert" style={{ color: "var(--tone-red-ink)" }}>
-              {error}
-            </p>
-          ) : null}
-          {saved ? (
-            <p role="status" style={{ color: "var(--tone-green-ink)" }}>
-              {saved}
-            </p>
-          ) : null}
-        </Card>
-        <Card className={styles.builderRail}>
-          <h2 className={styles.railTitle}>Fields</h2>
-          {templateId === "custom" || templateId === "participation" ? (
-            <>
-              <div className={styles.fieldList}>
-                {FIELD_OPTIONS.map((field) => (
-                  <label className={styles.fieldOption} key={field.id}>
-                    <input
-                      type="checkbox"
-                      checked={fields.includes(field.id)}
-                      onChange={(event) =>
-                        setFields((current) =>
-                          event.target.checked
-                            ? [...current, field.id]
-                            : current.length > 1
-                              ? current.filter((id) => id !== field.id)
-                              : current,
-                        )
-                      }
-                    />
-                    {field.label}
-                  </label>
-                ))}
+                </SelectField>
+                <SelectField
+                  label="Program"
+                  value={programId}
+                  onChange={(event) => setProgramId(event.target.value)}
+                >
+                  <option value="all">All programs</option>
+                  {programs
+                    .filter((program) => cause === "all" || program.cause === cause)
+                    .map((program) => (
+                      <option key={program.id} value={program.id}>
+                        {program.title}
+                      </option>
+                    ))}
+                </SelectField>
               </div>
-              <SelectField
-                label="Group rows by"
-                value={grouping}
-                onChange={(event) => setGrouping(event.target.value as ReportRequest["groupBy"])}
+            ) : (
+              <p className={styles.tableNote}>
+                Cohort and credential inventory reports are snapshots. Program, cause and
+                service-date filters do not apply.
+              </p>
+            )}
+            <div style={{ marginTop: 16 }}>
+              <Button
+                variant="secondary"
+                size="small"
+                icon={<Save size={12} />}
+                onClick={() => void saveView()}
               >
-                <option value="none">Date order</option>
-                <option value="cause">Cause</option>
-                <option value="program">Program</option>
-              </SelectField>
-            </>
-          ) : (
+                Save this view
+              </Button>
+            </div>
+            <Link
+              to="/coordinator/reports"
+              style={{ display: "block", marginTop: 12, fontSize: 12.5 }}
+            >
+              Back to templates
+            </Link>
+            {error ? (
+              <p role="alert" style={{ color: "var(--tone-red-ink)" }}>
+                {error}
+              </p>
+            ) : null}
+            {saved ? (
+              <p role="status" style={{ color: "var(--tone-green-ink)" }}>
+                {saved}
+              </p>
+            ) : null}
+          </Card>
+          <Card className={styles.builderRail}>
+            <h2 className={styles.railTitle}>Fields</h2>
+            {templateId === "custom" || templateId === "participation" ? (
+              <>
+                <div className={styles.fieldList}>
+                  {FIELD_OPTIONS.map((field) => (
+                    <label className={styles.fieldOption} key={field.id}>
+                      <input
+                        type="checkbox"
+                        checked={fields.includes(field.id)}
+                        onChange={(event) =>
+                          setFields((current) =>
+                            event.target.checked
+                              ? [...current, field.id]
+                              : current.length > 1
+                                ? current.filter((id) => id !== field.id)
+                                : current,
+                          )
+                        }
+                      />
+                      {field.label}
+                    </label>
+                  ))}
+                </div>
+                <SelectField
+                  label="Group rows by"
+                  value={grouping}
+                  onChange={(event) => setGrouping(event.target.value as ReportRequest["groupBy"])}
+                >
+                  <option value="none">Date order</option>
+                  <option value="cause">Cause</option>
+                  <option value="program">Program</option>
+                </SelectField>
+              </>
+            ) : (
+              <p className={styles.tableNote}>
+                This report uses a fixed set of fields specific to {template?.title.toLowerCase()}.
+              </p>
+            )}
             <p className={styles.tableNote}>
-              This report uses a fixed set of fields specific to {template?.title.toLowerCase()}.
+              Source record IDs let you verify individual entries against the service ledger.
             </p>
-          )}
-          <p className={styles.tableNote}>
-            Source record IDs let you verify individual entries against the service ledger.
-          </p>
-        </Card>
+          </Card>
         </div>
 
         <Card className={styles.canvas}>

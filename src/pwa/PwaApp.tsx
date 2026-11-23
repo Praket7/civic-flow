@@ -111,7 +111,9 @@ export function PwaApp() {
               ? "Your account needs a workspace invitation"
               : "This workspace could not open"}
           </h1>
-          <p className={styles.body} role="alert">{error}</p>
+          <p className={styles.body} role="alert">
+            {error}
+          </p>
           <div className={styles.rowActions}>
             <Button variant="secondary" onClick={() => void signOut()}>
               Sign out
