@@ -446,9 +446,9 @@ try {
   const expectedCsv = reportRows.map((row) =>
     row.map((cell) => {
       const safe = /^[=@]/.test(cell) ||
-        (/^[+-]/.test(cell) && !/^[+-][0-9\\s().-]*$/.test(cell))
+        (/^[+-]/.test(cell) && !/^[+-][0-9\s().-]*$/.test(cell))
         ? "'" + cell : cell;
-      return /[",\\r\\n]/.test(safe) ? '"' + safe.replaceAll('"', '""') + '"' : safe;
+      return /[",\r\n]/.test(safe) ? '"' + safe.replaceAll('"', '""') + '"' : safe;
     }).join(",")
   ).join("\r\n") + "\r\n";
   assert.equal(csv.replace(/^\uFEFF/, ""), expectedCsv, "CSV must match every visible source row");
