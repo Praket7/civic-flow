@@ -24,9 +24,7 @@ export interface RecoveryError {
 }
 
 function recordOf(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
+  return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : null;
 }
 
 function textOf(value: unknown): string | undefined {
