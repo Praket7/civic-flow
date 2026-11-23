@@ -218,24 +218,26 @@ export function DonutChart({
           stroke="var(--border-soft)"
           strokeWidth="16"
         />
-        {segments.filter(({ item }) => item.value > 0).map(({ item, offset }) => {
-          const dash = (item.value / total) * circumference;
-          return (
-            <circle
-              key={item.label}
-              cx="70"
-              cy="70"
-              r={radius}
-              fill="none"
-              stroke={item.color}
-              strokeWidth="16"
-              strokeDasharray={`${Math.max(0, dash - 2)} ${circumference}`}
-              strokeDashoffset={-offset}
-              strokeLinecap="round"
-              transform="rotate(-90 70 70)"
-            />
-          );
-        })}
+        {segments
+          .filter(({ item }) => item.value > 0)
+          .map(({ item, offset }) => {
+            const dash = (item.value / total) * circumference;
+            return (
+              <circle
+                key={item.label}
+                cx="70"
+                cy="70"
+                r={radius}
+                fill="none"
+                stroke={item.color}
+                strokeWidth="16"
+                strokeDasharray={`${Math.max(0, dash - 2)} ${circumference}`}
+                strokeDashoffset={-offset}
+                strokeLinecap="round"
+                transform="rotate(-90 70 70)"
+              />
+            );
+          })}
         <text x="70" y="68" textAnchor="middle" className={styles.donutCenter}>
           {centerValue}
         </text>

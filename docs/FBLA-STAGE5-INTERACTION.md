@@ -14,15 +14,15 @@ Make the coordinator and volunteer workflows usable without sacrificing the veri
 
 ## Implementation and evidence
 
-| Work area | Evidence |
-| --- | --- |
-| Shell and sidebar | Real column expansion, persistent account footer, inert closed mobile drawer, accessible navigation names, dismissal and route focus |
-| Shared forms | Keep guidance alongside errors, preserve caller invalid state, visible invalid and focus borders |
-| Data tables | Named keyboard-scrollable regions; no page-wide overflow required to access wide records |
-| Charts | True zero-height bars, no zero donut wedges, distinct SVG gradient identifiers, accessible chart tables |
-| Mission Control | Full attention details, compact mobile cards, no unrelated demo stock cover for real workspaces, accurate workload-balance wording |
-| Notification panel | Scrollable within the viewport and readable text after marking an item read |
-| Responsive checks | Existing route zoom, screenshot, contrast, accessibility-tree and browser audits; added interactive focus containment test |
+| Work area          | Evidence                                                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Shell and sidebar  | Real column expansion, persistent account footer, inert closed mobile drawer, accessible navigation names, dismissal and route focus |
+| Shared forms       | Keep guidance alongside errors, preserve caller invalid state, visible invalid and focus borders                                     |
+| Data tables        | Named keyboard-scrollable regions; no page-wide overflow required to access wide records                                             |
+| Charts             | True zero-height bars, no zero donut wedges, distinct SVG gradient identifiers, accessible chart tables                              |
+| Mission Control    | Full attention details, compact mobile cards, no unrelated demo stock cover for real workspaces, accurate workload-balance wording   |
+| Notification panel | Scrollable within the viewport and readable text after marking an item read                                                          |
+| Responsive checks  | Existing route zoom, screenshot, contrast, accessibility-tree and browser audits; added interactive focus containment test           |
 
 Baseline: Stage 4 main commit `2fde217b4822cf0ca97ff9b67887790e7c55a291`. Prior CI screenshots are available in run 45281193766. Capture and compare the new artifacts from the exact Stage 5 head; do not treat screenshot creation as visual approval.
 

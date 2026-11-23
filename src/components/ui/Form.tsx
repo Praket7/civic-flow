@@ -49,9 +49,11 @@ function describedBy(
   hint: ReactNode,
   existing: string | undefined,
 ): string | undefined {
-  return [existing, hint ? `${id}-hint` : undefined, error ? `${id}-error` : undefined]
-    .filter(Boolean)
-    .join(" ") || undefined;
+  return (
+    [existing, hint ? `${id}-hint` : undefined, error ? `${id}-error` : undefined]
+      .filter(Boolean)
+      .join(" ") || undefined
+  );
 }
 
 export function TextField({

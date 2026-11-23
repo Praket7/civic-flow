@@ -368,7 +368,9 @@ try {
   })()`);
   await evaluate("document.querySelector('button[aria-label^=\"Workspace:\"]')?.click()");
   assert.equal(
-    await evaluate('Boolean(document.querySelector(\'#workspace-navigation [href*="accessibility"]\'))'),
+    await evaluate(
+      "Boolean(document.querySelector('#workspace-navigation [href*=\"accessibility\"]'))",
+    ),
     false,
     "Accessibility must not remain in the workspace dropdown",
   );
@@ -403,8 +405,8 @@ try {
     await send("Input.dispatchKeyEvent", { type: "keyDown", key: name, code: name, modifiers });
     await send("Input.dispatchKeyEvent", { type: "keyUp", key: name, code: name, modifiers });
   };
-  await evaluate('document.querySelector(\'button[aria-label="Open navigation"]\').focus()');
-  await evaluate('document.querySelector(\'button[aria-label="Open navigation"]\').click()');
+  await evaluate("document.querySelector('button[aria-label=\"Open navigation\"]').focus()");
+  await evaluate("document.querySelector('button[aria-label=\"Open navigation\"]').click()");
   await until(
     () => evaluate('document.activeElement?.getAttribute("aria-label") === "Close navigation"'),
     "drawer moves focus to its close button",
@@ -414,7 +416,9 @@ try {
     true,
     "Background must be inert while drawer is open",
   );
-  await evaluate('document.querySelector(\'#primary-navigation button[aria-label="Sign out"]\').focus()');
+  await evaluate(
+    "document.querySelector('#primary-navigation button[aria-label=\"Sign out\"]').focus()",
+  );
   await key("Tab");
   assert.equal(
     await evaluate('document.activeElement?.getAttribute("aria-label")'),
@@ -431,9 +435,14 @@ try {
     true,
     "Closed drawer must exclude keyboard focus",
   );
-  await evaluate('document.querySelector(\'button[aria-label="Open navigation"]\').click()');
-  await until(() => evaluate('!document.querySelector("#primary-navigation").inert'), "drawer reopened");
-  await evaluate('document.querySelector(\'#primary-navigation a[aria-label="Schedule"]\').click()');
+  await evaluate("document.querySelector('button[aria-label=\"Open navigation\"]').click()");
+  await until(
+    () => evaluate('!document.querySelector("#primary-navigation").inert'),
+    "drawer reopened",
+  );
+  await evaluate(
+    "document.querySelector('#primary-navigation a[aria-label=\"Schedule\"]').click()",
+  );
   await heading("Schedule");
   await until(
     () => evaluate('document.activeElement?.id === "main-content"'),
@@ -445,7 +454,9 @@ try {
     "Navigation dismisses the drawer",
   );
   await send("Emulation.clearDeviceMetricsOverride");
-  console.log("Stage 5: mobile drawer focus containment, Escape, return focus, and route focus passed.");
+  console.log(
+    "Stage 5: mobile drawer focus containment, Escape, return focus, and route focus passed.",
+  );
 
   // Stage 4: changing a real date filter must recalculate the displayed report.
   await open("/judge/demo/#/coordinator/reports/custom");

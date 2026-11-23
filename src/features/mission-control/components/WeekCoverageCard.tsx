@@ -61,7 +61,9 @@ export function WeekCoverageCard({ days }: WeekCoverageCardProps) {
                 <span
                   className={styles.barFill}
                   data-tone={toneFor(day.percent)}
-                  style={{ height: `${day.capacity > 0 ? Math.max(0, Math.min(100, day.percent)) : 0}%` }}
+                  style={{
+                    height: `${day.capacity > 0 ? Math.max(0, Math.min(100, day.percent)) : 0}%`,
+                  }}
                 />
               </span>
             </li>

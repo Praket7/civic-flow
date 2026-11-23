@@ -44,7 +44,11 @@ export function MissionHero({ data }: MissionHeroProps) {
     : "";
 
   return (
-    <section className={styles.hero} aria-labelledby="mc-greeting" data-cover={Boolean(!ownWorkspace || cover)}>
+    <section
+      className={styles.hero}
+      aria-labelledby="mc-greeting"
+      data-cover={Boolean(!ownWorkspace || cover)}
+    >
       <div className={styles.heroCopy}>
         <p className={styles.eyebrow}>
           <span>{formatLongDate(now)}</span>
@@ -110,24 +114,26 @@ export function MissionHero({ data }: MissionHeroProps) {
       </div>
 
       {!ownWorkspace || cover ? (
-      <figure className={styles.heroFigure}>
-        <img
-          className={styles.heroImage}
-          src={cover ?? "/media/hero-community.jpg"}
-          alt={
-            ownWorkspace
-              ? (organization.imageAlt ?? `${organization.name} community photo`)
-              : t("Volunteers packing food boxes together at a community pantry")
-          }
-          width={1600}
-          height={760}
-          fetchPriority="high"
-        />
-        <figcaption className={styles.heroCaption}>
-          <span>{ownWorkspace ? coverCaption : "Packing day at the Rivergate Avenue pantry"}</span>
-          {ownWorkspace ? null : <span>Photo: Pexels / 6646918</span>}
-        </figcaption>
-      </figure>
+        <figure className={styles.heroFigure}>
+          <img
+            className={styles.heroImage}
+            src={cover ?? "/media/hero-community.jpg"}
+            alt={
+              ownWorkspace
+                ? (organization.imageAlt ?? `${organization.name} community photo`)
+                : t("Volunteers packing food boxes together at a community pantry")
+            }
+            width={1600}
+            height={760}
+            fetchPriority="high"
+          />
+          <figcaption className={styles.heroCaption}>
+            <span>
+              {ownWorkspace ? coverCaption : "Packing day at the Rivergate Avenue pantry"}
+            </span>
+            {ownWorkspace ? null : <span>Photo: Pexels / 6646918</span>}
+          </figcaption>
+        </figure>
       ) : null}
     </section>
   );

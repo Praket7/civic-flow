@@ -198,7 +198,8 @@ export function Sidebar({
           }
           if (event.key !== "Tab") return;
           const controls = Array.from(
-            sidebarRef.current?.querySelectorAll<HTMLElement>("a[href], button:not(:disabled)") ?? [],
+            sidebarRef.current?.querySelectorAll<HTMLElement>("a[href], button:not(:disabled)") ??
+              [],
           ).filter((control) => control.getClientRects().length > 0);
           const first = controls[0];
           const last = controls.at(-1);
@@ -285,10 +286,13 @@ export function Sidebar({
           </button>
 
           {workspaceOpen ? (
-            <div className={styles.workspaceMenu} id="workspace-navigation" role="region" aria-label="Workspace">
-              <span className={styles.menuLabel}>
-                {t("Workspaces")}
-              </span>
+            <div
+              className={styles.workspaceMenu}
+              id="workspace-navigation"
+              role="region"
+              aria-label="Workspace"
+            >
+              <span className={styles.menuLabel}>{t("Workspaces")}</span>
               {organizationWorkspace.organizations.length === 0 ? (
                 <p className={styles.menuEmpty}>
                   Join or create an organization to start scheduling.
@@ -371,18 +375,10 @@ export function Sidebar({
                   ) : null}
                 </>
               ) : null}
-              <Link
-                to="/help"
-                className={styles.menuItem}
-                onClick={dismissOnNavigate}
-              >
+              <Link to="/help" className={styles.menuItem} onClick={dismissOnNavigate}>
                 Help
               </Link>
-              <Link
-                to="/credits"
-                className={styles.menuItem}
-                onClick={dismissOnNavigate}
-              >
+              <Link to="/credits" className={styles.menuItem} onClick={dismissOnNavigate}>
                 Photo credits
               </Link>
             </div>

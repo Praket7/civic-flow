@@ -68,7 +68,12 @@ export function AppShell() {
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (!mobileOpen && !event.defaultPrevented && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      if (
+        !mobileOpen &&
+        !event.defaultPrevented &&
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === "k"
+      ) {
         event.preventDefault();
         setPaletteOpen((open) => !open);
       }
@@ -110,7 +115,9 @@ export function AppShell() {
           narrow={narrow}
           onToggleCollapsed={toggleCollapsed}
           onDismissMobile={dismissMobile}
-          onNavigate={() => { if (mobileOpen) dismissMobile(); }}
+          onNavigate={() => {
+            if (mobileOpen) dismissMobile();
+          }}
         />
         <div className={styles.main} data-surface={surface} inert={mobileOpen}>
           {surface ? null : (

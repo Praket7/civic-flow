@@ -145,7 +145,9 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className={styles.results}>
-        <p className={styles.groupLabel} role="status">{query.trim() ? "Matching surfaces" : "Jump to"}</p>
+        <p className={styles.groupLabel} role="status">
+          {query.trim() ? "Matching surfaces" : "Jump to"}
+        </p>
         {results.length === 0 ? (
           <p className={styles.empty}>
             No surface matches “{query.trim()}”. Try “coverage” or “hours”.

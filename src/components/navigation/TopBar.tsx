@@ -16,7 +16,12 @@ interface TopBarProps {
   sidebarOpen?: boolean;
 }
 
-export function TopBar({ onOpenPalette, onOpenSidebar, sidebarTriggerRef, sidebarOpen }: TopBarProps) {
+export function TopBar({
+  onOpenPalette,
+  onOpenSidebar,
+  sidebarTriggerRef,
+  sidebarOpen,
+}: TopBarProps) {
   const { workspace } = useWorkspace();
   const today = parseISO(workspace.now);
   const { resolvedTheme, toggleTheme } = useDisplayPreferences();
