@@ -51,7 +51,14 @@ export function buildPreviewReport(
     headers = ["Date", "Program", "Role", "Required", "Filled", "Gap", "Shift status"];
     let required = 0;
     let filled = 0;
-    for (const shift of workspace.shifts.filter((row) => row.startsAt >= workspace.now)) {
+    for (const shift of workspace.shifts.filter((row) => {
+      const date = row.startsAt.slice(0, 10);
+      return (
+        row.startsAt >= workspace.now &&
+        (!request.dateStart || date >= request.dateStart) &&
+        (!request.dateEnd || date <= request.dateEnd)
+      );
+    })) {
       const opportunity = workspace.opportunities.find((row) => row.id === shift.opportunityId);
       if (!opportunity || (cause && opportunity.cause !== cause)) continue;
       for (const role of shift.roles) {
@@ -147,13 +154,18 @@ export function buildPreviewReport(
     ];
   } else if (template === "impact") {
     headers = ["Program", "Metric", "Unit", "Value", "Recorded"];
-    rows = state.impactMetrics.map((metric) => [
-      workspace.opportunities.find((row) => row.id === metric.opportunityId)?.title ?? "Program",
-      metric.name,
-      metric.unit,
-      String(metric.value),
-      metric.recordedAt.slice(0, 10),
-    ]);
+    rows = state.impactMetrics
+      .filter((metric) => {
+        const opportunity = workspace.opportunities.find((row) => row.id === metric.opportunityId);
+        return inRange(metric.recordedAt.slice(0, 10)) && (!cause || opportunity?.cause === cause);
+      })
+      .map((metric) => [
+        workspace.opportunities.find((row) => row.id === metric.opportunityId)?.title ?? "Program",
+        metric.name,
+        metric.unit,
+        String(metric.value),
+        metric.recordedAt.slice(0, 10),
+      ]);
     summary = [{ label: "Outcome records", value: String(rows.length) }];
   } else {
     const fields =
