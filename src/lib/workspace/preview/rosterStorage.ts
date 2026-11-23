@@ -36,7 +36,10 @@ export function createPreviewRosterStorage(
 
   function writeImportedRoster(records: RosterVolunteer[]): void {
     try {
-      localStorage.setItem(scoped(IMPORTED_VOLUNTEERS_KEY), JSON.stringify(records.filter(isRosterRecord)));
+      localStorage.setItem(
+        scoped(IMPORTED_VOLUNTEERS_KEY),
+        JSON.stringify(records.filter(isRosterRecord)),
+      );
     } catch {
       // Storage can be unavailable in hardened webviews; the session still works.
     }
