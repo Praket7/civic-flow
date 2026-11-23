@@ -391,18 +391,42 @@ try {
   await open("/judge/demo/#/coordinator/reports/custom");
   await heading("Custom report builder");
   await until(
-    () => evaluate('Array.from(document.querySelectorAll("p")).some((node) => /source rows/.test(node.textContent || ""))'),
+    () =>
+      evaluate(
+        'Array.from(document.querySelectorAll("p")).some((node) => /source rows/.test(node.textContent || ""))',
+      ),
     "report source row count",
   );
-  assert.equal(await evaluate("(() => {\n  const names = Array.from(document.querySelectorAll(\"select\")).map((select) =>\n    document.querySelector('label[for=\"' + select.id + '\"]')?.textContent?.trim() || \"\"\n  );\n  return [\"Date range\", \"Cause\", \"Program\"].every((name) => names.includes(name));\n})()"), true, "Report filter controls");
-  assert.equal(await evaluate("(() => {\n  const select = Array.from(document.querySelectorAll(\"select\")).find((item) =>\n    document.querySelector('label[for=\"' + item.id + '\"]')?.textContent?.trim() === \"Date range\"\n  );\n  if (!select) return false;\n  Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, \"value\").set.call(select, \"custom\");\n  select.dispatchEvent(new Event(\"change\", { bubbles: true }));\n  return true;\n})()"), true, "Change report period");
+  assert.equal(
+    await evaluate(
+      '(() => {\n  const names = Array.from(document.querySelectorAll("select")).map((select) =>\n    document.querySelector(\'label[for="\' + select.id + \'"]\')?.textContent?.trim() || ""\n  );\n  return ["Date range", "Cause", "Program"].every((name) => names.includes(name));\n})()',
+    ),
+    true,
+    "Report filter controls",
+  );
+  assert.equal(
+    await evaluate(
+      '(() => {\n  const select = Array.from(document.querySelectorAll("select")).find((item) =>\n    document.querySelector(\'label[for="\' + item.id + \'"]\')?.textContent?.trim() === "Date range"\n  );\n  if (!select) return false;\n  Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(select, "custom");\n  select.dispatchEvent(new Event("change", { bubbles: true }));\n  return true;\n})()',
+    ),
+    true,
+    "Change report period",
+  );
   await until(
-    () => evaluate('Boolean(document.querySelector(\'input[aria-label="Report start date"]\'))'),
+    () => evaluate("Boolean(document.querySelector('input[aria-label=\"Report start date\"]'))"),
     "custom report start date",
   );
-  assert.equal(await evaluate("(() => {\n  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, \"value\").set;\n  for (const [label, value] of [[\"Report start date\", \"2030-01-01\"], [\"Report end date\", \"2030-01-31\"]]) {\n    const input = document.querySelector('input[aria-label=\"' + label + '\"]');\n    if (!input) return false;\n    setter.call(input, value);\n    input.dispatchEvent(new Event(\"input\", { bubbles: true }));\n    input.dispatchEvent(new Event(\"change\", { bubbles: true }));\n  }\n  return true;\n})()"), true, "Set future dates");
+  assert.equal(
+    await evaluate(
+      '(() => {\n  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;\n  for (const [label, value] of [["Report start date", "2030-01-01"], ["Report end date", "2030-01-31"]]) {\n    const input = document.querySelector(\'input[aria-label="\' + label + \'"]\');\n    if (!input) return false;\n    setter.call(input, value);\n    input.dispatchEvent(new Event("input", { bubbles: true }));\n    input.dispatchEvent(new Event("change", { bubbles: true }));\n  }\n  return true;\n})()',
+    ),
+    true,
+    "Set future dates",
+  );
   await until(
-    () => evaluate('Array.from(document.querySelectorAll("p")).some((node) => /0 source rows/.test(node.textContent || ""))'),
+    () =>
+      evaluate(
+        'Array.from(document.querySelectorAll("p")).some((node) => /0 source rows/.test(node.textContent || ""))',
+      ),
     "future-only report must contain zero source rows",
   );
   console.log("Stage 4: live report filters and future period passed.");
