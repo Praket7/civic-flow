@@ -2252,7 +2252,14 @@ mod tests {
                 .map(|i| candidate(&format!("benchmark-v-{i:03}"), &[], &["sat:morning"]))
                 .collect();
             let slots: Vec<Slot> = (0..slot_count)
-                .map(|i| slot(&format!("benchmark-slot-{i:03}"), "General", None, "2026-10-17T09:00:00-04:00"))
+                .map(|i| {
+                    slot(
+                        &format!("benchmark-slot-{i:03}"),
+                        "General",
+                        None,
+                        "2026-10-17T09:00:00-04:00",
+                    )
+                })
                 .collect();
             let mut timings_ms: Vec<f64> = Vec::new();
             let baseline = plan(&candidates, &slots, &policy(), &options());
@@ -2261,7 +2268,10 @@ mod tests {
                 let begin = Instant::now();
                 let again = plan(&candidates, &slots, &policy(), &options());
                 timings_ms.push(begin.elapsed().as_secs_f64() * 1000.0);
-                assert_eq!(again.assignments, baseline.assignments, "Optimizer changed its answer");
+                assert_eq!(
+                    again.assignments, baseline.assignments,
+                    "Optimizer changed its answer"
+                );
             }
             timings_ms.sort_by(|a, b| a.total_cmp(b));
             println!(
@@ -2270,5 +2280,4 @@ mod tests {
             );
         }
     }
-
 }
