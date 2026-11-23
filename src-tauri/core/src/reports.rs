@@ -291,29 +291,34 @@ fn participation(
     ))
 }
 
-fn coverage(conn: &Connection, request: &ReportRequest) -> Result<ReportTable> {
+fn coverage(conn: &Connection, request: &ReportRequest, start: &str, end: &str) -> Result<ReportTable> {
     let now = now(conn)?.to_rfc3339();
     let cause = request.cause.clone().unwrap_or_default();
+    let program = request.program_id.as_deref().unwrap_or("");
+    let upcoming = if request.date_start.is_none() && request.date_end.is_none() { 1 } else { 0 };
     let mut statement = conn.prepare(
         "SELECT substr(s.starts_at, 1, 10), o.title, r.name, r.required, r.filled,
                 MAX(r.required - r.filled, 0), s.status
          FROM shift_roles r
          JOIN shifts s ON s.id = r.shift_id
          JOIN opportunities o ON o.id = s.opportunity_id
-         WHERE s.starts_at >= ?1 AND (?2 = '' OR o.cause = ?2)
-           AND (?3 IS NULL OR o.organization_id = ?3)
+         WHERE s.status <> 'canceled'
+           AND ((?4 = 1 AND s.starts_at >= ?1)
+             OR (?4 = 0 AND substr(s.starts_at, 1, 10) >= ?2 AND substr(s.starts_at, 1, 10) <= ?3))
+           AND (?5 = '' OR o.cause = ?5) AND (?6 = '' OR o.id = ?6)
+           AND (?7 IS NULL OR o.organization_id = ?7)
          ORDER BY s.starts_at, o.title, r.name",
     )?;
-    let mut rows = statement.query(params![now, cause, crate::scope::current(conn)?])?;
+    let mut rows = statement.query(params![now, start, end, upcoming, cause, program, crate::scope::current(conn)?])?;
     let mut output = Vec::new();
     let mut required_total = 0_i64;
     let mut filled_total = 0_i64;
     while let Some(row) = rows.next()? {
-        let required: i64 = row.get(3)?;
-        let filled: i64 = row.get(4)?;
+        let required: i64 = row.get::<_, i64>(3)?.max(0);
+        let filled: i64 = row.get::<_, i64>(4)?.max(0).min(required);
         required_total += required;
         filled_total += filled;
-        let gap: i64 = row.get(5)?;
+        let gap = required - filled;
         let status: String = row.get(6)?;
         output.push(vec![
             row.get::<_, String>(0)?,
@@ -325,10 +330,8 @@ fn coverage(conn: &Connection, request: &ReportRequest) -> Result<ReportTable> {
             status,
         ]);
     }
-    let percent = if required_total == 0 {
-        100
-    } else {
-        (filled_total as f64 / required_total as f64 * 100.0).round() as i64
+    let percent = if required_total == 0 { "N/A".to_string() } else {
+        format!("{}%", (filled_total as f64 / required_total as f64 * 100.0).round() as i64)
     };
     Ok((
         vec![
@@ -351,8 +354,12 @@ fn coverage(conn: &Connection, request: &ReportRequest) -> Result<ReportTable> {
                 value: filled_total.to_string(),
             },
             ReportSummaryItem {
+                label: "Open slots".into(),
+                value: (required_total - filled_total).to_string(),
+            },
+            ReportSummaryItem {
                 label: "Role coverage".into(),
-                value: format!("{percent}%"),
+                value: percent,
             },
         ],
     ))
@@ -365,6 +372,7 @@ fn attendance(
     end: &str,
 ) -> Result<ReportTable> {
     let cause = request.cause.clone().unwrap_or_default();
+    let program = request.program_id.as_deref().unwrap_or("");
     let mut statement = conn.prepare(
         "SELECT substr(s.starts_at, 1, 10), o.title, v.name, a.role, a.status,
                 COALESCE(a.checked_in_at, ''), COALESCE(a.checked_out_at, '')
@@ -374,10 +382,11 @@ fn attendance(
          JOIN volunteers v ON v.id = a.volunteer_id
          WHERE substr(s.starts_at, 1, 10) >= ?1 AND substr(s.starts_at, 1, 10) <= ?2
            AND (?3 = '' OR o.cause = ?3)
-           AND (?4 IS NULL OR o.organization_id = ?4)
+           AND (?4 = '' OR o.id = ?4)
+           AND (?5 IS NULL OR o.organization_id = ?5)
          ORDER BY s.starts_at DESC, v.name",
     )?;
-    let mut rows = statement.query(params![start, end, cause, crate::scope::current(conn)?])?;
+    let mut rows = statement.query(params![start, end, cause, program, crate::scope::current(conn)?])?;
     let mut output = Vec::new();
     let mut checked_in = 0_i64;
     let mut completed = 0_i64;
@@ -386,7 +395,7 @@ fn attendance(
         let status: String = row.get(4)?;
         match status.as_str() {
             "checked_in" => checked_in += 1,
-            "completed" => completed += 1,
+            "completed" => { checked_in += 1; completed += 1; },
             "no_show" => no_show += 1,
             _ => {}
         }
@@ -527,16 +536,20 @@ fn skills(conn: &Connection) -> Result<ReportTable> {
     ))
 }
 
-fn impact(conn: &Connection) -> Result<ReportTable> {
+fn impact(conn: &Connection, request: &ReportRequest, start: &str, end: &str) -> Result<ReportTable> {
+    let cause = request.cause.as_deref().unwrap_or("");
+    let program = request.program_id.as_deref().unwrap_or("");
     let mut statement = conn.prepare(
         "SELECT o.title, d.name, d.unit, r.value, substr(r.recorded_at, 1, 10)
          FROM impact_results r
          JOIN impact_metric_definitions d ON d.id = r.definition_id
          JOIN opportunities o ON o.id = d.opportunity_id
-         WHERE (?1 IS NULL OR o.organization_id = ?1)
+         WHERE substr(r.recorded_at, 1, 10) >= ?1 AND substr(r.recorded_at, 1, 10) <= ?2
+           AND (?3 = '' OR o.cause = ?3) AND (?4 = '' OR o.id = ?4)
+           AND (?5 IS NULL OR o.organization_id = ?5)
          ORDER BY o.title, d.name, r.recorded_at",
     )?;
-    let mut rows = statement.query(params![crate::scope::current(conn)?])?;
+    let mut rows = statement.query(params![start, end, cause, program, crate::scope::current(conn)?])?;
     let mut output = Vec::new();
     while let Some(row) = rows.next()? {
         let value: f64 = row.get(3)?;
@@ -582,11 +595,11 @@ pub fn generate(conn: &Connection, request: &ReportRequest) -> Result<ReportDocu
         }
     };
     let (headers, rows, summary) = match template.as_str() {
-        "coverage" => coverage(conn, request)?,
+        "coverage" => coverage(conn, request, &start, &end)?,
         "attendance" => attendance(conn, request, &start, &end)?,
         "retention" => retention_rows(conn)?,
         "skills" | "credentials" => skills(conn)?,
-        "impact" => impact(conn)?,
+        "impact" => impact(conn, request, &start, &end)?,
         _ => participation(conn, request, &start, &end)?,
     };
     Ok(ReportDocument {
