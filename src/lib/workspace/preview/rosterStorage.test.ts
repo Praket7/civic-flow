@@ -41,6 +41,21 @@ describe("preview imported roster is isolated by organization", () => {
     org = "A";
     expect(repo.readImportedRoster()).toEqual([imported]);
   });
+  it("skips structurally corrupt rows but keeps valid imported people", () => {
+    const key = "A:civicflow.imported-volunteers.v1";
+    localStorage.setItem(
+      key,
+      JSON.stringify([
+        null,
+        12,
+        {},
+        { id: "bad", name: "Broken", email: "bad@example.org", skills: "not-an-array" },
+        imported,
+      ]),
+    );
+    expect(repo.readImportedRoster()).toEqual([imported]);
+    expect(repo.workspaceRoster().map((person) => person.id)).toEqual(["seed-01", "import-01"]);
+  });
   it("handles corrupt local storage without crashing", () => {
     localStorage.setItem("A:civicflow.imported-volunteers.v1", "{");
     expect(repo.readImportedRoster()).toEqual([]);

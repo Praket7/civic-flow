@@ -7,12 +7,28 @@ export function createPreviewRosterStorage(
 ) {
   const IMPORTED_VOLUNTEERS_KEY = "civicflow.imported-volunteers.v1";
 
+  /** Reject invalid persisted rows without discarding valid legacy imports. */
+  function isRosterRecord(value: unknown): value is RosterVolunteer {
+    if (typeof value !== "object" || value === null) return false;
+    const row = value as Record<string, unknown>;
+    return (
+      typeof row.id === "string" &&
+      row.id.trim().length > 0 &&
+      typeof row.name === "string" &&
+      row.name.trim().length > 0 &&
+      typeof row.email === "string" &&
+      [row.skills, row.availability, row.causes].every(
+        (items) => Array.isArray(items) && items.every((item) => typeof item === "string"),
+      )
+    );
+  }
+
   /** The heads the importer reads, mirroring the desktop column list. */
   function readImportedRoster(): RosterVolunteer[] {
     try {
       const raw = localStorage.getItem(scoped(IMPORTED_VOLUNTEERS_KEY));
       const parsed: unknown = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? (parsed as RosterVolunteer[]) : [];
+      return Array.isArray(parsed) ? parsed.filter(isRosterRecord) : [];
     } catch {
       return [];
     }
@@ -20,7 +36,7 @@ export function createPreviewRosterStorage(
 
   function writeImportedRoster(records: RosterVolunteer[]): void {
     try {
-      localStorage.setItem(scoped(IMPORTED_VOLUNTEERS_KEY), JSON.stringify(records));
+      localStorage.setItem(scoped(IMPORTED_VOLUNTEERS_KEY), JSON.stringify(records.filter(isRosterRecord)));
     } catch {
       // Storage can be unavailable in hardened webviews; the session still works.
     }
@@ -53,12 +69,6 @@ export function createPreviewRosterStorage(
       return true;
     });
   }
-
-  /**
-   * The same check the desktop importer runs, so the browser preview refuses the
-   * same files rather than accepting what SQLite would reject.
-   */
-  /** Keep the browser preview's existing scoped roster as the duplicate-email oracle. */
 
   return { readImportedRoster, writeImportedRoster, workspaceRoster };
 }

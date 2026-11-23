@@ -45,7 +45,8 @@ already merged main commit f5658651.
 - Invalid fractional limits, malformed saved policy, deceptive numeric input,
   cross-organization persistence and corrupt storage receive adversarial tests.
 - Closeout review adds stored-policy enum/version/boolean validation at read and write,
-  and detects edited or incomplete browser-demo snapshots before permitting restore.
+  rejects structurally corrupt imported-roster records, and detects edited or incomplete
+  browser-demo snapshots before permitting restore.
   The preview checksum detects accidental damage, not malicious replacement or cryptographic authenticity.
 - Shared hosted error mapping retains provider HTTP statuses and SQLSTATE,
   classifies failures consistently and filters internal SQL/path error messages.
