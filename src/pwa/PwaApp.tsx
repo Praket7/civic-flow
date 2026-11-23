@@ -1,5 +1,13 @@
 import { useEffect } from "react";
-import { Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
+import {
+  Navigate,
+  NavLink,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 import {
   Bell,
   CalendarDays,
@@ -88,7 +96,9 @@ export function PwaApp() {
         <div className={styles.authPanel}>
           <ShieldAlert aria-hidden size={30} />
           <h1 className={styles.errorTitle}>
-            {pendingMembership ? "Your account needs a workspace invitation" : "This workspace could not open"}
+            {pendingMembership
+              ? "Your account needs a workspace invitation"
+              : "This workspace could not open"}
           </h1>
           <p className={styles.body}>{error}</p>
           <div className={styles.rowActions}>

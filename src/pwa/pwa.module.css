@@ -1753,7 +1753,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(5, 19, 30, .16), rgba(5, 19, 30, .72));
+  background: linear-gradient(180deg, rgba(5, 19, 30, 0.16), rgba(5, 19, 30, 0.72));
 }
 
 .welcomePhotoCopy {
@@ -1770,7 +1770,10 @@
   margin: 12px 0;
 }
 
-.welcomePhotoCopy p { max-width: 46ch; line-height: 1.6; }
+.welcomePhotoCopy p {
+  max-width: 46ch;
+  line-height: 1.6;
+}
 
 .welcomePanel {
   display: flex;
@@ -1786,14 +1789,14 @@
 .welcomeEyebrow {
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: .12em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-secondary);
 }
 
 .welcomeTitle {
   font: 620 clamp(42px, 5vw, 74px)/1.07 var(--font-serif);
-  letter-spacing: -.04em;
+  letter-spacing: -0.04em;
   margin: 20px 0;
 }
 
@@ -1834,7 +1837,9 @@
   border-color: var(--action-primary);
 }
 
-.welcomeSecondary { color: var(--text-primary); }
+.welcomeSecondary {
+  color: var(--text-primary);
+}
 
 .welcomePrimary:focus-visible,
 .welcomeSecondary:focus-visible,
@@ -1861,7 +1866,10 @@
   margin: 14px 0 0;
 }
 
-.authSwitch a { color: var(--text-primary); font-weight: 700; }
+.authSwitch a {
+  color: var(--text-primary);
+  font-weight: 700;
+}
 
 .signupNotice {
   background: var(--surface-muted);
@@ -1874,12 +1882,31 @@
 }
 
 @media (max-width: 800px) {
-  .welcomePage { grid-template-columns: 1fr; }
-  .welcomePhoto { min-height: 230px; }
-  .welcomePhotoCopy { bottom: 24px; left: 24px; right: 24px; }
-  .welcomePhotoCopy h2 { font-size: clamp(27px, 6vw, 42px); max-width: none; }
-  .welcomePhotoCopy p { display: none; }
-  .welcomePanel { padding: 38px 24px 54px; }
-  .welcomeTitle { font-size: clamp(40px, 8vw, 62px); }
-  .welcomeActions { max-width: none; }
+  .welcomePage {
+    grid-template-columns: 1fr;
+  }
+  .welcomePhoto {
+    min-height: 230px;
+  }
+  .welcomePhotoCopy {
+    bottom: 24px;
+    left: 24px;
+    right: 24px;
+  }
+  .welcomePhotoCopy h2 {
+    font-size: clamp(27px, 6vw, 42px);
+    max-width: none;
+  }
+  .welcomePhotoCopy p {
+    display: none;
+  }
+  .welcomePanel {
+    padding: 38px 24px 54px;
+  }
+  .welcomeTitle {
+    font-size: clamp(40px, 8vw, 62px);
+  }
+  .welcomeActions {
+    max-width: none;
+  }
 }
