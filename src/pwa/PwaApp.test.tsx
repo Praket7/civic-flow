@@ -39,6 +39,30 @@ describe("hosted welcome and account entry", () => {
     expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
   });
 
+  it("promotes the no-account interactive sample to the primary welcome action", () => {
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <PwaApp />
+      </MemoryRouter>,
+    );
+    const action = screen.getByRole("link", { name: /explore interactive demo/i });
+    expect(action).toHaveAttribute("href", "/judge/demo/#/welcome");
+    expect(action.className).toMatch(/welcomePrimary/);
+  });
+
+  it("keeps a sample shortcut while an external authentication check is loading", () => {
+    vi.mocked(useCloud).mockReturnValue({
+      phase: "loading",
+    } as ReturnType<typeof useCloud>);
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <PwaApp />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: /interactive demo without signing in/i }))
+      .toHaveAttribute("href", "/judge/demo/#/welcome");
+  });
+
   it("opens a create-account form without requiring an existing login", async () => {
     vi.mocked(signUpWithPassword).mockResolvedValue({ needsVerification: true });
     render(

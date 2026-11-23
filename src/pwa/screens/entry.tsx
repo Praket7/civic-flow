@@ -32,15 +32,15 @@ export function WelcomeScreen() {
           account, return to your organization, or explore the sample without signing in.
         </p>
         <div className={styles.welcomeActions}>
-          <Link to="/create-account" className={styles.welcomePrimary}>
-            Create an account <ArrowRight size={17} aria-hidden />
+          <a href="/judge/demo/#/welcome" className={styles.welcomePrimary}>
+            Explore interactive demo <ArrowRight size={17} aria-hidden />
+          </a>
+          <Link to="/create-account" className={styles.welcomeSecondary}>
+            Create an account
           </Link>
           <Link to="/sign-in" className={styles.welcomeSecondary}>
             Sign in
           </Link>
-          <a href="/judge/demo/#/welcome" className={styles.welcomeSecondary}>
-            Explore the demo — no account required
-          </a>
         </div>
         <p className={styles.authSwitch}>
           Real shared records require an invitation from an organization. The interactive demo uses

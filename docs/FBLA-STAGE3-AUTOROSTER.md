@@ -22,6 +22,8 @@ The browser judging workspace has its own demo matching implementation and golde
 6. Why-not alternatives are ordered deterministically. Eligible contenders appear first, but blocked contenders remain available to explain their actual hard-rule refusal.
 7. Native solver tests cover 64 combinatorial skill scarcity cases against the existing independent brute-force oracle, plus a specialist-scarcity case where first-eligible greedy fills one of two roles but the optimizer can fill both.
 8. A manual reproducible 1,000-volunteer, 250-seat scale fixture complements the pre-existing 24/12, 120/35 and 300/80 benchmarks. CI never asserts an unreliable wall-clock threshold.
+9. Proposal integrity now independently checks per-seat evaluation, role capacity, invalid time intervals, and cross-shift overlapping assignments, in addition to the original checks. An internally self-consistent proposal can still violate constraints when considered as a whole.
+10. The public `civic-flow-demo.vercel.app` welcome emphasizes no-account sample entry. The browser audit follows the actual welcome CTA into the separate sample and checks for a credential-free route. If cloud authentication stalls, the public loading screen keeps a direct sample link available.
 
 ## Limits and accuracy
 
@@ -58,3 +60,20 @@ Record CPU, Rust version, build profile, volunteer and seat counts, greedy/optim
 - [ ] Demo production domain runs the intended commit, with fresh-browser welcome and no-account example access.
 
 Separate release gates remain for real multi-organization staging accounts, cloud migration history, encrypted restore, signed installers, and clean-device testing. A green synthetic CI suite is not proof of these.
+
+## Research-informed final review
+
+Whole-plan feasibility should be evaluated independently of per-candidate eligibility:
+an individually eligible volunteer can be proposed for simultaneous shifts, and a
+set of recommendations may claim more seats than the current role capacity.
+For context, [Leigh et al., 2025](https://arxiv.org/abs/2508.15118) study
+faithful explanations and human revision in workforce optimization, while
+[Kaur, Smith and Pazour, 2022](https://scispace.com/papers/optimization-of-volunteer-task-assignments-to-improve-1u1q0ojh)
+model volunteer-specific task constraints and preferences; the
+[volunteer crowdsourcing study](https://www.alphaxiv.org/abs/2408.11510)
+motivates transparent baselines. None of these studies establishes that
+CivicFlow increases retention or guarantees demographic fairness.
+
+The Stage 3 closeout also checks the exact public demo domain rather than
+relying on a localhost-only judge route, with a no-account welcome-to-demo
+click-through and all six GitHub CI jobs as release gates.
