@@ -47,7 +47,13 @@ describe("pure preview reporting", () => {
     expect(result.headers).toContain("Gap");
     expect(result.rows).toHaveLength(2);
     expect(result.rows[0]).toEqual([
-      "2026-11-23", "Pantry", "Distribution", "3", "1", "2", "scheduled",
+      "2026-11-23",
+      "Pantry",
+      "Distribution",
+      "3",
+      "1",
+      "2",
+      "scheduled",
     ]);
     expect(result.summary).toContainEqual({ label: "Role coverage", value: "60%" });
   });
