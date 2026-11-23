@@ -205,6 +205,9 @@ jobs:
       - name: Core tests
         working-directory: src-tauri/core
         run: cargo test
+      - name: AutoRoster medium-scale deterministic benchmark
+        working-directory: src-tauri/core
+        run: cargo test --test roster_performance medium_roster_performance -- --ignored --nocapture
       - name: Build the embedded frontend
         run: |
           pnpm install --frozen-lockfile
