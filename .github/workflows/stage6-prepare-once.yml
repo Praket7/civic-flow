@@ -1,4 +1,4 @@
-name: Stage 6 Prepare Once (public role flow)
+name: Stage 6 Prepare Once (new opportunity journey)
 on:
   push:
     branches: [stage6-connected-journeys]
