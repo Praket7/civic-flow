@@ -1,8 +1,6 @@
 name: Stage 4 Reporting Acceptance
 
 on:
-  push:
-    branches: [stage4-reporting-accuracy-impact]
   pull_request:
     branches: [main]
     paths:
@@ -12,6 +10,10 @@ on:
       - "src-tauri/core/src/reports.rs"
       - "src-tauri/core/tests/reports.rs"
       - "scripts/audit-judge-flow.mjs"
+
+concurrency:
+  group: stage4-reporting-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
