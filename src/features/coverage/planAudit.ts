@@ -1,5 +1,5 @@
-import type { RosterPlan } from "../../types/domain";
-import type { Candidate } from "./autoRosterModel";
+import type { RosterEvaluation, RosterPlan } from "../../types/domain";
+import type { Candidate, ShiftPlan } from "./autoRosterModel";
 
 /**
  * Independent, read-only audit of the *proposal*. It never certifies a roster
@@ -22,12 +22,23 @@ export interface PlanAudit {
   unfilledReasons: { reason: string; count: number }[];
 }
 
-export function auditRosterPlan(plan: RosterPlan, candidates: Candidate[]): PlanAudit {
+export function auditRosterPlan(
+  plan: RosterPlan,
+  candidates: Candidate[],
+  context: { evaluation?: RosterEvaluation | null; shifts?: ShiftPlan[] } = {},
+): PlanAudit {
   const issues: string[] = [];
   const slotIds = new Set<string>();
   const volunteerShifts = new Set<string>();
   const plannedByVolunteer = new Map<string, number>();
   const knownCandidates = new Map(candidates.map((row) => [row.volunteer.id, row]));
+  const expectedShifts = new Map((context.shifts ?? []).map((entry) => [entry.row.shift.id, entry]));
+  const proposedByRole = new Map<string, number>();
+  const scheduledByVolunteer = new Map<string, { start: number; end: number }[]>();
+  const evaluatedCandidates = new Map(
+    (context.evaluation?.candidates ?? []).map((entry) => [entry.candidateId, entry]),
+  );
+  const roleKey = (shiftId: string, role: string) => JSON.stringify([shiftId, role]);
   let provisionalAvailability = 0;
   let score = 0;
 
@@ -47,6 +58,47 @@ export function auditRosterPlan(plan: RosterPlan, candidates: Candidate[]): Plan
       issues.push("An assignment has inconsistent eligibility or explanation evidence.");
     }
 
+    // Cross-check the proposed seat against a second, independent evaluation.
+    if (context.evaluation) {
+      const slot = evaluatedCandidates
+        .get(assignment.candidateId)
+        ?.slots.find((entry) => entry.slotId === explanation?.slotId);
+      if (
+        !slot ||
+        !slot.eligible ||
+        !slot.selected ||
+        slot.shiftId !== assignment.shiftId ||
+        slot.role !== assignment.role ||
+        slot.score !== assignment.score
+      ) {
+        issues.push("A proposed seat does not match its independently evaluated candidate.");
+      }
+    }
+    if (!Number.isFinite(assignment.score)) {
+      issues.push("A match score is not a finite number.");
+    }
+    if (context.shifts) {
+      const shift = expectedShifts.get(assignment.shiftId);
+      if (!shift?.gaps.some((gap) => gap.name === assignment.role)) {
+        issues.push("An assignment targets a shift or role without an open seat.");
+      }
+      const key = roleKey(assignment.shiftId, assignment.role);
+      proposedByRole.set(key, (proposedByRole.get(key) ?? 0) + 1);
+      if (shift) {
+        const start = Date.parse(shift.row.shift.startsAt);
+        const end = Date.parse(shift.row.shift.endsAt);
+        if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+          issues.push("A proposed shift has an invalid time interval.");
+        } else {
+          const existing = scheduledByVolunteer.get(assignment.candidateId) ?? [];
+          if (existing.some((entry) => start < entry.end && entry.start < end)) {
+            issues.push("A volunteer has overlapping assignments in the proposed plan.");
+          }
+          existing.push({ start, end });
+          scheduledByVolunteer.set(assignment.candidateId, existing);
+        }
+      }
+    }
     const slotId = explanation?.slotId;
     if (!slotId || slotIds.has(slotId)) {
       issues.push("A seat is missing its unique identifier or appears more than once.");
@@ -71,6 +123,31 @@ export function auditRosterPlan(plan: RosterPlan, candidates: Candidate[]): Plan
 
   if (plan.slotsConsidered !== plan.assignments.length + plan.unfilled.length) {
     issues.push("Proposed assignments and unfilled seats do not reconcile with the plan scope.");
+  }
+  if (context.shifts) {
+    const unfilledByRole = new Map<string, number>();
+    for (const row of plan.unfilled) {
+      const key = roleKey(row.shiftId, row.role);
+      unfilledByRole.set(key, (unfilledByRole.get(key) ?? 0) + 1);
+      if (!expectedShifts.get(row.shiftId)?.gaps.some((gap) => gap.name === row.role)) {
+        issues.push("An unfilled seat references a role outside the current planning scope.");
+      }
+    }
+    const expectedSeats = [...expectedShifts.values()].reduce(
+      (total, shift) => total + shift.gaps.reduce((sum, gap) => sum + gap.missing, 0),
+      0,
+    );
+    if (expectedSeats !== plan.slotsConsidered) {
+      issues.push("The plan scope does not match the current open role seats.");
+    }
+    for (const shift of expectedShifts.values()) {
+      for (const gap of shift.gaps) {
+        const key = roleKey(shift.row.shift.id, gap.name);
+        if ((proposedByRole.get(key) ?? 0) + (unfilledByRole.get(key) ?? 0) !== gap.missing) {
+          issues.push("Proposed and unfilled role seats do not match required capacity.");
+        }
+      }
+    }
   }
   if (score !== plan.totalScore) {
     issues.push("Individual match scores do not reconcile with the recorded plan total.");

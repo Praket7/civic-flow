@@ -124,6 +124,13 @@ export function PlanPane({
         </p>
       ) : null}
 
+      {planAudit && !planAudit.safeToApply ? (
+        <p className={styles.errorNote} role="alert">
+          This proposal failed independent verification. Do not apply it. Rebuild the plan after
+          reviewing the reported role, availability, or schedule discrepancies.
+        </p>
+      ) : null}
+
       {stale ? (
         <div className={styles.stalePanel}>
           <Button
