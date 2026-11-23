@@ -73,7 +73,6 @@ Record CPU, Rust version, build profile, volunteer and seat counts, greedy/optim
 
 Verified against merged PR #16 (CI run [45185465715](https://github.com/Praket7/civic-flow/actions/runs/45185465715), six successful jobs) and the production Vercel alias. On November 23, 2026, the canonical URL resolved to the Stage 3 merge deployment `7750182` (READY). The compiled Chromium check exercises fresh-browser welcome, both no-account entry paths, and the sample coordinator route. The UI's preview and why-not controls are read-only until the explicit Apply operation, which performs authoritative transactional checks. This is automated source and built-browser acceptance, not independent real-account usability or clean-device sign-off.
 
-
 - [x] Six GitHub CI jobs green on the final Stage 3 PR head.
 - [x] Native solver oracle and specialist-scarcity tests pass, alongside existing constraints and forced-comparison tests.
 - [x] Frontend proposal reconciliation, invalid-plan blocking, and alternative ranking tests pass.
