@@ -159,7 +159,17 @@ try {
   // protects the judging path from inadvertently sending visitors to sign in.
   const demoAction = await evaluate(`(() => {
     const link = document.querySelector('a[href="/judge/demo/#/welcome"]');
-    return { primary: Boolean(link?.className?.includes("welcomePrimary")) };
+    const signup = document.querySelector('a[href="#/create-account"]');
+    const signin = document.querySelector('a[href="#/sign-in"]');
+    if (!link || !signup || !signin) return { primary: false };
+    const ordered = [link, signup, signin].every((item) => item.parentElement === link.parentElement)
+      && link.parentElement.firstElementChild === link;
+    const background = getComputedStyle(link).backgroundColor;
+    const primary = ordered && link.getBoundingClientRect().height >= 44
+      && background !== getComputedStyle(signup).backgroundColor
+      && background !== getComputedStyle(signin).backgroundColor
+      && background !== "rgba(0, 0, 0, 0)";
+    return { primary, ordered, background };
   })()`);
   assert.equal(demoAction.primary, true, "the no-account demo must be the primary welcome action");
   await evaluate("document.querySelector('a[href=\\\"/judge/demo/#/welcome\\\"]')?.click()");
