@@ -430,10 +430,11 @@ export function getHourRows(session: SessionOverrides = {}, workspace: DemoWorks
       opportunity,
       date: entry.date,
       requestedMinutes: entry.minutes,
-      approvedMinutes: decision
-        ? decision.approvedMinutes
-        : entry.status === "verified"
-          ? entry.minutes
+      // A rejected or pending record must never contribute approved minutes,
+      // even when an older decision retains a non-null amount.
+      approvedMinutes:
+        (decision?.status ?? entry.status) === "verified"
+          ? (decision?.approvedMinutes ?? entry.minutes)
           : null,
       status: decision?.status ?? entry.status,
       verificationId: entry.verificationId,
@@ -489,13 +490,13 @@ export function getHoursTrend(
   workspace: DemoWorkspace,
 ): { label: string; hours: number }[] {
   const end = parseISO(workspace.now);
-  const rows = getHourRows(session, workspace).filter((row) => row.status !== "rejected");
+  const rows = getHourRows(session, workspace).filter((row) => row.status === "verified");
   return Array.from({ length: 12 }, (_, index) => {
     const month = new Date(end.getFullYear(), end.getMonth() - (11 - index), 1);
     const key = format(month, "yyyy-MM");
     const minutes = rows
       .filter((row) => row.date.startsWith(key))
-      .reduce((sum, row) => sum + (row.approvedMinutes ?? row.requestedMinutes), 0);
+      .reduce((sum, row) => sum + (row.approvedMinutes ?? 0), 0);
     return { label: format(month, "MMM"), hours: Math.round(minutes / 60) };
   });
 }
@@ -506,7 +507,8 @@ export function getCauseHours(
 ): { cause: Cause; label: string; hours: number; percent: number }[] {
   const totals = new Map<Cause, number>();
   for (const row of getHourRows(session, workspace)) {
-    const hours = (row.approvedMinutes ?? row.requestedMinutes) / 60;
+    if (row.status !== "verified") continue;
+    const hours = (row.approvedMinutes ?? 0) / 60;
     totals.set(row.opportunity.cause, (totals.get(row.opportunity.cause) ?? 0) + hours);
   }
   const grand = [...totals.values()].reduce((sum, value) => sum + value, 0) || 1;
