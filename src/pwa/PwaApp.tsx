@@ -69,6 +69,11 @@ export function PwaApp() {
         </span>
         <p>CivicFlow Volunteer</p>
         <span className={styles.loadingBar} aria-hidden />
+        {!isEmbedded() ? (
+          <a className={styles.splashDemoLink} href="/judge/demo/#/welcome">
+            Explore the demo without signing in
+          </a>
+        ) : null}
       </main>
     );
   }

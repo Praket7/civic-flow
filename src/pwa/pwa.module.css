@@ -1453,6 +1453,45 @@
   text-transform: uppercase;
 }
 
+/* Always leave an escape hatch when Supabase auth is slow or unavailable. */
+.splashDemoLink,
+.authDemoLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  color: var(--action-primary);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  text-decoration: none;
+  letter-spacing: normal;
+  text-transform: none;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.splashDemoLink {
+  margin-top: 20px;
+}
+
+.authDemoLink {
+  margin: 10px 0 18px;
+}
+
+.splashDemoLink:hover,
+.authDemoLink:hover {
+  border-color: currentColor;
+}
+
+.splashDemoLink:focus-visible,
+.authDemoLink:focus-visible {
+  outline: 3px solid var(--action-primary);
+  outline-offset: 3px;
+}
+
 .loadingBar {
   width: 72px;
   height: 3px;

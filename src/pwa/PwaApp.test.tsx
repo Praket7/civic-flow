@@ -39,6 +39,21 @@ describe("hosted welcome and account entry", () => {
     expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
   });
 
+  it("keeps a direct no-account demo link available while cloud auth is loading", () => {
+    vi.mocked(useCloud).mockReturnValue({
+      phase: "loading",
+    } as unknown as ReturnType<typeof useCloud>);
+    render(
+      <MemoryRouter initialEntries={["/sign-in"]}>
+        <PwaApp />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByRole("link", { name: /explore the demo without signing in/i }),
+    ).toHaveAttribute("href", "/judge/demo/#/welcome");
+    expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
+  });
+
   it("opens a create-account form without requiring an existing login", async () => {
     vi.mocked(signUpWithPassword).mockResolvedValue({ needsVerification: true });
     render(
@@ -77,6 +92,10 @@ describe("hosted welcome and account entry", () => {
     expect(screen.getByRole("link", { name: /create an account/i })).toHaveAttribute(
       "href",
       "/create-account",
+    );
+    expect(screen.getByRole("link", { name: /explore the demo.*no account/i })).toHaveAttribute(
+      "href",
+      "/judge/demo/#/welcome",
     );
   });
 });

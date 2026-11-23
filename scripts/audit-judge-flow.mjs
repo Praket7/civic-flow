@@ -169,6 +169,26 @@ try {
     "sign in must link back to registration",
   );
 
+  // A mistaken sign-in deep link must never trap a judge behind credentials.
+  await open("/#/sign-in");
+  await heading("Your next shift is waiting.");
+  const demoEscape = await evaluate(`(() => {
+    const link = document.querySelector('a[href="/judge/demo/#/welcome"]');
+    if (!link) return false;
+    const rect = link.getBoundingClientRect();
+    return rect.height >= 40 && rect.top >= 0 && rect.bottom <= innerHeight;
+  })()`);
+  assert.equal(
+    demoEscape,
+    true,
+    "No-account demo link must be visible before scrolling on sign in",
+  );
+  await evaluate("document.querySelector('a[href=\"/judge/demo/#/welcome\"]')?.click()");
+  await until(
+    () => evaluate('location.pathname === "/judge/demo/" && location.hash === "#/welcome"'),
+    "sign-in escape must open the sample welcome, not another password form",
+  );
+  await heading("Service, organized.");
   await open("/judge/");
   await heading("More time for service");
   await open("/judge/demo/#/welcome");

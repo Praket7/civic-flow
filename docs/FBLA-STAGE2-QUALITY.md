@@ -1,7 +1,7 @@
 # CivicFlow — Stage 2 architecture and rubric evidence
 
 **Scope:** Stage 2 engineering quality; updated November 23, 2026.
-**Base:** main at f5658651; target is the Stage 2 engineering closeout branch, pending PR review and CI.
+**Status:** Stage 2 engineering complete. PR #13 merged at 312dbd7, with all six CI checks passing at the merge head. Independent real-environment release acceptance remains separate.
 **Release decision:** engineering acceptance is separate from real-user production and signed release acceptance.
 
 ## Why these changes matter

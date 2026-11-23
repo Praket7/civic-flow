@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
 import { useCloud } from "../../lib/sync/provider";
+import { isEmbedded } from "../../lib/cloud/bridge";
 import { formatShiftRange } from "../../lib/sync/views";
 import { markAllRead, markRead } from "../../lib/sync/notifications";
 import { messageOf } from "../../lib/errors";
@@ -47,6 +48,12 @@ export function SignInScreen() {
           title="Your next shift is waiting."
           body="Sign in with the email your coordinator invited. This app works offline once you're in."
         />
+        {!isEmbedded() ? (
+          <a className={styles.authDemoLink} href="/judge/demo/#/welcome">
+            Explore the demo — no account required
+            <ArrowRight size={16} aria-hidden />
+          </a>
+        ) : null}
         <form
           className={styles.form}
           onSubmit={(event) => {
@@ -91,9 +98,6 @@ export function SignInScreen() {
         </form>
         <p className={styles.authSwitch}>
           New to CivicFlow? <Link to="/create-account">Create an account</Link>
-        </p>
-        <p className={styles.authSwitch}>
-          Just exploring? <a href="/judge/demo/#/welcome">Open the sample without an account</a>
         </p>
         <p className={styles.finePrint}>
           Trouble signing in? Ask your coordinator to check your invitation. Passwords are managed

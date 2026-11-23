@@ -200,9 +200,18 @@ export function PlanPane({
                 </li>
                 {planAudit.workload ? (
                   <li>
-                    Projected weekly shifts: {planAudit.workload.minimum} to{" "}
-                    {planAudit.workload.maximum} across {planAudit.workload.candidates} candidates.
-                    This measures workload spread, not demographic fairness.
+                    Workload across {planAudit.workload.candidates} eligible candidates:{" "}
+                    {planAudit.workload.baselineMinimum}–{planAudit.workload.baselineMaximum} before
+                    the plan, {planAudit.workload.minimum}–{planAudit.workload.maximum} projected
+                    shifts per week. Average {planAudit.workload.meanBefore} →{" "}
+                    {planAudit.workload.meanAfter}; workload spread{" "}
+                    {planAudit.workload.spreadChange > 0
+                      ? "widens by " + planAudit.workload.spreadChange
+                      : planAudit.workload.spreadChange < 0
+                        ? "narrows by " + Math.abs(planAudit.workload.spreadChange)
+                        : "is unchanged"}
+                    . These are scheduling-workload measures, not demographic fairness or
+                    volunteers' future attendance predictions.
                   </li>
                 ) : null}
                 {planAudit.provisionalAvailability > 0 ? (

@@ -56,9 +56,57 @@ describe("AutoRoster Stage 3 independent proposal audit", () => {
       scoreAverage: 85,
       distinctPeople: 1,
       safeToApply: true,
-      workload: { minimum: 0, maximum: 3, spread: 3, candidates: 2 },
+      workload: {
+        baselineMinimum: 0,
+        baselineMaximum: 2,
+        baselineSpread: 2,
+        minimum: 0,
+        maximum: 3,
+        spread: 3,
+        spreadChange: 1,
+        meanBefore: 1,
+        meanAfter: 1.5,
+        candidates: 2,
+      },
       unfilledReasons: [{ reason: "Credential missing", count: 1 }],
     });
+  });
+
+  it("does not claim workload always improves when scarce skills concentrate assignments", () => {
+    const result = auditRosterPlan(plan([assignment("a", "seat-1", 90)]), [
+      candidate("a", 4),
+      candidate("b", 1),
+      candidate("c", 1),
+    ]);
+    expect(result.workload).toMatchObject({
+      baselineMinimum: 1,
+      baselineMaximum: 4,
+      minimum: 1,
+      maximum: 5,
+      spreadChange: 1,
+      meanBefore: 2,
+      meanAfter: 2.3,
+    });
+    expect(result.safeToApply).toBe(true);
+  });
+
+  it("blocks malformed workload values and duplicate candidate identifiers", () => {
+    const result = auditRosterPlan(plan([assignment("a", "seat-1", 60)]), [
+      candidate("a", -1),
+      candidate("a", 2),
+    ]);
+    expect(result.safeToApply).toBe(false);
+    expect(result.workload).toBeNull();
+    expect(result.issues.join(" ")).toMatch(/duplicate volunteer|invalid weekly workload/i);
+  });
+
+  it("rejects nonfinite scores and corrupted seat counts before a proposed plan can apply", () => {
+    const bad = plan([assignment("a", "seat-1", Number.POSITIVE_INFINITY)]);
+    bad.slotsConsidered = Number.NaN;
+    const result = auditRosterPlan(bad, [candidate("a")]);
+    expect(result.safeToApply).toBe(false);
+    expect(result.scoreAverage).toBeNull();
+    expect(result.issues.join(" ")).toMatch(/nonfinite|open-seat/i);
   });
 
   it("does not divide by zero when there are no open seats", () => {

@@ -1,7 +1,7 @@
 # Stage 3 — AutoRoster intelligence and verification
 
 **Repository:** Praket7/civic-flow  
-**Baseline:** main commit 312dbd7 (merged PR #13).  
+**Baseline:** main commit 312dbd7 (merged PR #13). PR #14 merged at 7518fed; all six CI jobs passed on merged main.
 **Scope:** explainable and deterministic staffing decisions, a trustworthy coordinator review, adversarial correctness evidence, and reproducible benchmarks. This stage does not change production Supabase schema or misrepresent the judging demo as a hosted multiuser coordinator.
 
 ## Algorithm and already-implemented capabilities
@@ -22,6 +22,21 @@ The browser judging workspace has its own demo matching implementation and golde
 6. Why-not alternatives are ordered deterministically. Eligible contenders appear first, but blocked contenders remain available to explain their actual hard-rule refusal.
 7. Native solver tests cover 64 combinatorial skill scarcity cases against the existing independent brute-force oracle, plus a specialist-scarcity case where first-eligible greedy fills one of two roles but the optimizer can fill both.
 8. A manual reproducible 1,000-volunteer, 250-seat scale fixture complements the pre-existing 24/12, 120/35 and 300/80 benchmarks. CI never asserts an unreliable wall-clock threshold.
+
+## Stage 3 follow-up: workload audit and reliable judging entry
+
+The read-only audit additionally rejects invalid numeric scores, fractional or negative
+candidate workloads, and duplicate candidate identifiers. Workload evidence now compares
+the _same represented candidate pool_ before and after assignment: minimum/maximum,
+spread and average shifts per week, explicitly noting if concentration worsens.
+These measures are not demographic fairness, predictions of retention, or evidence
+of better real-world outcomes. Native Rust remains the authoritative solver.
+
+On the public hosted PWA, judges can open the isolated, no-account sample from
+the first screen, the sign-in page or the provider-loading splash. The judging
+workspace remains at /judge/demo/#/welcome and the public site lives at
+https://civic-flow-demo.vercel.app. A compiled Chromium regression exercises the
+mistaken sign-in route and verifies it reaches the demo without credentials.
 
 ## Limits and accuracy
 
