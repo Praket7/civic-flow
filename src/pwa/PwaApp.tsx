@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Bell,
   CalendarDays,
@@ -11,6 +11,8 @@ import {
   UserRound,
 } from "lucide-react";
 import { useCloud } from "../lib/sync/provider";
+import { isEmbedded } from "../lib/cloud/bridge";
+import { CreateAccountScreen, WelcomeScreen } from "./screens/entry";
 import { CoordinatorApp } from "./coordinator";
 import {
   CheckInScreen,
@@ -63,20 +65,42 @@ export function PwaApp() {
     );
   }
 
-  if (phase === "signed-out") return <SignInScreen />;
+  // The hosted PWA previously showed a password form to first-time visitors.
+  // Give them a public welcome and real account-creation route first. The
+  // embedded desktop frame still receives its session from the parent shell.
+  if (phase === "signed-out") {
+    if (isEmbedded()) return <SignInScreen />;
+    return (
+      <Routes>
+        <Route path="/" element={<WelcomeScreen />} />
+        <Route path="/welcome" element={<WelcomeScreen />} />
+        <Route path="/sign-in" element={<SignInScreen />} />
+        <Route path="/create-account" element={<CreateAccountScreen />} />
+        <Route path="*" element={<Navigate to="/welcome" replace />} />
+      </Routes>
+    );
+  }
 
   if (phase === "error") {
+    const pendingMembership = error?.includes("invitation") ?? false;
     return (
       <main className={styles.authPage}>
         <div className={styles.authPanel}>
           <ShieldAlert aria-hidden size={30} />
-          <h1 className={styles.errorTitle}>This workspace could not open</h1>
+          <h1 className={styles.errorTitle}>
+            {pendingMembership ? "Your account needs a workspace invitation" : "This workspace could not open"}
+          </h1>
           <p className={styles.body}>{error}</p>
           <div className={styles.rowActions}>
             <Button variant="secondary" onClick={() => void signOut()}>
               Sign out
             </Button>
             <Button onClick={() => window.location.reload()}>Try again</Button>
+            {!isEmbedded() ? (
+              <a className={styles.authTextLink} href="/judge/demo/#/welcome">
+                Explore the sample workspace
+              </a>
+            ) : null}
           </div>
         </div>
       </main>

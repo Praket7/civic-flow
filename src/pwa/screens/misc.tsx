@@ -30,6 +30,9 @@ export function SignInScreen() {
   return (
     <main className={styles.authPage}>
       <div className={styles.authPanel}>
+        <Link to="/welcome" className={styles.authTextLink}>
+          <ArrowLeft aria-hidden size={15} /> Back to welcome
+        </Link>
         <div className={styles.brand}>
           <span className={styles.brandMark} aria-hidden>
             CF
@@ -86,6 +89,12 @@ export function SignInScreen() {
             Sign in <ArrowRight aria-hidden size={17} />
           </Button>
         </form>
+        <p className={styles.authSwitch}>
+          New to CivicFlow? <Link to="/create-account">Create an account</Link>
+        </p>
+        <p className={styles.authSwitch}>
+          Just exploring? <a href="/judge/demo/#/welcome">Open the sample without an account</a>
+        </p>
         <p className={styles.finePrint}>
           Trouble signing in? Ask your coordinator to check your invitation. Passwords are managed
           by your organization's account provider.

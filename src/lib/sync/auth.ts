@@ -101,6 +101,27 @@ export async function signInWithPassword(email: string, password: string): Promi
   return data.session;
 }
 
+/**
+ * Creates a hosted Supabase identity. Account creation does not grant
+ * organization membership: the server authorizes access through invitations.
+ * The provider's configured Site URL handles email confirmation redirects,
+ * avoiding an unallowlisted, ephemeral Vercel preview hostname.
+ */
+export async function signUpWithPassword(
+  name: string,
+  email: string,
+  password: string,
+): Promise<{ needsVerification: boolean }> {
+  const { data, error } = await supabase().auth.signUp({
+    email: email.trim(),
+    password,
+    options: { data: { name: name.trim() } },
+  });
+  if (error) throw new Error(describeAuthError(error.message));
+  if (!data.user) throw new Error("Unable to submit this account request.");
+  return { needsVerification: !data.session };
+}
+
 export async function signOut(): Promise<void> {
   const { error } = await supabase().auth.signOut();
   if (error) throw new Error(describeAuthError(error.message));

@@ -1722,3 +1722,164 @@
 .helpLink:hover {
   text-decoration: underline;
 }
+
+/* Public entrypoint for signed-out hosted users, separate from the offline
+   desktop demo. A real account requires an organization invitation. */
+.welcomePage {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 0.94fr);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+}
+
+.welcomePhoto {
+  position: relative;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: var(--color-navy);
+  color: #fff;
+}
+
+.welcomePhoto img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.welcomePhoto::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(5, 19, 30, .16), rgba(5, 19, 30, .72));
+}
+
+.welcomePhotoCopy {
+  position: absolute;
+  z-index: 1;
+  bottom: clamp(28px, 6vw, 86px);
+  left: clamp(24px, 6vw, 82px);
+  right: clamp(24px, 6vw, 82px);
+}
+
+.welcomePhotoCopy h2 {
+  font: 600 clamp(32px, 4vw, 58px)/1.1 var(--font-serif);
+  max-width: 14ch;
+  margin: 12px 0;
+}
+
+.welcomePhotoCopy p { max-width: 46ch; line-height: 1.6; }
+
+.welcomePanel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: stretch;
+  padding: clamp(28px, 6vw, 90px);
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+}
+
+.welcomeEyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.welcomeTitle {
+  font: 620 clamp(42px, 5vw, 74px)/1.07 var(--font-serif);
+  letter-spacing: -.04em;
+  margin: 20px 0;
+}
+
+.welcomeLead {
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.7;
+  max-width: 48ch;
+}
+
+.welcomeActions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  margin-top: 30px;
+  max-width: 370px;
+}
+
+.welcomePrimary,
+.welcomeSecondary {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+
+.welcomePrimary {
+  background: var(--action-primary);
+  color: var(--color-ink-inverse);
+  border-color: var(--action-primary);
+}
+
+.welcomeSecondary { color: var(--text-primary); }
+
+.welcomePrimary:focus-visible,
+.welcomeSecondary:focus-visible,
+.authTextLink:focus-visible,
+.authSwitch a:focus-visible {
+  outline: 3px solid var(--action-primary);
+  outline-offset: 3px;
+}
+
+.authTextLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  text-underline-offset: 3px;
+  font-size: 13px;
+  margin-bottom: 15px;
+}
+
+.authSwitch {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin: 14px 0 0;
+}
+
+.authSwitch a { color: var(--text-primary); font-weight: 700; }
+
+.signupNotice {
+  background: var(--surface-muted);
+  color: var(--text-primary);
+  border: 1px solid var(--border-soft);
+  padding: 16px;
+  border-radius: 12px;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+@media (max-width: 800px) {
+  .welcomePage { grid-template-columns: 1fr; }
+  .welcomePhoto { min-height: 230px; }
+  .welcomePhotoCopy { bottom: 24px; left: 24px; right: 24px; }
+  .welcomePhotoCopy h2 { font-size: clamp(27px, 6vw, 42px); max-width: none; }
+  .welcomePhotoCopy p { display: none; }
+  .welcomePanel { padding: 38px 24px 54px; }
+  .welcomeTitle { font-size: clamp(40px, 8vw, 62px); }
+  .welcomeActions { max-width: none; }
+}
