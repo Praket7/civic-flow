@@ -384,8 +384,14 @@ export function getWaitlist(
 /* ------------------------------- attendance ------------------------------- */
 
 /** The shift the check-in desk is working, or null when nothing is scheduled. */
-export function getLiveEvent(session: SessionOverrides = {}, workspace: DemoWorkspace, shiftId?: string) {
-  const shift = shiftId ? shiftById(shiftId, workspace) : shiftById(DEMO_EVENT_SHIFT_ID, workspace) ?? workspace.shifts[1];
+export function getLiveEvent(
+  session: SessionOverrides = {},
+  workspace: DemoWorkspace,
+  shiftId?: string,
+) {
+  const shift = shiftId
+    ? shiftById(shiftId, workspace)
+    : (shiftById(DEMO_EVENT_SHIFT_ID, workspace) ?? workspace.shifts[1]);
   if (!shift) return null;
   const opportunity = opportunityById(shift.opportunityId, workspace);
   // Whether self check-in is open is not this selector's to decide. The
@@ -837,7 +843,11 @@ export function getMatches(
   extraOpportunities: Opportunity[] = [],
 ): MatchRow[] {
   const upcoming = getUpcomingShiftRows(workspace);
-  return [...new Map([...workspace.opportunities, ...extraOpportunities].map(row => [row.id, row])).values()]
+  return [
+    ...new Map(
+      [...workspace.opportunities, ...extraOpportunities].map((row) => [row.id, row]),
+    ).values(),
+  ]
     .map((opportunity) => {
       let score = 40;
       const reasons: string[] = [];

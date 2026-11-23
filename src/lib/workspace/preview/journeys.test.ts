@@ -48,8 +48,8 @@ describe("connected sample journey", () => {
     const applicant = initial.assignments[0].candidateId;
     await repository.joinWaitlist(shift.id, applicant, "General support", true);
     const waiting = await repository.getSnapshot();
-    expect(waiting.waitlist.find(row => row.shiftId === shift.id)?.requestReview).toBe(true);
-    expect(waiting.registrations.some(row => row.shiftId === shift.id)).toBe(false);
+    expect(waiting.waitlist.find((row) => row.shiftId === shift.id)?.requestReview).toBe(true);
+    expect(waiting.registrations.some((row) => row.shiftId === shift.id)).toBe(false);
     const plan = await repository.autoRoster([shift.id], options);
     expect(plan.slotsConsidered).toBe(1);
     const assignment = plan.assignments[0];
@@ -67,8 +67,12 @@ describe("connected sample journey", () => {
     const id = assignment.candidateId;
     const registered = await repository.getSnapshot();
     expect(registered.registrations.filter((row) => row.shiftId === shift.id)).toHaveLength(1);
-    expect(registered.waitlist.find(row => row.shiftId === shift.id)?.status).toBe("promoted");
-    expect(registered.journeyNotifications?.some(row => row.volunteerId === applicant && row.title === "Shift assignment confirmed")).toBe(true);
+    expect(registered.waitlist.find((row) => row.shiftId === shift.id)?.status).toBe("promoted");
+    expect(
+      registered.journeyNotifications?.some(
+        (row) => row.volunteerId === applicant && row.title === "Shift assignment confirmed",
+      ),
+    ).toBe(true);
     expect(await repository.registerForShift(shift.id, id, assignment.role)).toEqual(registered);
     await expect(repository.checkOut(shift.id, id)).rejects.toThrow(/before checking/);
     const code = await repository.getCheckinCode(shift.id);

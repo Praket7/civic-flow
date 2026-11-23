@@ -370,7 +370,14 @@ export function createPreviewRosterEngine(context: {
    * One pass over open seats. `forced` pins a volunteer, as the Rust planner does.
    */
   function requestedReview(volunteerId: string, seat: PreviewSeat): boolean {
-    return state.waitlist.some(row => row.requestReview && row.status === "waiting" && row.shiftId === seat.shiftId && row.volunteerId === volunteerId && row.eligibleRole === seat.role);
+    return state.waitlist.some(
+      (row) =>
+        row.requestReview &&
+        row.status === "waiting" &&
+        row.shiftId === seat.shiftId &&
+        row.volunteerId === volunteerId &&
+        row.eligibleRole === seat.role,
+    );
   }
 
   function previewPlanShape(
@@ -399,8 +406,13 @@ export function createPreviewRosterEngine(context: {
         if (checks.some((check) => !check.passed)) continue;
         const { components, total } = previewScore(volunteer, seat, options, policy, load);
         const requested = options.includeWaitlist && requestedReview(volunteer.id, seat);
-        const bestRequested = best && options.includeWaitlist && requestedReview(best.volunteer.id, seat);
-        if (!best || (requested && !bestRequested) || (requested === Boolean(bestRequested) && total > best.score)) {
+        const bestRequested =
+          best && options.includeWaitlist && requestedReview(best.volunteer.id, seat);
+        if (
+          !best ||
+          (requested && !bestRequested) ||
+          (requested === Boolean(bestRequested) && total > best.score)
+        ) {
           best = { seat, volunteer, checks, components, score: total };
         }
       }
@@ -560,7 +572,9 @@ export function createPreviewRosterEngine(context: {
       reasons: [
         `Skill match: ${choice.seat.role}`,
         `${options.preferSpanish && choice.volunteer.languages.includes("Spanish") ? "Spanish-speaking" : "Available"} for ${choice.seat.shiftId}`,
-        options.includeWaitlist && requestedReview(choice.volunteer.id, choice.seat) ? "Eligible applicant requested this role" : "Highest score among the eligible volunteers",
+        options.includeWaitlist && requestedReview(choice.volunteer.id, choice.seat)
+          ? "Eligible applicant requested this role"
+          : "Highest score among the eligible volunteers",
       ],
       promoteWaitlist: requestedReview(choice.volunteer.id, choice.seat),
       eligibleRoles: seats

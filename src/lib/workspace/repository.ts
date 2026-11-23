@@ -126,7 +126,12 @@ export interface WorkspaceRepository {
     volunteerId: string,
     reason?: string,
   ): Promise<SessionSnapshot>;
-  joinWaitlist(shiftId: string, volunteerId: string, role: string, requestReview?: boolean): Promise<SessionSnapshot>;
+  joinWaitlist(
+    shiftId: string,
+    volunteerId: string,
+    role: string,
+    requestReview?: boolean,
+  ): Promise<SessionSnapshot>;
   getCheckinCode(shiftId: string): Promise<CheckinCode>;
   checkinWindow(shiftId: string): Promise<CheckinWindow>;
   installationAccess(): Promise<InstallationAccess>;

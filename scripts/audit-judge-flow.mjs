@@ -719,7 +719,9 @@ try {
   await fixtureRole("user-praket", "/coordinator/opportunities/new");
   await heading("Create an opportunity");
   async function fillLabel(label, value) {
-    await until(() => evaluate(`(() => {
+    await until(
+      () =>
+        evaluate(`(() => {
       const label = [...document.querySelectorAll("label")].find(node => node.textContent.trim() === ${JSON.stringify(label)});
       const field = label?.control ?? label?.querySelector("input, textarea, select");
       if (!field) return false;
@@ -728,13 +730,18 @@ try {
       field.dispatchEvent(new Event("input", { bubbles: true }));
       field.dispatchEvent(new Event("change", { bubbles: true }));
       return true;
-    })()`), "fill " + label);
+    })()`),
+      "fill " + label,
+    );
   }
   const title = "Community welcome desk";
   await fillLabel("Opportunity name", title);
   await fillLabel("Cause", "community");
   await clickText("Continue");
-  await fillLabel("What volunteers will do", "Welcome visitors, organize supplies, and direct families to community services.");
+  await fillLabel(
+    "What volunteers will do",
+    "Welcome visitors, organize supplies, and direct families to community services.",
+  );
   await fillLabel("Volunteer capacity", "1");
   await clickText("Continue");
   await clickText("Save opportunity");
@@ -744,33 +751,90 @@ try {
   await fillLabel("Starts at", "09:00");
   await fillLabel("Roles, one per line as Name x Count", "General support x 1");
   await clickText("Schedule the series");
-  const program = await until(async () => (await snapshot()).createdOpportunities?.find(row => row.title === title), "created program");
-  const series = await until(async () => (await snapshot()).createdSeries?.find(row => row.opportunityId === program.id), "created series");
-  const shift = await until(async () => (await snapshot()).createdShifts?.find(row => row.id.includes(series.id)), "created shift");
+  const program = await until(
+    async () => (await snapshot()).createdOpportunities?.find((row) => row.title === title),
+    "created program",
+  );
+  const series = await until(
+    async () => (await snapshot()).createdSeries?.find((row) => row.opportunityId === program.id),
+    "created series",
+  );
+  const shift = await until(
+    async () => (await snapshot()).createdShifts?.find((row) => row.id.includes(series.id)),
+    "created shift",
+  );
   await capture("08-created-program");
   await fixtureRole("user-maya", "/volunteer/discover");
   await fillLabel("Search opportunities", title);
-  await until(() => evaluate(`(() => { const link = [...document.querySelectorAll("a")].find(node => node.textContent.trim() === ${JSON.stringify(title)}); if (!link) return false; link.click(); return true; })()`), "discover created program");
+  await until(
+    () =>
+      evaluate(
+        `(() => { const link = [...document.querySelectorAll("a")].find(node => node.textContent.trim() === ${JSON.stringify(title)}); if (!link) return false; link.click(); return true; })()`,
+      ),
+    "discover created program",
+  );
   await heading(title);
   await clickText("Request coordinator review");
-  await until(async () => (await snapshot()).waitlist?.some(row => row.shiftId === shift.id && row.volunteerId === "vol-maya" && row.status === "waiting" && row.requestReview), "application pending");
+  await until(
+    async () =>
+      (await snapshot()).waitlist?.some(
+        (row) =>
+          row.shiftId === shift.id &&
+          row.volunteerId === "vol-maya" &&
+          row.status === "waiting" &&
+          row.requestReview,
+      ),
+    "application pending",
+  );
   await capture("09-volunteer-application");
   await fixtureRole("user-praket", "/coordinator/autoroster");
-  await until(() => evaluate(`(() => { const button = [...document.querySelectorAll("button")].find(node => node.textContent.includes("One shift")); if (!button) return false; button.click(); return true; })()`), "single shift planning");
+  await until(
+    () =>
+      evaluate(
+        `(() => { const button = [...document.querySelectorAll("button")].find(node => node.textContent.includes("One shift")); if (!button) return false; button.click(); return true; })()`,
+      ),
+    "single shift planning",
+  );
   await fillLabel("Shift to optimize", shift.id);
   await clickText("Run optimizer");
-  await until(() => evaluate(`document.querySelector('[aria-label="Proposed roster"]')?.textContent.includes("Maya Chen")`), "eligible applicant recommended");
+  await until(
+    () =>
+      evaluate(
+        `document.querySelector('[aria-label="Proposed roster"]')?.textContent.includes("Maya Chen")`,
+      ),
+    "eligible applicant recommended",
+  );
   await capture("10-eligible-applicant-plan");
   await clickText("Apply 1 assignment");
-  await until(async () => (await snapshot()).registrations?.some(row => row.shiftId === shift.id && row.volunteerId === "vol-maya" && row.status === "registered"), "assignment applied");
-  assert.equal((await snapshot()).waitlist.find(row => row.shiftId === shift.id && row.volunteerId === "vol-maya").status, "promoted");
+  await until(
+    async () =>
+      (await snapshot()).registrations?.some(
+        (row) =>
+          row.shiftId === shift.id && row.volunteerId === "vol-maya" && row.status === "registered",
+      ),
+    "assignment applied",
+  );
+  assert.equal(
+    (await snapshot()).waitlist.find(
+      (row) => row.shiftId === shift.id && row.volunteerId === "vol-maya",
+    ).status,
+    "promoted",
+  );
   await fixtureRole("user-maya", "/volunteer/notifications");
-  await until(() => evaluate(`document.body.textContent.includes("Shift assignment confirmed")`), "recipient-specific assignment notification");
+  await until(
+    () => evaluate(`document.body.textContent.includes("Shift assignment confirmed")`),
+    "recipient-specific assignment notification",
+  );
   await capture("11-assignment-notification");
   await open("/judge/demo/#/volunteer/schedule");
-  await until(() => evaluate(`document.body.textContent.includes(${JSON.stringify(title)})`), "assigned shift appears in volunteer schedule");
+  await until(
+    () => evaluate(`document.body.textContent.includes(${JSON.stringify(title)})`),
+    "assigned shift appears in volunteer schedule",
+  );
   await capture("12-new-shift-on-schedule");
-  console.log("Stage 6: created opportunity, scheduled shift, discovered and applied, verified eligibility, applied AutoRoster, notification and schedule passed.");
+  console.log(
+    "Stage 6: created opportunity, scheduled shift, discovered and applied, verified eligibility, applied AutoRoster, notification and schedule passed.",
+  );
   console.log(
     "Stage 6: invalid code, check-in, checkout, pending record, coordinator approval, volunteer verified history passed.",
   );
