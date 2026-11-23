@@ -142,7 +142,13 @@ export function ShiftDetailScreen() {
       </Card>
 
       <Card className={styles.actionCard}>
-        {shift.registration ? (
+        {shift.status === "canceled" ? (
+          <p className={styles.actionTitle}>This shift is canceled.</p>
+        ) : shift.attendance?.status === "completed" ? (
+          <p className={styles.actionTitle}>Service completed. View your hours for the review status.</p>
+        ) : shift.attendance?.status === "no_show" ? (
+          <p className={styles.actionTitle}>No show recorded. Contact your coordinator if this is incorrect.</p>
+        ) : shift.registration ? (
           <>
             <p className={styles.actionTitle}>
               <BadgeCheck aria-hidden size={18} /> You're registered
@@ -199,6 +205,8 @@ export function ShiftDetailScreen() {
               Leave waitlist
             </Button>
           </>
+        ) : !shift.canRegister ? (
+          <p className={styles.actionTitle}>Registration is closed for this shift.</p>
         ) : (
           <>
             <p className={styles.actionTitle}>

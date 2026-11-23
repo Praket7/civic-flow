@@ -153,6 +153,7 @@ export function VolunteerShiftPage() {
   const [copyMessage, setCopyMessage] = useState("");
   const [cancelArmed, setCancelArmed] = useState(false);
   const [cancelError, setCancelError] = useState("");
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
   const { data: checkinWindow } = useCheckinWindow(shift?.id ?? "");
 
   if (!shift || !opportunity) {
@@ -273,7 +274,13 @@ export function VolunteerShiftPage() {
           <Button variant="lime" icon={<CalendarPlus size={14} />} onClick={downloadCalendar}>
             Add to calendar
           </Button>
-          {!myRosterRow || !checkinWindow ? null : checkInOpen ? (
+          {status === "checked_in" ? (
+            <Button disabled={checkoutBusy} onClick={async () => {
+              setCheckoutBusy(true);
+              setCancelError("");
+              try { await actions.checkOut(activeShift.id, volunteer.id); } catch (caught) { setCancelError(messageOf(caught)); } finally { setCheckoutBusy(false); }
+            }}>Check out</Button>
+          ) : !myRosterRow || !checkinWindow || status === "completed" ? null : checkInOpen ? (
             <ButtonLink to="/volunteer/check-in" variant="primary" icon={<FileCheck2 size={14} />}>
               Check in
             </ButtonLink>
