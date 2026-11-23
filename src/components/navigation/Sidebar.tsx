@@ -397,7 +397,9 @@ export function Sidebar({
                 </>
               ) : null}
               {import.meta.env.PROD && !isTauri() ? (
-                <Link to="/welcome" className={styles.menuItem} onClick={dismissOnNavigate}>Switch sample role</Link>
+                <Link to="/welcome" className={styles.menuItem} onClick={dismissOnNavigate}>
+                  Switch sample role
+                </Link>
               ) : null}
               <Link to="/help" className={styles.menuItem} onClick={dismissOnNavigate}>
                 Help

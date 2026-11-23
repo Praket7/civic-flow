@@ -607,7 +607,12 @@ try {
     await heading("Service, organized");
     await clickText(id === "user-maya" ? "Explore as volunteer" : "Explore as coordinator");
     await until(
-      () => evaluate('location.hash.startsWith(' + JSON.stringify(id === "user-maya" ? "#/volunteer/" : "#/coordinator/") + ')'),
+      () =>
+        evaluate(
+          "location.hash.startsWith(" +
+            JSON.stringify(id === "user-maya" ? "#/volunteer/" : "#/coordinator/") +
+            ")",
+        ),
       "sample role changed",
     );
     await open("/judge/demo/#" + route);

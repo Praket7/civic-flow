@@ -105,7 +105,13 @@ export function WelcomePage() {
               </Link>
             )}
             {demoOnly ? (
-              <button type="button" className={styles.secondaryAction} onClick={() => void exploreDemo(user?.role === "volunteer" ? "coordinator" : "volunteer")}>
+              <button
+                type="button"
+                className={styles.secondaryAction}
+                onClick={() =>
+                  void exploreDemo(user?.role === "volunteer" ? "coordinator" : "volunteer")
+                }
+              >
                 {user?.role === "volunteer" ? "Explore as coordinator" : "Explore as volunteer"}
               </button>
             ) : null}

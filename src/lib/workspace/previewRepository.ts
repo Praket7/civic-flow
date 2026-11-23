@@ -1154,7 +1154,11 @@ export const previewRepository: WorkspaceRepository = {
       return state;
     }
     const shift = journeyWorkspace().shifts.find((row) => row.id === shiftId);
-    if (!shift || shift.status !== "scheduled" || new Date(shift.startsAt) <= new Date(workspace.now))
+    if (
+      !shift ||
+      shift.status !== "scheduled" ||
+      new Date(shift.startsAt) <= new Date(workspace.now)
+    )
       throw new Error("This shift is not accepting waitlist requests.");
     if (!journeyWorkspace().volunteers.some((row) => row.id === volunteerId))
       throw new Error("Volunteer not found.");
