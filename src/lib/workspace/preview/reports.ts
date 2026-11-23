@@ -84,9 +84,9 @@ export function buildPreviewReport(
         (!programId || opportunity.id === programId),
     );
   };
-  let headers: string[] = [];
+  let headers: string[];
   let rows: string[][] = [];
-  let summary: ReportSummaryItem[] = [];
+  let summary: ReportSummaryItem[];
 
   if (template === "coverage") {
     headers = ["Date", "Program", "Role", "Required", "Filled", "Gap", "Shift status"];
