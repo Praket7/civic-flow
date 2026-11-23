@@ -139,7 +139,6 @@ describe("pure preview reporting", () => {
   });
 });
 
-
 describe("Stage 4 known-answer reporting ledger", () => {
   const ledger = {
     now: "2026-11-22T12:00:00-05:00",
@@ -154,26 +153,96 @@ describe("Stage 4 known-answer reporting ledger", () => {
       { id: "school", title: "Tutoring", cause: "education" },
     ],
     shifts: [
-      { id: "earlier", opportunityId: "pantry", startsAt: "2026-10-10T09:00:00-05:00", status: "completed", roles: [{ name: "Distribution", required: 2, filled: 1 }] },
-      { id: "cancelled", opportunityId: "pantry", startsAt: "2026-10-11T09:00:00-05:00", status: "canceled", roles: [{ name: "Distribution", required: 1, filled: 1 }] },
-      { id: "future", opportunityId: "school", startsAt: "2026-12-02T09:00:00-05:00", status: "scheduled", roles: [{ name: "Tutor", required: 3, filled: 2 }] },
+      {
+        id: "earlier",
+        opportunityId: "pantry",
+        startsAt: "2026-10-10T09:00:00-05:00",
+        status: "completed",
+        roles: [{ name: "Distribution", required: 2, filled: 1 }],
+      },
+      {
+        id: "cancelled",
+        opportunityId: "pantry",
+        startsAt: "2026-10-11T09:00:00-05:00",
+        status: "canceled",
+        roles: [{ name: "Distribution", required: 1, filled: 1 }],
+      },
+      {
+        id: "future",
+        opportunityId: "school",
+        startsAt: "2026-12-02T09:00:00-05:00",
+        status: "scheduled",
+        roles: [{ name: "Tutor", required: 3, filled: 2 }],
+      },
     ],
     hourEntries: [
-      { id: "a-verified", volunteerId: "alice", opportunityId: "pantry", date: "2026-10-10", minutes: 90, status: "pending", verificationId: "a-verification" },
-      { id: "b-pending", volunteerId: "bob", opportunityId: "pantry", date: "2026-10-10", minutes: 100, status: "pending", verificationId: null },
-      { id: "c-rejected", volunteerId: "bob", opportunityId: "pantry", date: "2026-10-11", minutes: 60, status: "rejected", verificationId: null },
-      { id: "d-verified", volunteerId: "bob", opportunityId: "school", date: "2026-10-12", minutes: 30, status: "verified", verificationId: "d-verification" },
-      { id: "e-outside", volunteerId: "alice", opportunityId: "school", date: "2026-08-15", minutes: 120, status: "verified", verificationId: "e-verification" },
+      {
+        id: "a-verified",
+        volunteerId: "alice",
+        opportunityId: "pantry",
+        date: "2026-10-10",
+        minutes: 90,
+        status: "pending",
+        verificationId: "a-verification",
+      },
+      {
+        id: "b-pending",
+        volunteerId: "bob",
+        opportunityId: "pantry",
+        date: "2026-10-10",
+        minutes: 100,
+        status: "pending",
+        verificationId: null,
+      },
+      {
+        id: "c-rejected",
+        volunteerId: "bob",
+        opportunityId: "pantry",
+        date: "2026-10-11",
+        minutes: 60,
+        status: "rejected",
+        verificationId: null,
+      },
+      {
+        id: "d-verified",
+        volunteerId: "bob",
+        opportunityId: "school",
+        date: "2026-10-12",
+        minutes: 30,
+        status: "verified",
+        verificationId: "d-verification",
+      },
+      {
+        id: "e-outside",
+        volunteerId: "alice",
+        opportunityId: "school",
+        date: "2026-08-15",
+        minutes: 120,
+        status: "verified",
+        verificationId: "e-verification",
+      },
     ],
     mayaEntries: [],
   } as unknown as DemoWorkspace;
   const decisions = {
     ...state,
     hoursDecisions: {
-      "a-verified": { status: "verified", approvedMinutes: 45, reason: "Corrected against check-out", reviewedAt: "2026-11-01" },
-      "c-rejected": { status: "rejected", approvedMinutes: 600, reason: "Duplicate claim", reviewedAt: "2026-11-02" },
+      "a-verified": {
+        status: "verified",
+        approvedMinutes: 45,
+        reason: "Corrected against check-out",
+        reviewedAt: "2026-11-01",
+      },
+      "c-rejected": {
+        status: "rejected",
+        approvedMinutes: 600,
+        reason: "Duplicate claim",
+        reviewedAt: "2026-11-02",
+      },
     },
-    registrations: [{ shiftId: "earlier", volunteerId: "alice", role: "Distribution", status: "completed" }],
+    registrations: [
+      { shiftId: "earlier", volunteerId: "alice", role: "Distribution", status: "completed" },
+    ],
   } as unknown as SessionSnapshot;
   const q: ReportRequest = {
     template: "custom",
@@ -185,7 +254,13 @@ describe("Stage 4 known-answer reporting ledger", () => {
 
   it("reconciles corrected, pending, rejected and outside-period records exactly", () => {
     const report = buildPreviewReport(q, ledger, decisions);
-    expect(report.headers).toEqual(["Record ID", "Approved minutes", "Requested minutes", "Status", "Cause"]);
+    expect(report.headers).toEqual([
+      "Record ID",
+      "Approved minutes",
+      "Requested minutes",
+      "Status",
+      "Cause",
+    ]);
     expect(report.rows).toEqual([
       ["d-verified", "30", "30", "verified", "education"],
       ["c-rejected", "", "60", "rejected", "food"],
@@ -199,11 +274,17 @@ describe("Stage 4 known-answer reporting ledger", () => {
   });
 
   it("filters by exact program and cause without losing the approved-hour invariant", () => {
-    const report = buildPreviewReport({ ...q, cause: "food", programId: "pantry" }, ledger, decisions);
+    const report = buildPreviewReport(
+      { ...q, cause: "food", programId: "pantry" },
+      ledger,
+      decisions,
+    );
     expect(report.rows).toHaveLength(3);
     expect(report.summary).toContainEqual({ label: "Approved service", value: "0h 45m" });
     expect(report.rows.every((row) => row[4] === "food")).toBe(true);
-    expect(buildPreviewReport({ ...q, programId: "does-not-exist" }, ledger, decisions).rows).toEqual([]);
+    expect(
+      buildPreviewReport({ ...q, programId: "does-not-exist" }, ledger, decisions).rows,
+    ).toEqual([]);
   });
 
   it("supports history and upcoming capacity and excludes canceled shifts", () => {
@@ -221,15 +302,28 @@ describe("Stage 4 known-answer reporting ledger", () => {
   });
 
   it("rejects reversed, malformed and impossible date ranges", () => {
-    expect(() => buildPreviewReport({ ...q, dateEnd: "2026-09-01" }, ledger, decisions)).toThrow("start date");
-    expect(() => buildPreviewReport({ ...q, dateStart: "2026-02-30" }, ledger, decisions)).toThrow("real calendar");
-    expect(() => buildPreviewReport({ ...q, dateStart: "yesterday" }, ledger, decisions)).toThrow("YYYY-MM-DD");
+    expect(() => buildPreviewReport({ ...q, dateEnd: "2026-09-01" }, ledger, decisions)).toThrow(
+      "start date",
+    );
+    expect(() => buildPreviewReport({ ...q, dateStart: "2026-02-30" }, ledger, decisions)).toThrow(
+      "real calendar",
+    );
+    expect(() => buildPreviewReport({ ...q, dateStart: "yesterday" }, ledger, decisions)).toThrow(
+      "YYYY-MM-DD",
+    );
   });
 
   it("sorts by actual program values even if the group column is hidden", () => {
-    const report = buildPreviewReport({ ...q, groupBy: "program", fields: ["recordId"] }, ledger, decisions);
+    const report = buildPreviewReport(
+      { ...q, groupBy: "program", fields: ["recordId"] },
+      ledger,
+      decisions,
+    );
     expect(report.rows.map((row) => row[0])).toEqual([
-      "c-rejected", "a-verified", "b-pending", "d-verified",
+      "c-rejected",
+      "a-verified",
+      "b-pending",
+      "d-verified",
     ]);
   });
 });

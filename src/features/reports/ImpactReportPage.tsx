@@ -51,15 +51,16 @@ export function ImpactReportPage() {
             <p className={styles.coverKicker}>{`${workspace.organization.name} · Annual impact`}</p>
             <h2 className={styles.coverTitle}>Service that stays in the neighborhood.</h2>
             <p className={styles.coverMeta}>
-              {report.period} · Generated from {report.totals.uniqueVolunteersYtd} unique
-              volunteers and approved service records.
+              {report.period} · Generated from {report.totals.uniqueVolunteersYtd} unique volunteers
+              and approved service records.
             </p>
           </section>
 
           <section className={styles.reportSection}>
             <h2 className={styles.reportSectionTitle}>The year in numbers</h2>
             <p style={{ marginTop: 5, fontSize: 13.5, color: "var(--text-muted)" }}>
-              Approved hours come from reviewed service records. Program outcomes come from separately recorded impact measurements.
+              Approved hours come from reviewed service records. Program outcomes come from
+              separately recorded impact measurements.
             </p>
             <div className={styles.reportStats}>
               <div className={styles.reportStat}>
@@ -185,7 +186,9 @@ export function ImpactReportPage() {
             </div>
             <div className={styles.asideRow}>
               <span>Attendance</span>
-              <span>{report.attendanceObservations ? `${report.totals.attendanceRate}%` : "N/A"}</span>
+              <span>
+                {report.attendanceObservations ? `${report.totals.attendanceRate}%` : "N/A"}
+              </span>
             </div>
             <div className={styles.asideRow}>
               <span>Hours per contributing volunteer</span>

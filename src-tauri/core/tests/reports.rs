@@ -104,20 +104,42 @@ fn unknown_templates_and_bad_dates_are_refused() {
 fn all_participation_summaries_reconcile_to_approved_rows() {
     let database = seeded();
     let mut filters = request("custom");
-    filters.fields = vec!["recordId".into(), "status".into(), "hours".into(), "requested".into()];
+    filters.fields = vec![
+        "recordId".into(),
+        "status".into(),
+        "hours".into(),
+        "requested".into(),
+    ];
     let report = generate(database.connection(), &filters).expect("custom report");
-    assert_eq!(report.headers, vec!["Record ID", "Status", "Approved minutes", "Requested minutes"]);
+    assert_eq!(
+        report.headers,
+        vec![
+            "Record ID",
+            "Status",
+            "Approved minutes",
+            "Requested minutes"
+        ]
+    );
     let mut approved = 0_i64;
     for row in &report.rows {
-        assert!(!row[0].is_empty(), "every export row has its source record ID");
+        assert!(
+            !row[0].is_empty(),
+            "every export row has its source record ID"
+        );
         if row[1] == "verified" {
             approved += row[2].parse::<i64>().expect("verified amount");
         } else {
-            assert_eq!(row[2], "", "unapproved rows cannot display approved minutes");
+            assert_eq!(
+                row[2], "",
+                "unapproved rows cannot display approved minutes"
+            );
         }
     }
     let expected = format!("{}h {:02}m", approved / 60, approved % 60);
-    assert!(report.summary.iter().any(|item| item.label == "Verified" && item.value == expected));
+    assert!(report
+        .summary
+        .iter()
+        .any(|item| item.label == "Verified" && item.value == expected));
     let csv = to_csv(&report);
     assert!(csv.contains("Record ID"));
     assert_eq!(csv.lines().count(), report.rows.len() + 1);
@@ -131,16 +153,23 @@ fn historical_coverage_filters_really_limit_rows() {
     historical.date_end = Some("1999-01-31".into());
     let report = generate(database.connection(), &historical).expect("empty historic period");
     assert!(report.rows.is_empty());
-    assert!(report.summary.iter().any(|item| item.label == "Role coverage" && item.value == "N/A"));
+    assert!(report
+        .summary
+        .iter()
+        .any(|item| item.label == "Role coverage" && item.value == "N/A"));
 }
 
 #[test]
 fn report_program_id_uses_stable_ids_and_restricts_source_rows() {
     let database = seeded();
-    let id: String = database.connection().query_row(
-        "SELECT id FROM opportunities ORDER BY id LIMIT 1", [],
-        |row| row.get(0)
-    ).expect("seeded opportunity");
+    let id: String = database
+        .connection()
+        .query_row(
+            "SELECT id FROM opportunities ORDER BY id LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("seeded opportunity");
     let mut filtered = request("custom");
     filtered.program_id = Some(id.clone());
     filtered.fields = vec!["program".into(), "recordId".into()];

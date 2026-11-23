@@ -507,9 +507,12 @@ export function getCauseHours(
 ): { cause: Cause; label: string; hours: number; percent: number }[] {
   const totals = new Map<Cause, number>();
   for (const row of getHourRows(session, workspace)) {
-    if (row.status !== "verified" ||
-        row.date < workspace.now.slice(0, 4) + "-01-01" ||
-        row.date > workspace.now.slice(0, 10)) continue;
+    if (
+      row.status !== "verified" ||
+      row.date < workspace.now.slice(0, 4) + "-01-01" ||
+      row.date > workspace.now.slice(0, 10)
+    )
+      continue;
     const hours = (row.approvedMinutes ?? 0) / 60;
     totals.set(row.opportunity.cause, (totals.get(row.opportunity.cause) ?? 0) + hours);
   }
@@ -706,12 +709,14 @@ export function getReportPreview(session: SessionOverrides = {}, workspace: Demo
   const today = workspace.now.slice(0, 10);
   const yearStart = today.slice(0, 4) + "-01-01";
   const month = today.slice(0, 7);
-  const verified = getHourRows(session, workspace)
-    .filter((row) => row.status === "verified" && row.date >= yearStart && row.date <= today);
+  const verified = getHourRows(session, workspace).filter(
+    (row) => row.status === "verified" && row.date >= yearStart && row.date <= today,
+  );
   const hoursYtd = verified.reduce((sum, row) => sum + (row.approvedMinutes ?? 0), 0) / 60;
-  const hoursThisMonth = verified
-    .filter((row) => row.date.startsWith(month))
-    .reduce((sum, row) => sum + (row.approvedMinutes ?? 0), 0) / 60;
+  const hoursThisMonth =
+    verified
+      .filter((row) => row.date.startsWith(month))
+      .reduce((sum, row) => sum + (row.approvedMinutes ?? 0), 0) / 60;
   const uniqueVolunteersYtd = new Set(verified.map((row) => row.volunteer.id)).size;
   const minutesByVolunteer = new Map<string, number>();
   for (const row of verified) {
@@ -720,7 +725,8 @@ export function getReportPreview(session: SessionOverrides = {}, workspace: Demo
       (minutesByVolunteer.get(row.volunteer.id) ?? 0) + (row.approvedMinutes ?? 0),
     );
   }
-  const attendanceEntries = Object.values(session.attendance ?? {}).flat()
+  const attendanceEntries = Object.values(session.attendance ?? {})
+    .flat()
     .filter((row) => ["checked_in", "completed", "no_show"].includes(row.status));
   const arrived = attendanceEntries.filter((row) => row.status !== "no_show").length;
   const causes = getCauseHours(session, workspace);
@@ -736,11 +742,12 @@ export function getReportPreview(session: SessionOverrides = {}, workspace: Demo
       hoursThisMonth,
       uniqueVolunteersYtd,
       activeVolunteers: workspace.volunteers.filter((row) => row.status === "active").length,
-      shiftsCompleted: workspace.shifts.filter((row) =>
-        row.status === "completed" && row.startsAt.slice(0, 10) <= today,
+      shiftsCompleted: workspace.shifts.filter(
+        (row) => row.status === "completed" && row.startsAt.slice(0, 10) <= today,
       ).length,
       attendanceRate: attendanceEntries.length
-        ? Math.round((arrived / attendanceEntries.length) * 100) : 0,
+        ? Math.round((arrived / attendanceEntries.length) * 100)
+        : 0,
       mealsPacked: outcomes.get("meals_packed")?.value ?? 0,
       tutoringSessions: outcomes.get("tutoring_sessions")?.value ?? 0,
       treesPlanted: outcomes.get("trees_planted")?.value ?? 0,

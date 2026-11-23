@@ -213,7 +213,10 @@ export function ReportsPage() {
                 <p className={styles.templateCopy}>
                   Saved filter set:{" "}
                   {Object.entries(view.filters)
-                    .map(([key, values]) => `${key}: ${Array.isArray(values) ? values.join(", ") : typeof values === "string" ? values : "any"}`)
+                    .map(
+                      ([key, values]) =>
+                        `${key}: ${Array.isArray(values) ? values.join(", ") : typeof values === "string" ? values : "any"}`,
+                    )
                     .join(" · ")}
                 </p>
               </div>

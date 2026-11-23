@@ -37,7 +37,6 @@ const REPORT_FIELD_LABELS: Record<string, string> = {
   reviewReason: "Review reason",
 };
 
-
 /** Only normalized, real dates are valid. Lexical ISO comparisons are inclusive. */
 function requireDate(value: string): void {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -80,8 +79,8 @@ export function buildPreviewReport(
     const opportunity = opportunities.get(opportunityId);
     return Boolean(
       opportunity &&
-        (!cause || opportunity.cause === cause) &&
-        (!programId || opportunity.id === programId),
+      (!cause || opportunity.cause === cause) &&
+      (!programId || opportunity.id === programId),
     );
   };
   let headers: string[];
@@ -93,10 +92,11 @@ export function buildPreviewReport(
     let required = 0;
     let filled = 0;
     const selected = workspace.shifts
-      .filter((shift) =>
-        (hasPeriod ? inRange(shift.startsAt.slice(0, 10)) : shift.startsAt >= workspace.now) &&
-        shift.status !== "canceled" &&
-        matches(shift.opportunityId),
+      .filter(
+        (shift) =>
+          (hasPeriod ? inRange(shift.startsAt.slice(0, 10)) : shift.startsAt >= workspace.now) &&
+          shift.status !== "canceled" &&
+          matches(shift.opportunityId),
       )
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt) || a.id.localeCompare(b.id));
     for (const shift of selected) {
@@ -122,8 +122,16 @@ export function buildPreviewReport(
       { label: "Required role slots", value: String(required) },
       { label: "Filled slots", value: String(filled) },
       { label: "Open slots", value: String(required - filled) },
-      { label: "Role coverage", value: required ? Math.round((filled / required) * 100) + "%" : "N/A" },
-      { label: "Scope", value: hasPeriod ? "Selected period, canceled shifts excluded" : "Upcoming shifts, canceled shifts excluded" },
+      {
+        label: "Role coverage",
+        value: required ? Math.round((filled / required) * 100) + "%" : "N/A",
+      },
+      {
+        label: "Scope",
+        value: hasPeriod
+          ? "Selected period, canceled shifts excluded"
+          : "Upcoming shifts, canceled shifts excluded",
+      },
     ];
   } else if (template === "attendance") {
     headers = ["Date", "Program", "Volunteer", "Role", "Status", "Checked in", "Checked out"];
@@ -132,7 +140,8 @@ export function buildPreviewReport(
     let noShow = 0;
     for (const [shiftId, entries] of Object.entries(state.attendance ?? {})) {
       const shift = workspace.shifts.find((item) => item.id === shiftId);
-      if (!shift || !matches(shift.opportunityId) || !inRange(shift.startsAt.slice(0, 10))) continue;
+      if (!shift || !matches(shift.opportunityId) || !inRange(shift.startsAt.slice(0, 10)))
+        continue;
       const opportunity = opportunities.get(shift.opportunityId);
       if (!opportunity) continue;
       for (const entry of entries) {
@@ -171,7 +180,10 @@ export function buildPreviewReport(
     summary = [
       { label: "Cohort eligible", value: String(eligible) },
       { label: "Returned", value: String(returned) },
-      { label: "Average 30-day return", value: (eligible ? Math.round((returned / eligible) * 100) : 0) + "%" },
+      {
+        label: "Average 30-day return",
+        value: (eligible ? Math.round((returned / eligible) * 100) : 0) + "%",
+      },
       { label: "Scope", value: "All cohorts; activity filters not applicable" },
     ];
   } else if (template === "skills" || template === "credentials") {
@@ -179,7 +191,9 @@ export function buildPreviewReport(
     let expiring = 0;
     for (const volunteer of workspace.volunteers) {
       for (const skill of volunteer.skills) {
-        const credential = (state.credentials ?? []).find((row) => row.volunteerId === volunteer.id);
+        const credential = (state.credentials ?? []).find(
+          (row) => row.volunteerId === volunteer.id,
+        );
         if (credential && credential.status !== "current") expiring += 1;
         rows.push([
           volunteer.name,
@@ -241,23 +255,28 @@ export function buildPreviewReport(
         verification: row.verificationId ?? "",
         cause: row.opportunity.cause,
         role: row.shiftId
-          ? state.registrations?.find((reg) =>
-              reg.shiftId === row.shiftId && reg.volunteerId === row.volunteer.id,
-            )?.role ?? ""
+          ? (state.registrations?.find(
+              (reg) => reg.shiftId === row.shiftId && reg.volunteerId === row.volunteer.id,
+            )?.role ?? "")
           : "",
         recordId: row.id,
         reviewReason: row.reason,
       };
       records.push({
-        key: request.groupBy === "cause" ? row.opportunity.cause
-          : request.groupBy === "program" ? row.opportunity.title : "",
+        key:
+          request.groupBy === "cause"
+            ? row.opportunity.cause
+            : request.groupBy === "program"
+              ? row.opportunity.title
+              : "",
         date: row.date,
         id: row.id,
         values,
       });
     }
-    records.sort((a, b) =>
-      a.key.localeCompare(b.key) || b.date.localeCompare(a.date) || a.id.localeCompare(b.id),
+    records.sort(
+      (a, b) =>
+        a.key.localeCompare(b.key) || b.date.localeCompare(a.date) || a.id.localeCompare(b.id),
     );
     rows = records.map((record) => fields.map((field) => record.values[field] ?? ""));
     summary = [
@@ -273,7 +292,10 @@ export function buildPreviewReport(
     template,
     title: REPORT_TITLES[template],
     organization: state.settings?.organizationName || workspace.organization.name,
-    period: template === "coverage" && !hasPeriod ? "Upcoming from " + workspace.now.slice(0, 10) : start + " – " + end,
+    period:
+      template === "coverage" && !hasPeriod
+        ? "Upcoming from " + workspace.now.slice(0, 10)
+        : start + " – " + end,
     generatedAt: workspace.now,
     headers,
     rows,

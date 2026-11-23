@@ -61,7 +61,9 @@ export function buildTrendPoints(rows: HourRow[]): { label: string; value: numbe
     .map(([date, value]) => ({ label: formatDate(date), value }));
 }
 
-export function buildCausePoints(rows: HourRow[]): { label: string; value: number; color: string }[] {
+export function buildCausePoints(
+  rows: HourRow[],
+): { label: string; value: number; color: string }[] {
   const totals = new Map<string, number>();
   for (const row of rows) {
     if (row.status !== "verified") continue;
@@ -79,7 +81,11 @@ export function buildCausePoints(rows: HourRow[]): { label: string; value: numbe
 
 /** Charts are derived from the same authoritative report rows as the table/export. */
 export function chartPoints(report: ReportDocument | null) {
-  if (!report) return { trend: [] as { label: string; value: number }[], causes: [] as { label: string; value: number; color: string }[] };
+  if (!report)
+    return {
+      trend: [] as { label: string; value: number }[],
+      causes: [] as { label: string; value: number; color: string }[],
+    };
   const date = report.headers.indexOf("Service date");
   const hours = report.headers.indexOf("Approved minutes");
   const cause = report.headers.indexOf("Cause");
@@ -94,12 +100,17 @@ export function chartPoints(report: ReportDocument | null) {
     }
   }
   return {
-    trend: [...trend.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-10).map(([day, value]) => ({ label: formatDate(day), value })),
-    causes: [...causes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([id, value]) => ({
-      label: CAUSE_LABELS[id as keyof typeof CAUSE_LABELS] ?? id,
-      value,
-      color: "var(--color-cobalt)",
-    })),
+    trend: [...trend.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-10)
+      .map(([day, value]) => ({ label: formatDate(day), value })),
+    causes: [...causes.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([id, value]) => ({
+        label: CAUSE_LABELS[id as keyof typeof CAUSE_LABELS] ?? id,
+        value,
+        color: "var(--color-cobalt)",
+      })),
   };
 }
 
@@ -119,15 +130,17 @@ export function CustomReportPage() {
   } catch {
     // Invalid saved views must never prevent editing the default builder.
   }
-  const selectedTemplate = params.get("template") ??
+  const selectedTemplate =
+    params.get("template") ??
     (typeof savedFilters.template === "string" ? savedFilters.template : null);
   const template = REPORT_TEMPLATES.find((item) => item.id === selectedTemplate);
   const templateId = template?.id.replace(/^report-/, "") ?? "custom";
   const supportsActivityFilters = !["retention", "credentials", "skills"].includes(templateId);
   const [fields, setFields] = useState<string[]>(() => {
     const selected = Array.isArray(savedFilters.fields)
-      ? savedFilters.fields.filter((field): field is string =>
-          typeof field === "string" && FIELD_OPTIONS.some((option) => option.id === field),
+      ? savedFilters.fields.filter(
+          (field): field is string =>
+            typeof field === "string" && FIELD_OPTIONS.some((option) => option.id === field),
         )
       : [];
     return selected.length ? selected : DEFAULT_FIELDS;
@@ -141,7 +154,9 @@ export function CustomReportPage() {
   const [range, setRange] = useState<PeriodSelection>(() =>
     ["week", "month", "year", "all", "custom", "upcoming"].includes(String(savedFilters.range))
       ? (savedFilters.range as PeriodSelection)
-      : templateId === "coverage" ? "upcoming" : "year",
+      : templateId === "coverage"
+        ? "upcoming"
+        : "year",
   );
   const [customStart, setCustomStart] = useState(
     typeof savedFilters.customStart === "string"
@@ -153,7 +168,8 @@ export function CustomReportPage() {
   );
   const [grouping, setGrouping] = useState<ReportRequest["groupBy"]>(() =>
     ["none", "cause", "program"].includes(String(savedFilters.grouping))
-      ? (savedFilters.grouping as ReportRequest["groupBy"]) : "none",
+      ? (savedFilters.grouping as ReportRequest["groupBy"])
+      : "none",
   );
   const [chart, setChart] = useState("table");
   const [reportState, setReportState] = useState<{
@@ -165,30 +181,50 @@ export function CustomReportPage() {
   const [saved, setSaved] = useState("");
   const [error, setError] = useState("");
 
-  const period: { start: string; end: string } | null = range === "upcoming" ? null
-    : range === "custom" ? { start: customStart, end: customEnd }
-    : range === "all" ? { start: "1900-01-01", end: "9999-12-31" }
-    : reportRange(workspace.now, range);
+  const period: { start: string; end: string } | null =
+    range === "upcoming"
+      ? null
+      : range === "custom"
+        ? { start: customStart, end: customEnd }
+        : range === "all"
+          ? { start: "1900-01-01", end: "9999-12-31" }
+          : reportRange(workspace.now, range);
   const periodStart = period?.start ?? null;
   const periodEnd = period?.end ?? null;
   const invalidPeriod = Boolean(
-    supportsActivityFilters && period &&
+    supportsActivityFilters &&
+    period &&
     (!validIsoDate(period.start) || !validIsoDate(period.end) || period.start > period.end),
   );
-  const request = useMemo<ReportRequest>(() => ({
-    template: templateId,
-    fields,
-    dateStart: supportsActivityFilters ? periodStart : null,
-    dateEnd: supportsActivityFilters ? periodEnd : null,
-    cause: supportsActivityFilters && cause !== "all" ? cause : null,
-    programId: supportsActivityFilters && programId !== "all" ? programId : null,
-    groupBy: grouping,
-  }), [templateId, fields, supportsActivityFilters, periodStart, periodEnd, cause, programId, grouping]);
+  const request = useMemo<ReportRequest>(
+    () => ({
+      template: templateId,
+      fields,
+      dateStart: supportsActivityFilters ? periodStart : null,
+      dateEnd: supportsActivityFilters ? periodEnd : null,
+      cause: supportsActivityFilters && cause !== "all" ? cause : null,
+      programId: supportsActivityFilters && programId !== "all" ? programId : null,
+      groupBy: grouping,
+    }),
+    [
+      templateId,
+      fields,
+      supportsActivityFilters,
+      periodStart,
+      periodEnd,
+      cause,
+      programId,
+      grouping,
+    ],
+  );
   const requestKey = JSON.stringify(request);
 
   const programs = useMemo(() => {
     const byId = new Map<string, { id: string; title: string; cause: string }>();
-    for (const opportunity of [...workspace.opportunities, ...(session.createdOpportunities ?? [])]) {
+    for (const opportunity of [
+      ...workspace.opportunities,
+      ...(session.createdOpportunities ?? []),
+    ]) {
       byId.set(opportunity.id, {
         id: opportunity.id,
         title: opportunity.title,
@@ -201,16 +237,24 @@ export function CustomReportPage() {
   useEffect(() => {
     if (invalidPeriod) return;
     let active = true;
-    void getWorkspaceRepository().generateReport(request)
+    void getWorkspaceRepository()
+      .generateReport(request)
       .then((document) => {
-        if (active) setReportState({ key: requestKey, sourceSession: session, document, error: "" });
+        if (active)
+          setReportState({ key: requestKey, sourceSession: session, document, error: "" });
       })
       .catch((caught) => {
-        if (active) setReportState({
-          key: requestKey, sourceSession: session, document: null, error: messageOf(caught),
-        });
+        if (active)
+          setReportState({
+            key: requestKey,
+            sourceSession: session,
+            document: null,
+            error: messageOf(caught),
+          });
       });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [request, requestKey, invalidPeriod, session]);
 
   const currentReport = reportState?.key === requestKey && reportState.sourceSession === session;
@@ -218,18 +262,21 @@ export function CustomReportPage() {
   const loading = !invalidPeriod && !currentReport;
   const previewError = invalidPeriod
     ? "Choose real dates with a start date on or before the end date."
-    : currentReport ? reportState.error : "";
+    : currentReport
+      ? reportState.error
+      : "";
 
   const rows = useMemo<ReportRow[]>(
     () => (report?.rows ?? []).map((cells, index) => ({ id: String(index), cells })),
     [report],
   );
   const columns = useMemo<Column<ReportRow>[]>(
-    () => (report?.headers ?? []).map((header, index) => ({
-      key: "column-" + index,
-      header,
-      render: (row: ReportRow) => row.cells[index] ?? "",
-    })),
+    () =>
+      (report?.headers ?? []).map((header, index) => ({
+        key: "column-" + index,
+        header,
+        render: (row: ReportRow) => row.cells[index] ?? "",
+      })),
     [report],
   );
   const points = useMemo(() => chartPoints(report), [report]);
@@ -249,7 +296,13 @@ export function CustomReportPage() {
       setSaved(
         format === "pdf" && receipt.path === "print-dialog"
           ? "Printable report opened. Choose Save as PDF in the print dialog."
-          : "Exported " + receipt.title + " (" + receipt.format.toUpperCase() + ") to " + receipt.path + ".",
+          : "Exported " +
+              receipt.title +
+              " (" +
+              receipt.format.toUpperCase() +
+              ") to " +
+              receipt.path +
+              ".",
       );
     } catch (caught) {
       setError(messageOf(caught));
@@ -259,10 +312,20 @@ export function CustomReportPage() {
   async function saveView() {
     try {
       const name = template?.title ?? "Custom view";
-      await actions.saveReportView(name, "reports", JSON.stringify({
-        template: template?.id ?? null, fields, cause, programId, range,
-        customStart, customEnd, grouping,
-      }));
+      await actions.saveReportView(
+        name,
+        "reports",
+        JSON.stringify({
+          template: template?.id ?? null,
+          fields,
+          cause,
+          programId,
+          range,
+          customStart,
+          customEnd,
+          grouping,
+        }),
+      );
       setSaved("Saved " + name + " with " + fields.length + " fields and the current filters.");
       setError("");
     } catch (caught) {
@@ -281,12 +344,20 @@ export function CustomReportPage() {
         backLabel="Reports"
         actions={
           <>
-            <Button variant="secondary" icon={<FileDown size={14} />}
-              disabled={!canExport} onClick={() => void exportReport("pdf")}>
+            <Button
+              variant="secondary"
+              icon={<FileDown size={14} />}
+              disabled={!canExport}
+              onClick={() => void exportReport("pdf")}
+            >
               Export PDF
             </Button>
-            <Button variant="primary" icon={<Download size={14} />}
-              disabled={!canExport} onClick={() => void exportReport("csv")}>
+            <Button
+              variant="primary"
+              icon={<Download size={14} />}
+              disabled={!canExport}
+              onClick={() => void exportReport("csv")}
+            >
               Export CSV
             </Button>
           </>
@@ -301,28 +372,40 @@ export function CustomReportPage() {
                 {FIELD_OPTIONS.map((field) => (
                   <label className={styles.fieldOption} key={field.id}>
                     <input
-                      type="checkbox" checked={fields.includes(field.id)}
-                      onChange={(event) => setFields((current) =>
-                        event.target.checked
-                          ? [...current, field.id]
-                          : current.length > 1 ? current.filter((id) => id !== field.id) : current,
-                      )}
+                      type="checkbox"
+                      checked={fields.includes(field.id)}
+                      onChange={(event) =>
+                        setFields((current) =>
+                          event.target.checked
+                            ? [...current, field.id]
+                            : current.length > 1
+                              ? current.filter((id) => id !== field.id)
+                              : current,
+                        )
+                      }
                     />
                     {field.label}
                   </label>
                 ))}
               </div>
-              <SelectField label="Group rows by" value={grouping}
-                onChange={(event) => setGrouping(event.target.value as ReportRequest["groupBy"])}>
+              <SelectField
+                label="Group rows by"
+                value={grouping}
+                onChange={(event) => setGrouping(event.target.value as ReportRequest["groupBy"])}
+              >
                 <option value="none">Date order</option>
                 <option value="cause">Cause</option>
                 <option value="program">Program</option>
               </SelectField>
             </>
           ) : (
-            <p className={styles.tableNote}>This report uses a fixed set of fields specific to {template?.title.toLowerCase()}.</p>
+            <p className={styles.tableNote}>
+              This report uses a fixed set of fields specific to {template?.title.toLowerCase()}.
+            </p>
           )}
-          <p className={styles.tableNote}>Source record IDs let you verify individual entries against the service ledger.</p>
+          <p className={styles.tableNote}>
+            Source record IDs let you verify individual entries against the service ledger.
+          </p>
         </Card>
 
         <Card className={styles.canvas}>
@@ -331,13 +414,18 @@ export function CustomReportPage() {
               <div>
                 <h2 className={styles.paperTitle}>{report?.title ?? "Report preview"}</h2>
                 <p className={styles.paperMeta}>
-                  {report?.organization ?? workspace.organization.name} · {report?.period ?? "Preparing report"}
+                  {report?.organization ?? workspace.organization.name} ·{" "}
+                  {report?.period ?? "Preparing report"}
                 </p>
               </div>
               <Badge tone="cobalt">Source-backed</Badge>
             </div>
             {loading ? <p role="status">Calculating report from source records…</p> : null}
-            {previewError ? <p role="alert" style={{ color: "var(--tone-red-ink)" }}>{previewError}</p> : null}
+            {previewError ? (
+              <p role="alert" style={{ color: "var(--tone-red-ink)" }}>
+                {previewError}
+              </p>
+            ) : null}
             {report ? (
               <>
                 <div style={{ marginTop: 14, display: "flex", gap: 18, flexWrap: "wrap" }}>
@@ -355,27 +443,51 @@ export function CustomReportPage() {
                       { id: "trend", label: "Approved hours trend" },
                       { id: "cause", label: "By cause" },
                     ]}
-                    value={chart} onChange={setChart} label="Report visualization"
+                    value={chart}
+                    onChange={setChart}
+                    label="Report visualization"
                   />
                 </div>
                 <div style={{ marginTop: 14 }}>
                   {chart === "trend" ? (
                     points.trend.length ? (
-                      <AreaChart data={points.trend} height={176}
+                      <AreaChart
+                        data={points.trend}
+                        height={176}
                         label="Approved service time by date from current report rows"
-                        formatValue={formatMinutes} />
-                    ) : <p className={styles.tableNote}>To chart approved hours, include Service date and Approved minutes in a participation report.</p>
+                        formatValue={formatMinutes}
+                      />
+                    ) : (
+                      <p className={styles.tableNote}>
+                        To chart approved hours, include Service date and Approved minutes in a
+                        participation report.
+                      </p>
+                    )
                   ) : null}
                   {chart === "cause" ? (
                     points.causes.length ? (
-                      <DonutChart data={points.causes}
-                        centerValue={formatMinutes(points.causes.reduce((sum, point) => sum + point.value, 0))}
-                        centerLabel="approved time" label="Approved time by cause"
-                        valueFormatter={formatMinutes} />
-                    ) : <p className={styles.tableNote}>To analyze causes, include Cause and Approved minutes in a participation report.</p>
+                      <DonutChart
+                        data={points.causes}
+                        centerValue={formatMinutes(
+                          points.causes.reduce((sum, point) => sum + point.value, 0),
+                        )}
+                        centerLabel="approved time"
+                        label="Approved time by cause"
+                        valueFormatter={formatMinutes}
+                      />
+                    ) : (
+                      <p className={styles.tableNote}>
+                        To analyze causes, include Cause and Approved minutes in a participation
+                        report.
+                      </p>
+                    )
                   ) : null}
-                  <DataTable columns={columns} rows={rows} caption="Report source records"
-                    empty="No records match these filters. The empty report is valid." />
+                  <DataTable
+                    columns={columns}
+                    rows={rows}
+                    caption="Report source records"
+                    empty="No records match these filters. The empty report is valid."
+                  />
                 </div>
                 <p className={styles.tableNote}>
                   {rows.length} source rows · Generated {report.generatedAt.slice(0, 10)} ·
@@ -393,57 +505,104 @@ export function CustomReportPage() {
           </h2>
           {supportsActivityFilters ? (
             <div className={styles.filters}>
-              <SelectField label="Date range" value={range}
-                onChange={(event) => setRange(event.target.value as PeriodSelection)}>
+              <SelectField
+                label="Date range"
+                value={range}
+                onChange={(event) => setRange(event.target.value as PeriodSelection)}
+              >
                 <option value="week">Last 7 days</option>
                 <option value="month">This month</option>
                 <option value="year">Year to date</option>
                 <option value="all">All available dates</option>
                 <option value="custom">Custom dates</option>
-                {templateId === "coverage" ? <option value="upcoming">Upcoming shifts</option> : null}
+                {templateId === "coverage" ? (
+                  <option value="upcoming">Upcoming shifts</option>
+                ) : null}
               </SelectField>
               {range === "custom" ? (
                 <>
                   <label className={styles.tableNote}>
                     Start date
-                    <input aria-label="Report start date" type="date" value={customStart}
-                      onChange={(event) => setCustomStart(event.target.value)} />
+                    <input
+                      aria-label="Report start date"
+                      type="date"
+                      value={customStart}
+                      onChange={(event) => setCustomStart(event.target.value)}
+                    />
                   </label>
                   <label className={styles.tableNote}>
                     End date
-                    <input aria-label="Report end date" type="date" value={customEnd}
-                      onChange={(event) => setCustomEnd(event.target.value)} />
+                    <input
+                      aria-label="Report end date"
+                      type="date"
+                      value={customEnd}
+                      onChange={(event) => setCustomEnd(event.target.value)}
+                    />
                   </label>
                 </>
               ) : null}
-              <SelectField label="Cause" value={cause}
-                onChange={(event) => { setCause(event.target.value); setProgramId("all"); }}>
+              <SelectField
+                label="Cause"
+                value={cause}
+                onChange={(event) => {
+                  setCause(event.target.value);
+                  setProgramId("all");
+                }}
+              >
                 <option value="all">All causes</option>
                 {Object.entries(CAUSE_LABELS).map(([id, label]) => (
-                  <option key={id} value={id}>{label}</option>
+                  <option key={id} value={id}>
+                    {label}
+                  </option>
                 ))}
               </SelectField>
-              <SelectField label="Program" value={programId}
-                onChange={(event) => setProgramId(event.target.value)}>
+              <SelectField
+                label="Program"
+                value={programId}
+                onChange={(event) => setProgramId(event.target.value)}
+              >
                 <option value="all">All programs</option>
-                {programs.filter((program) => cause === "all" || program.cause === cause)
-                  .map((program) => <option key={program.id} value={program.id}>{program.title}</option>)}
+                {programs
+                  .filter((program) => cause === "all" || program.cause === cause)
+                  .map((program) => (
+                    <option key={program.id} value={program.id}>
+                      {program.title}
+                    </option>
+                  ))}
               </SelectField>
             </div>
           ) : (
             <p className={styles.tableNote}>
-              Cohort and credential inventory reports are snapshots. Program, cause and service-date filters do not apply.
+              Cohort and credential inventory reports are snapshots. Program, cause and service-date
+              filters do not apply.
             </p>
           )}
           <div style={{ marginTop: 16 }}>
-            <Button variant="secondary" size="small" icon={<Save size={12} />}
-              onClick={() => void saveView()}>Save this view</Button>
+            <Button
+              variant="secondary"
+              size="small"
+              icon={<Save size={12} />}
+              onClick={() => void saveView()}
+            >
+              Save this view
+            </Button>
           </div>
-          <Link to="/coordinator/reports" style={{ display: "block", marginTop: 12, fontSize: 12.5 }}>
+          <Link
+            to="/coordinator/reports"
+            style={{ display: "block", marginTop: 12, fontSize: 12.5 }}
+          >
             Back to templates
           </Link>
-          {error ? <p role="alert" style={{ color: "var(--tone-red-ink)" }}>{error}</p> : null}
-          {saved ? <p role="status" style={{ color: "var(--tone-green-ink)" }}>{saved}</p> : null}
+          {error ? (
+            <p role="alert" style={{ color: "var(--tone-red-ink)" }}>
+              {error}
+            </p>
+          ) : null}
+          {saved ? (
+            <p role="status" style={{ color: "var(--tone-green-ink)" }}>
+              {saved}
+            </p>
+          ) : null}
         </Card>
       </div>
     </Page>

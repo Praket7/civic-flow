@@ -216,7 +216,14 @@ fn participation(
            AND (?5 IS NULL OR o.organization_id = ?5)
          ORDER BY CASE WHEN ?6 = 'cause' THEN o.cause WHEN ?6 = 'program' THEN o.title ELSE '' END, h.date DESC, v.name",
     )?;
-    let mut rows = statement.query(params![start, end, cause, program, crate::scope::current(conn)?, request.group_by])?;
+    let mut rows = statement.query(params![
+        start,
+        end,
+        cause,
+        program,
+        crate::scope::current(conn)?,
+        request.group_by
+    ])?;
     let mut output = Vec::new();
     let mut pending_minutes = 0_i64;
     let mut rejected = 0_i64;
@@ -233,12 +240,19 @@ fn participation(
         let role: String = row.get(7)?;
         let requested: i64 = row.get(8)?;
         let record_id: String = row.get(9)?;
-        let approved = if status == "verified" { approved_value.unwrap_or(0).max(0) } else { 0 };
+        let approved = if status == "verified" {
+            approved_value.unwrap_or(0).max(0)
+        } else {
+            0
+        };
         match status.as_str() {
-            "verified" => { verified_minutes += approved; volunteers.insert(volunteer.clone()); },
+            "verified" => {
+                verified_minutes += approved;
+                volunteers.insert(volunteer.clone());
+            }
             "pending" => pending_minutes += requested.max(0),
             "rejected" => rejected += 1,
-            _ => {},
+            _ => {}
         }
         let mut values = Vec::with_capacity(fields.len());
         for field in &fields {
@@ -246,7 +260,13 @@ fn participation(
                 "volunteer" => volunteer.clone(),
                 "program" => program.clone(),
                 "date" => date.clone(),
-                "hours" => if status == "verified" { approved.to_string() } else { String::new() },
+                "hours" => {
+                    if status == "verified" {
+                        approved.to_string()
+                    } else {
+                        String::new()
+                    }
+                }
                 "requested" => requested.to_string(),
                 "recordId" => record_id.clone(),
                 "status" => status.clone(),
@@ -291,11 +311,20 @@ fn participation(
     ))
 }
 
-fn coverage(conn: &Connection, request: &ReportRequest, start: &str, end: &str) -> Result<ReportTable> {
+fn coverage(
+    conn: &Connection,
+    request: &ReportRequest,
+    start: &str,
+    end: &str,
+) -> Result<ReportTable> {
     let now = now(conn)?.to_rfc3339();
     let cause = request.cause.clone().unwrap_or_default();
     let program = request.program_id.as_deref().unwrap_or("");
-    let upcoming = if request.date_start.is_none() && request.date_end.is_none() { 1 } else { 0 };
+    let upcoming = if request.date_start.is_none() && request.date_end.is_none() {
+        1
+    } else {
+        0
+    };
     let mut statement = conn.prepare(
         "SELECT substr(s.starts_at, 1, 10), o.title, r.name, r.required, r.filled,
                 MAX(r.required - r.filled, 0), s.status
@@ -309,7 +338,15 @@ fn coverage(conn: &Connection, request: &ReportRequest, start: &str, end: &str) 
            AND (?7 IS NULL OR o.organization_id = ?7)
          ORDER BY s.starts_at, o.title, r.name",
     )?;
-    let mut rows = statement.query(params![now, start, end, upcoming, cause, program, crate::scope::current(conn)?])?;
+    let mut rows = statement.query(params![
+        now,
+        start,
+        end,
+        upcoming,
+        cause,
+        program,
+        crate::scope::current(conn)?
+    ])?;
     let mut output = Vec::new();
     let mut required_total = 0_i64;
     let mut filled_total = 0_i64;
@@ -330,8 +367,13 @@ fn coverage(conn: &Connection, request: &ReportRequest, start: &str, end: &str) 
             status,
         ]);
     }
-    let percent = if required_total == 0 { "N/A".to_string() } else {
-        format!("{}%", (filled_total as f64 / required_total as f64 * 100.0).round() as i64)
+    let percent = if required_total == 0 {
+        "N/A".to_string()
+    } else {
+        format!(
+            "{}%",
+            (filled_total as f64 / required_total as f64 * 100.0).round() as i64
+        )
     };
     Ok((
         vec![
@@ -386,7 +428,13 @@ fn attendance(
            AND (?5 IS NULL OR o.organization_id = ?5)
          ORDER BY s.starts_at DESC, v.name",
     )?;
-    let mut rows = statement.query(params![start, end, cause, program, crate::scope::current(conn)?])?;
+    let mut rows = statement.query(params![
+        start,
+        end,
+        cause,
+        program,
+        crate::scope::current(conn)?
+    ])?;
     let mut output = Vec::new();
     let mut checked_in = 0_i64;
     let mut completed = 0_i64;
@@ -395,7 +443,10 @@ fn attendance(
         let status: String = row.get(4)?;
         match status.as_str() {
             "checked_in" => checked_in += 1,
-            "completed" => { checked_in += 1; completed += 1; },
+            "completed" => {
+                checked_in += 1;
+                completed += 1;
+            }
             "no_show" => no_show += 1,
             _ => {}
         }
@@ -536,7 +587,12 @@ fn skills(conn: &Connection) -> Result<ReportTable> {
     ))
 }
 
-fn impact(conn: &Connection, request: &ReportRequest, start: &str, end: &str) -> Result<ReportTable> {
+fn impact(
+    conn: &Connection,
+    request: &ReportRequest,
+    start: &str,
+    end: &str,
+) -> Result<ReportTable> {
     let cause = request.cause.as_deref().unwrap_or("");
     let program = request.program_id.as_deref().unwrap_or("");
     let mut statement = conn.prepare(
@@ -549,7 +605,13 @@ fn impact(conn: &Connection, request: &ReportRequest, start: &str, end: &str) ->
            AND (?5 IS NULL OR o.organization_id = ?5)
          ORDER BY o.title, d.name, r.recorded_at",
     )?;
-    let mut rows = statement.query(params![start, end, cause, program, crate::scope::current(conn)?])?;
+    let mut rows = statement.query(params![
+        start,
+        end,
+        cause,
+        program,
+        crate::scope::current(conn)?
+    ])?;
     let mut output = Vec::new();
     while let Some(row) = rows.next()? {
         let value: f64 = row.get(3)?;
