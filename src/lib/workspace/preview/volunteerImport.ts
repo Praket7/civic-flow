@@ -52,34 +52,57 @@ function parseCsv(text: string): string[][] {
   let row: string[] = [];
   let cell = "";
   let quoted = false;
+  let afterQuote = false;
   const characters = [...text.replace(/^\ufeff/, "")];
+
   for (let index = 0; index < characters.length; index += 1) {
     const character = characters[index];
-    if (character === '"') {
-      if (quoted && characters[index + 1] === '"') {
+    if (quoted) {
+      if (character === '"' && characters[index + 1] === '"') {
         cell += '"';
         index += 1;
+      } else if (character === '"') {
+        quoted = false;
+        afterQuote = true;
       } else {
-        quoted = !quoted;
+        cell += character;
       }
-    } else if (character === "," && !quoted) {
-      row.push(cell);
-      cell = "";
-    } else if ((character === "\n" || character === "\r") && !quoted) {
-      if (character === "\r" && characters[index + 1] === "\n") index += 1;
-      row.push(cell);
-      rows.push(row);
-      row = [];
-      cell = "";
-    } else {
-      cell += character;
+      continue;
     }
+
+    if (character === '"') {
+      if (cell.length > 0 || afterQuote) {
+        throw new Error("The CSV contains a quote inside an unquoted cell.");
+      }
+      quoted = true;
+      continue;
+    }
+
+    if (character === "," || character === "\r" || character === "\n") {
+      row.push(cell);
+      cell = "";
+      afterQuote = false;
+      if (character === "\r" || character === "\n") {
+        if (character === "\r" && characters[index + 1] === "\n") index += 1;
+        rows.push(row);
+        row = [];
+      }
+      continue;
+    }
+
+    if (afterQuote) {
+      // Some spreadsheet editors add whitespace between a closing quote and comma.
+      if (character === " " || character === "\t") continue;
+      throw new Error("The CSV contains text after a closing quote.");
+    }
+    cell += character;
   }
-  if (cell.trim().length > 0 || row.length > 0) {
+
+  if (quoted) throw new Error("The CSV contains an unfinished quoted cell.");
+  if (cell.trim().length > 0 || row.length > 0 || afterQuote) {
     row.push(cell);
     rows.push(row);
   }
-  if (quoted) throw new Error("The CSV contains an unfinished quoted cell.");
   return rows.filter((cells) => cells.some((value) => value.trim().length > 0));
 }
 

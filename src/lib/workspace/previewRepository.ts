@@ -74,6 +74,7 @@ import type {
 import * as previewOrganizations from "../organizations/preview";
 import { buildMissionControl } from "./compute";
 import { buildPreviewReport } from "./preview/reports";
+import { renderPrintableReport } from "./preview/reportHtml";
 import { IMPORT_COLUMNS, previewVolunteerCsv } from "./preview/volunteerImport";
 import { demoWorkspace } from "./dataset";
 import { blankWorkspaceForOrganization, withRoster } from "./organizationWorkspace";
@@ -2018,14 +2019,7 @@ export const previewRepository: WorkspaceRepository = {
     }
     const printWindow = window.open("", "_blank", "width=960,height=1000");
     if (!printWindow) throw new Error("Allow pop-ups to open the printable report.");
-    printWindow.document.write(
-      `<!doctype html><title>${report.title}</title><style>body{font:12px system-ui;padding:32px;color:#111}h1{font-size:20px}h2{font-size:14px;font-weight:500}table{border-collapse:collapse;width:100%;margin-top:16px}th,td{border-bottom:1px solid #ddd;padding:6px;text-align:left;font-size:10px}th{background:#f2f2f2}</style>` +
-        `<h1>${report.organization}</h1><h2>${report.title} · ${report.period}</h2>` +
-        `<p>${report.summary.map((item) => `${item.label}: ${item.value}`).join(" · ")}</p>` +
-        `<table><thead><tr>${report.headers.map((header) => `<th>${header}</th>`).join("")}</tr></thead><tbody>${report.rows
-          .map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`)
-          .join("")}</tbody></table>`,
-    );
+    printWindow.document.write(renderPrintableReport(report));
     printWindow.document.close();
     printWindow.focus();
     printWindow.setTimeout(() => printWindow.print(), 250);

@@ -40,6 +40,31 @@ describe("browser volunteer CSV importer", () => {
     expect(result.rows[2].problems.join(" ")).toContain("Two rows use");
   });
 
+
+  it("accepts escaped quotes and embedded line breaks in quoted CSV fields", () => {
+    const result = previewVolunteerCsv(
+      'Name,Email,Skills\r\n"Pat ""Buddy"" Lee",pat@example.org,"First aid;\n Tutoring"\r\n',
+      [],
+    );
+    expect(result.problems).toEqual([]);
+    expect(result.valid).toBe(1);
+    expect(result.rows[0]).toMatchObject({
+      name: 'Pat "Buddy" Lee',
+      skills: ["First aid", "Tutoring"],
+    });
+  });
+
+  it.each([
+    ['Name,Email\nPat "Buddy" Lee,pat@example.org', "quote inside an unquoted cell"],
+    ['Name,Email\n"Pat"oops,pat@example.org', "text after a closing quote"],
+    ['Name,Email\nPat,pat"oops"@example.org', "quote inside an unquoted cell"],
+  ])("rejects malformed quoting before importing any rows", (source, problem) => {
+    const result = previewVolunteerCsv(source, []);
+    expect(result.total).toBe(0);
+    expect(result.valid).toBe(0);
+    expect(result.problems.join(" ")).toContain(problem);
+  });
+
   it("returns a helpful, noncrashing error for unclosed quoted cells", () => {
     const result = previewVolunteerCsv('Name,Email\n"broken,b@example.org', []);
     expect(result.rows).toHaveLength(0);

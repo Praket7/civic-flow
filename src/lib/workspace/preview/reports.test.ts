@@ -107,6 +107,36 @@ describe("pure preview reporting", () => {
     expect(result.summary).toContainEqual({ label: "Outcome records", value: "1" });
   });
 
+
+  it("includes completed shifts in an explicitly selected historical coverage period", () => {
+    const historical = {
+      ...workspace,
+      shifts: [
+        {
+          ...workspace.shifts[0],
+          id: "shift-history",
+          startsAt: "2026-11-15T09:00:00-05:00",
+          status: "completed",
+        },
+        ...workspace.shifts,
+      ],
+    } as DemoWorkspace;
+    const selected = buildPreviewReport(request, historical, state);
+    expect(selected.rows.map((row) => row[0])).toEqual([
+      "2026-11-15",
+      "2026-11-23",
+      "2026-11-24",
+    ]);
+    expect(selected.summary).toContainEqual({ label: "Required role slots", value: "8" });
+    const upcoming = buildPreviewReport(
+      { ...request, dateStart: undefined, dateEnd: undefined },
+      historical,
+      state,
+    );
+    expect(upcoming.rows).toHaveLength(2);
+    expect(upcoming.rows.every((row) => row[0] > "2026-11-22")).toBe(true);
+  });
+
   it("does not mutate a source workspace", () => {
     const before = JSON.stringify(workspace);
     buildPreviewReport(request, workspace, state);
