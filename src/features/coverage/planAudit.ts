@@ -36,6 +36,7 @@ export function auditRosterPlan(plan: RosterPlan, candidates: Candidate[]): Plan
     const explanation = assignment.explanation;
     if (
       !explanation ||
+      !knownCandidates.has(assignment.candidateId) ||
       !explanation.eligible ||
       !explanation.selected ||
       explanation.candidateId !== assignment.candidateId ||

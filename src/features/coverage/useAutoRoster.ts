@@ -354,7 +354,7 @@ export function useAutoRoster() {
 
   async function applyPlan() {
     if (applied || applying || !plan) return;
-    if (!planAudit?.safeToApply) {
+    if (!planAudit?.safeToApply || activePlan.length !== plan.assignments.length) {
       setError(
         "This plan did not pass independent verification. Rebuild the plan before applying.",
       );

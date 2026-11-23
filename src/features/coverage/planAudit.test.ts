@@ -95,6 +95,13 @@ describe("AutoRoster Stage 3 independent proposal audit", () => {
     expect(result.safeToApply).toBe(true);
   });
 
+  it("rejects assignments for volunteers missing from the current evaluation", () => {
+    const proposed = plan([assignment("unknown", "seat-1", 75)]);
+    const result = auditRosterPlan(proposed, [candidate("known")]);
+    expect(result.safeToApply).toBe(false);
+    expect(result.issues.join(" ")).toMatch(/inconsistent eligibility/);
+  });
+
   it("rejects inconsistent totals and explanations rather than approving a broken plan", () => {
     const proposed = plan([assignment("a", "seat-1", 70)]);
     proposed.totalScore = 90;
