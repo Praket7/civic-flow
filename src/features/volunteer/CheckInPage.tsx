@@ -120,7 +120,11 @@ function CheckInBody({ liveEvent }: { liveEvent: LiveEvent }) {
   const capacity = shift.capacity;
   const percent = capacity === 0 ? 0 : Math.round((checkedInCount / capacity) * 100);
   const canSubmit =
-    isOpen && Boolean(myRow) && !alreadyCheckedIn && !busy && digits.every((digit) => digit.length === 1);
+    isOpen &&
+    Boolean(myRow) &&
+    !alreadyCheckedIn &&
+    !busy &&
+    digits.every((digit) => digit.length === 1);
 
   function focusInput(index: number) {
     const bounded = Math.max(0, Math.min(CODE_LENGTH - 1, index));
