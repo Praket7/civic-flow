@@ -112,56 +112,65 @@ function validIsoDate(value: string): boolean {
 export function CustomReportPage() {
   const { workspace, session, actions } = useWorkspace();
   const [params] = useSearchParams();
-  const template = REPORT_TEMPLATES.find((item) => item.id === params.get("template"));
+  const savedView = session.savedViews?.find((view) => view.id === params.get("view"));
+  let savedFilters: Record<string, unknown> = {};
+  try {
+    if (savedView) savedFilters = JSON.parse(savedView.filtersJson) as Record<string, unknown>;
+  } catch {
+    // Invalid saved views must never prevent editing the default builder.
+  }
+  const selectedTemplate = params.get("template") ??
+    (typeof savedFilters.template === "string" ? savedFilters.template : null);
+  const template = REPORT_TEMPLATES.find((item) => item.id === selectedTemplate);
   const templateId = template?.id.replace(/^report-/, "") ?? "custom";
   const supportsActivityFilters = !["retention", "credentials", "skills"].includes(templateId);
-  const [fields, setFields] = useState<string[]>(DEFAULT_FIELDS);
-  const [cause, setCause] = useState("all");
-  const [programId, setProgramId] = useState("all");
-  const [range, setRange] = useState<PeriodSelection>(templateId === "coverage" ? "upcoming" : "year");
-  const [customStart, setCustomStart] = useState(currentDay(workspace.now).slice(0, 4) + "-01-01");
-  const [customEnd, setCustomEnd] = useState(currentDay(workspace.now));
-  const [grouping, setGrouping] = useState<ReportRequest["groupBy"]>("none");
+  const [fields, setFields] = useState<string[]>(() => {
+    const selected = Array.isArray(savedFilters.fields)
+      ? savedFilters.fields.filter((field): field is string =>
+          typeof field === "string" && FIELD_OPTIONS.some((option) => option.id === field),
+        )
+      : [];
+    return selected.length ? selected : DEFAULT_FIELDS;
+  });
+  const [cause, setCause] = useState(
+    typeof savedFilters.cause === "string" ? savedFilters.cause : "all",
+  );
+  const [programId, setProgramId] = useState(
+    typeof savedFilters.programId === "string" ? savedFilters.programId : "all",
+  );
+  const [range, setRange] = useState<PeriodSelection>(() =>
+    ["week", "month", "year", "all", "custom", "upcoming"].includes(String(savedFilters.range))
+      ? (savedFilters.range as PeriodSelection)
+      : templateId === "coverage" ? "upcoming" : "year",
+  );
+  const [customStart, setCustomStart] = useState(
+    typeof savedFilters.customStart === "string"
+      ? savedFilters.customStart
+      : currentDay(workspace.now).slice(0, 4) + "-01-01",
+  );
+  const [customEnd, setCustomEnd] = useState(
+    typeof savedFilters.customEnd === "string" ? savedFilters.customEnd : currentDay(workspace.now),
+  );
+  const [grouping, setGrouping] = useState<ReportRequest["groupBy"]>(() =>
+    ["none", "cause", "program"].includes(String(savedFilters.grouping))
+      ? (savedFilters.grouping as ReportRequest["groupBy"]) : "none",
+  );
   const [chart, setChart] = useState("table");
-  const [report, setReport] = useState<ReportDocument | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [reportState, setReportState] = useState<{
+    key: string;
+    sourceSession: typeof session;
+    document: ReportDocument | null;
+    error: string;
+  } | null>(null);
   const [saved, setSaved] = useState("");
   const [error, setError] = useState("");
-  const [previewError, setPreviewError] = useState("");
 
-  const savedView = session.savedViews?.find((view) => view.id === params.get("view"));
-  useEffect(() => {
-    if (!savedView) return;
-    try {
-      const filters = JSON.parse(savedView.filtersJson) as Record<string, unknown>;
-      const validFields = Array.isArray(filters.fields)
-        ? filters.fields.filter((field): field is string =>
-            typeof field === "string" && FIELD_OPTIONS.some((option) => option.id === field),
-          )
-        : [];
-      if (validFields.length) setFields(validFields);
-      if (typeof filters.cause === "string") setCause(filters.cause);
-      if (typeof filters.programId === "string") setProgramId(filters.programId);
-      if (["week", "month", "year", "all", "custom", "upcoming"].includes(String(filters.range))) {
-        setRange(filters.range as PeriodSelection);
-      }
-      if (typeof filters.customStart === "string") setCustomStart(filters.customStart);
-      if (typeof filters.customEnd === "string") setCustomEnd(filters.customEnd);
-      if (["none", "cause", "program"].includes(String(filters.grouping))) {
-        setGrouping(filters.grouping as ReportRequest["groupBy"]);
-      }
-    } catch {
-      setPreviewError("This saved view has invalid settings. Default filters are shown.");
-    }
-  }, [savedView?.id]);
-
-  const period = useMemo(() => {
-    if (range === "upcoming") return null;
-    if (range === "custom") return { start: customStart, end: customEnd };
-    if (range === "all") return { start: "1900-01-01", end: "9999-12-31" };
-    return reportRange(workspace.now, range);
-  }, [workspace.now, range, customStart, customEnd]);
-
+  const period: { start: string; end: string } | null = range === "upcoming" ? null
+    : range === "custom" ? { start: customStart, end: customEnd }
+    : range === "all" ? { start: "1900-01-01", end: "9999-12-31" }
+    : reportRange(workspace.now, range);
+  const periodStart = period?.start ?? null;
+  const periodEnd = period?.end ?? null;
   const invalidPeriod = Boolean(
     supportsActivityFilters && period &&
     (!validIsoDate(period.start) || !validIsoDate(period.end) || period.start > period.end),
@@ -169,12 +178,13 @@ export function CustomReportPage() {
   const request = useMemo<ReportRequest>(() => ({
     template: templateId,
     fields,
-    dateStart: supportsActivityFilters ? period?.start ?? null : null,
-    dateEnd: supportsActivityFilters ? period?.end ?? null : null,
+    dateStart: supportsActivityFilters ? periodStart : null,
+    dateEnd: supportsActivityFilters ? periodEnd : null,
     cause: supportsActivityFilters && cause !== "all" ? cause : null,
     programId: supportsActivityFilters && programId !== "all" ? programId : null,
     groupBy: grouping,
-  }), [templateId, fields, supportsActivityFilters, period, cause, programId, grouping]);
+  }), [templateId, fields, supportsActivityFilters, periodStart, periodEnd, cause, programId, grouping]);
+  const requestKey = JSON.stringify(request);
 
   const programs = useMemo(() => {
     const byId = new Map<string, { id: string; title: string; cause: string }>();
@@ -189,20 +199,26 @@ export function CustomReportPage() {
   }, [workspace.opportunities, session.createdOpportunities]);
 
   useEffect(() => {
-    if (invalidPeriod) {
-      setReport(null);
-      setLoading(false);
-      setPreviewError("Choose real dates with a start date on or before the end date.");
-      return;
-    }
-    let current = true;
-    setLoading(true);
-    setPreviewError("");
+    if (invalidPeriod) return;
+    let active = true;
     void getWorkspaceRepository().generateReport(request)
-      .then((generated) => { if (current) { setReport(generated); setLoading(false); } })
-      .catch((caught) => { if (current) { setPreviewError(messageOf(caught)); setReport(null); setLoading(false); } });
-    return () => { current = false; };
-  }, [request, invalidPeriod, session]);
+      .then((document) => {
+        if (active) setReportState({ key: requestKey, sourceSession: session, document, error: "" });
+      })
+      .catch((caught) => {
+        if (active) setReportState({
+          key: requestKey, sourceSession: session, document: null, error: messageOf(caught),
+        });
+      });
+    return () => { active = false; };
+  }, [request, requestKey, invalidPeriod, session]);
+
+  const currentReport = reportState?.key === requestKey && reportState.sourceSession === session;
+  const report = !invalidPeriod && currentReport ? reportState.document : null;
+  const loading = !invalidPeriod && !currentReport;
+  const previewError = invalidPeriod
+    ? "Choose real dates with a start date on or before the end date."
+    : currentReport ? reportState.error : "";
 
   const rows = useMemo<ReportRow[]>(
     () => (report?.rows ?? []).map((cells, index) => ({ id: String(index), cells })),
@@ -289,7 +305,7 @@ export function CustomReportPage() {
                       onChange={(event) => setFields((current) =>
                         event.target.checked
                           ? [...current, field.id]
-                          : current.filter((id) => id !== field.id),
+                          : current.length > 1 ? current.filter((id) => id !== field.id) : current,
                       )}
                     />
                     {field.label}
