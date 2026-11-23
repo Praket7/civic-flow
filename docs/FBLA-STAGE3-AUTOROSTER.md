@@ -1,7 +1,7 @@
 # Stage 3 — AutoRoster intelligence and verification
 
 **Repository:** Praket7/civic-flow  
-**Baseline:** main commit 312dbd7 (merged PR #13). PR #14 merged at 7518fed; all six CI jobs passed on merged main.
+**Baseline:** Stage 2 PR #13 merged at 312dbd7; Stage 3 PR #14 merged at 7518fed and consolidated PR #16 merged at 7750182. All six PR #16 CI jobs passed.
 **Scope:** explainable and deterministic staffing decisions, a trustworthy coordinator review, adversarial correctness evidence, and reproducible benchmarks. This stage does not change production Supabase schema or misrepresent the judging demo as a hosted multiuser coordinator.
 
 ## Algorithm and already-implemented capabilities
@@ -71,11 +71,14 @@ Record CPU, Rust version, build profile, volunteer and seat counts, greedy/optim
 
 ## Acceptance gates
 
-- [ ] Six GitHub CI jobs green on the final Stage 3 PR head.
-- [ ] Native solver oracle and specialist-scarcity tests pass, alongside existing constraints and forced-comparison tests.
-- [ ] Frontend proposal reconciliation, invalid-plan blocking, and alternative ranking tests pass.
-- [ ] Stage 2 golden roster regression and cancellation recovery remain green.
-- [ ] Coordinators can review, question, and reject a plan without writing data.
-- [ ] Demo production domain runs the intended commit, with fresh-browser welcome and no-account example access.
+Verified against merged PR #16 (CI run [45185465715](https://github.com/Praket7/civic-flow/actions/runs/45185465715), six successful jobs) and the production Vercel alias. On November 23, 2026, the canonical URL resolved to the Stage 3 merge deployment `7750182` (READY). The compiled Chromium check exercises fresh-browser welcome, both no-account entry paths, and the sample coordinator route. The UI's preview and why-not controls are read-only until the explicit Apply operation, which performs authoritative transactional checks. This is automated source and built-browser acceptance, not independent real-account usability or clean-device sign-off.
+
+
+- [x] Six GitHub CI jobs green on the final Stage 3 PR head.
+- [x] Native solver oracle and specialist-scarcity tests pass, alongside existing constraints and forced-comparison tests.
+- [x] Frontend proposal reconciliation, invalid-plan blocking, and alternative ranking tests pass.
+- [x] Stage 2 golden roster regression and cancellation recovery remain green.
+- [x] Coordinators can review, question, and reject a plan without writing data.
+- [x] Demo production domain runs the intended commit, with fresh-browser welcome and no-account example access.
 
 Separate release gates remain for real multi-organization staging accounts, cloud migration history, encrypted restore, signed installers, and clean-device testing. A green synthetic CI suite is not proof of these.

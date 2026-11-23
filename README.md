@@ -163,13 +163,19 @@ CivicFlow is released under the [MIT License](LICENSE). The generated [third-par
 
 ## Stage 2: software quality and competition evidence
 
-The [Stage 2 engineering and 110-point rubric evidence guide](docs/FBLA-STAGE2-QUALITY.md) documents the extracted preview report/CSV modules, cross-platform error recovery contract, deterministic AutoRoster benchmarks, exact test commands, and the seven-minute demonstration. The [Stage 2 draft pull request](https://github.com/Praket7/civic-flow/pull/9) is not a release. Do not describe a passing build as verified production authorization, successful backup recovery or signed installation.
+**Stage 2 engineering is complete.** The [Stage 2 quality and 110-point rubric evidence guide](docs/FBLA-STAGE2-QUALITY.md) covers modular preview repositories, validation, error recovery, benchmarks, tests, and the seven-minute demonstration. [PR #13](https://github.com/Praket7/civic-flow/pull/13) merged the engineering closeout. Real multi-account production acceptance, restore rehearsal, and signed installers remain separate release requirements; automated checks do not certify them.
+
+## Stage 3: explainable AutoRoster and verified demo
+
+**Stage 3 engineering is complete.** [PR #14](https://github.com/Praket7/civic-flow/pull/14) and [PR #16](https://github.com/Praket7/civic-flow/pull/16) delivered independently audited staffing proposals, role/candidate eligibility and cross-shift overlap validation, understandable alternative recommendations, deterministic scarcity tests, and before/after workload evidence. The [Stage 3 verification guide](docs/FBLA-STAGE3-AUTOROSTER.md) documents research, reproduction, limitations and exact acceptance evidence.
+
+The verified public domain is **[civic-flow-demo.vercel.app](https://civic-flow-demo.vercel.app/)**. To see the full coordinator example without an account, open **[the interactive judging demo](https://civic-flow-demo.vercel.app/judge/demo/#/welcome)**. The sample uses browser-local data and is not a hosted organization. The public root is the real Supabase-backed volunteer PWA, which requires an authorized organization invitation for shared records.
 
 ## FBLA judging review
 
-A reviewed **dedicated judging hostname** serves a **separate judging page** at `/judge/`. It links to
-`/judge/demo/#/welcome`, the full coordinator UI running only against **browser-local sample
-data**. This is not a real hosted nonprofit workspace. The production root continues to serve
+The **[FBLA competition review](https://civic-flow-demo.vercel.app/judge/)** links to
+the **[no-account coordinator demo](https://civic-flow-demo.vercel.app/judge/demo/#/welcome)**,
+which runs against **browser-local sample data**. This is not a real hosted nonprofit workspace. The production root continues to serve
 the authenticated Supabase-backed PWA. Never host the judging sample on an active nonprofit's production origin: paths do not isolate
 browser storage. The desktop release remains the complete offline app.
 
