@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyError, messageOf } from "./errors";
+import { classifyError, messageOf, providerError } from "./errors";
 
 describe("cross-platform recovery errors", () => {
   it("preserves meaningful validation messages and field hints", () => {
@@ -56,5 +56,41 @@ describe("hosted provider error descriptions", () => {
     expect(messageOf({ error_description: "Session was not found" })).toBe("Session was not found");
     expect(messageOf(null)).not.toMatch(/\[object Object\]|null/);
     expect(messageOf({ unexpected: true }, "Please retry")).toBe("Please retry");
+  });
+});
+
+describe("adversarial hosted and native failures", () => {
+  it("classifies provider SQLSTATE and HTTP responses", () => {
+    expect(classifyError(providerError({ code: "23505", message: "duplicate" }))).toMatchObject({
+      category: "conflict",
+      retryable: false,
+    });
+    expect(classifyError(providerError({ code: "23514", message: "constraint" })).category).toBe(
+      "validation",
+    );
+    expect(classifyError(providerError({ status: 401, message: "Expired" })).category).toBe(
+      "authentication",
+    );
+    expect(classifyError(providerError({ status: 403, message: "Forbidden" })).category).toBe(
+      "permission",
+    );
+  });
+  it("never exposes private SQL, file paths, or server traces", () => {
+    for (const message of [
+      "SELECT * FROM secrets",
+      "INSERT INTO credentials",
+      "/private/var/db/main.sqlite",
+      "postgres stack trace",
+    ]) {
+      expect(messageOf({ code: "GENERIC_PROVIDER", message })).toBe(
+        "The request couldn't be completed.",
+      );
+    }
+  });
+  it("handles malformed provider values safely", () => {
+    expect(messageOf(providerError(null))).toContain("service request failed");
+    expect(
+      classifyError(providerError({ status: 500, message: "Internal failure" })).category,
+    ).toBe("internal");
   });
 });
