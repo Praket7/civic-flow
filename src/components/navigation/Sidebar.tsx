@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Accessibility,
   BarChart3,
   BriefcaseBusiness,
   CalendarDays,
@@ -338,14 +339,6 @@ export function Sidebar({
                 </>
               ) : null}
               <Link
-                to={isCoordinator ? "/coordinator/accessibility" : "/volunteer/profile"}
-                className={styles.menuItem}
-                role="menuitem"
-                onClick={dismissOnNavigate}
-              >
-                Accessibility
-              </Link>
-              <Link
                 to="/help"
                 className={styles.menuItem}
                 role="menuitem"
@@ -405,6 +398,20 @@ export function Sidebar({
         </nav>
 
         <div className={styles.footer}>
+          {isCoordinator ? (
+            <NavLink
+              to="/coordinator/accessibility"
+              className={({ isActive }) =>
+                `${styles.accessibilityLink} ${isActive ? styles.accessibilityLinkActive : ""}`
+              }
+              aria-label="Accessibility settings"
+              title="Accessibility settings"
+              onClick={dismissOnNavigate}
+            >
+              <Accessibility size={17} strokeWidth={1.8} aria-hidden="true" />
+              <span className={styles.accessibilityLabel}>Accessibility</span>
+            </NavLink>
+          ) : null}
           <div className={styles.person}>
             <Avatar
               initials={person.initials}

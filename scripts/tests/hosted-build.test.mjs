@@ -86,6 +86,16 @@ test("public judging page points at the isolated sample and labels its data", as
   assert.match(html, /offline/i);
 });
 
+test("judging copy is product-led rather than instructions or scoring claims", async () => {
+  const html = await readFile(new URL("../../public/judge/index.html", import.meta.url), "utf8");
+  assert.match(html, /Every open shift has a clear path to being filled/);
+  assert.match(html, /Thoughtful details\. Dependable decisions/);
+  assert.doesNotMatch(
+    html,
+    /Judge the working program|Try a bad value|Verify stored records|Change the analysis|New York prejudging · 200 points|How to evaluate the program/,
+  );
+});
+
 test("volunteer service worker leaves judging pages outside its PWA shell cache", async () => {
   const source = await readFile(new URL("../../public/sw.js", import.meta.url), "utf8");
   const listeners = new Map();

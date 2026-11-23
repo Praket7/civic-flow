@@ -15,6 +15,13 @@ function toneFor(percent: number) {
 }
 
 export function WeekCoverageCard({ days }: WeekCoverageCardProps) {
+  // Weight the headline by actual seats, not by the average of daily percentages.
+  const capacity = days.reduce((total, day) => total + day.capacity, 0);
+  const confirmed = days.reduce((total, day) => total + Math.min(day.confirmed, day.capacity), 0);
+  const seatsOpen = Math.max(0, capacity - confirmed);
+  const daysWithOpenings = days.filter((day) => day.capacity > day.confirmed).length;
+  const weeklyFill = capacity > 0 ? `${Math.round((confirmed / capacity) * 100)}%` : "—";
+
   return (
     <section className={`${styles.card} ${styles.weekCard}`} aria-labelledby="mc-week">
       <div className={styles.cardHead}>
@@ -61,6 +68,21 @@ export function WeekCoverageCard({ days }: WeekCoverageCardProps) {
           );
         })}
       </ul>
+
+      <div className={styles.coverageSummary} role="group" aria-label="Weekly staffing summary">
+        <div className={styles.coverageStat}>
+          <strong className={styles.coverageValue}>{weeklyFill}</strong>
+          <span className={styles.coverageLabel}>Weekly fill</span>
+        </div>
+        <div className={styles.coverageStat}>
+          <strong className={styles.coverageValue}>{seatsOpen}</strong>
+          <span className={styles.coverageLabel}>Seats still open</span>
+        </div>
+        <div className={styles.coverageStat}>
+          <strong className={styles.coverageValue}>{daysWithOpenings}</strong>
+          <span className={styles.coverageLabel}>Days with openings</span>
+        </div>
+      </div>
 
       <table className="visually-hidden">
         <caption>Seat fill by day this week</caption>

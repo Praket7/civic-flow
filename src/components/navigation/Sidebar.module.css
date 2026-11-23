@@ -417,6 +417,45 @@
   border-top: 1px solid rgba(255, 255, 255, 0.09);
 }
 
+.accessibilityLink {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(248, 241, 227, 0.16);
+  border-radius: var(--radius-control);
+  background: rgba(248, 241, 227, 0.045);
+  color: rgba(248, 241, 227, 0.88);
+  font-size: 13px;
+  font-weight: 530;
+  text-decoration: none;
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.accessibilityLink svg {
+  flex: none;
+}
+
+.accessibilityLink:hover,
+.accessibilityLinkActive {
+  color: #fff;
+  background: rgba(248, 241, 227, 0.12);
+  border-color: rgba(248, 241, 227, 0.33);
+}
+
+.accessibilityLink:focus-visible {
+  outline: 2px solid var(--color-lime);
+  outline-offset: 2px;
+}
+
+.accessibilityLabel {
+  white-space: nowrap;
+}
+
 .person {
   display: flex;
   align-items: center;
@@ -515,6 +554,7 @@
   .sidebar[data-collapsed="true"]:not(:hover):not(:focus-within) .badge,
   .sidebar[data-collapsed="true"]:not(:hover):not(:focus-within) .groupLabel,
   .sidebar[data-collapsed="true"]:not(:hover):not(:focus-within) .personText,
+  .sidebar[data-collapsed="true"]:not(:hover):not(:focus-within) .accessibilityLabel,
   .sidebar[data-collapsed="true"]:not(:hover):not(:focus-within) .status {
     display: none;
   }
@@ -536,6 +576,11 @@
   .sidebar[data-collapsed="true"]:not(:hover):not(:focus-within) .item {
     justify-content: center;
     padding: 0;
+  }
+
+  .sidebar[data-collapsed="true"]:not(:hover):not(:focus-within) .accessibilityLink {
+    justify-content: center;
+    padding: 8px 0;
   }
 
   .sidebar[data-collapsed="true"]:not(:hover):not(:focus-within) .person {
@@ -635,6 +680,7 @@
   .sidebar:not(:hover):not(:focus-within) .badge,
   .sidebar:not(:hover):not(:focus-within) .groupLabel,
   .sidebar:not(:hover):not(:focus-within) .personText,
+  .sidebar:not(:hover):not(:focus-within) .accessibilityLabel,
   .sidebar:not(:hover):not(:focus-within) .status {
     display: none;
   }
@@ -651,6 +697,11 @@
   .sidebar:not(:hover):not(:focus-within) .item {
     justify-content: center;
     padding: 0;
+  }
+
+  .sidebar:not(:hover):not(:focus-within) .accessibilityLink {
+    justify-content: center;
+    padding: 8px 0;
   }
 
   .sidebar:not(:hover):not(:focus-within) .person {
@@ -706,6 +757,7 @@
   .sidebar .badge,
   .sidebar .groupLabel,
   .sidebar .personText,
+  .sidebar .accessibilityLabel,
   .sidebar .status {
     display: revert;
   }
