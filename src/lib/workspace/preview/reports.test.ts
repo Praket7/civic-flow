@@ -162,7 +162,7 @@ describe("Stage 4 known-answer reporting ledger", () => {
         roles: [{ name: "Distribution", required: 2, filled: 1 }],
       },
       {
-        id: "cancelled",
+        id: "canceled",
         opportunityId: "pantry",
         startsAt: "2026-10-11T09:00:00-05:00",
         endsAt: "2026-10-11T12:00:00-05:00",
