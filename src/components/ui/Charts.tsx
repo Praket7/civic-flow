@@ -1,3 +1,4 @@
+import { useId } from "react";
 import type { ReactNode } from "react";
 import styles from "./ui.module.css";
 
@@ -16,6 +17,7 @@ function ChartTable({ label, rows }: { label: string; rows: { label: string; val
     <details className={styles.chartTable}>
       <summary>View {label} as a table</summary>
       <table>
+        <caption className="visually-hidden">{label}</caption>
         <thead>
           <tr>
             <th scope="col">Label</th>
@@ -25,7 +27,7 @@ function ChartTable({ label, rows }: { label: string; rows: { label: string; val
         <tbody>
           {rows.map((row) => (
             <tr key={row.label}>
-              <td>{row.label}</td>
+              <th scope="row">{row.label}</th>
               <td>{row.value}</td>
             </tr>
           ))}
@@ -67,7 +69,7 @@ export function BarChart({
               <div
                 className={styles.barFill}
                 style={{
-                  height: `${Math.max(3, Math.min(100, (item.value / max) * 100))}%`,
+                  height: `${Math.max(0, Math.min(100, max > 0 ? (item.value / max) * 100 : 0))}%`,
                   background: colors[index % colors.length],
                 }}
               />
@@ -115,7 +117,7 @@ export function AreaChart({
   });
   const line = points.map((point) => `${point.x},${point.y}`).join(" ");
   const area = `${padding},${height - padding} ${line} ${width - padding},${height - padding}`;
-  const gradientId = `area-${label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+  const gradientId = `area-${useId().replace(/[^a-z0-9-]/gi, "")}`;
   return (
     <figure className={styles.chartFigure}>
       <svg
@@ -132,7 +134,7 @@ export function AreaChart({
             <stop offset="100%" stopColor={color} stopOpacity="0.02" />
           </linearGradient>
         </defs>
-        <polygon points={area} fill={`url(#${gradientId})`} />
+        {points.length > 0 ? <polygon points={area} fill={`url(#${gradientId})`} /> : null}
         <polyline
           points={line}
           fill="none"
@@ -216,24 +218,26 @@ export function DonutChart({
           stroke="var(--border-soft)"
           strokeWidth="16"
         />
-        {segments.map(({ item, offset }) => {
-          const dash = (item.value / total) * circumference;
-          return (
-            <circle
-              key={item.label}
-              cx="70"
-              cy="70"
-              r={radius}
-              fill="none"
-              stroke={item.color}
-              strokeWidth="16"
-              strokeDasharray={`${Math.max(0, dash - 2)} ${circumference}`}
-              strokeDashoffset={-offset}
-              strokeLinecap="round"
-              transform="rotate(-90 70 70)"
-            />
-          );
-        })}
+        {segments
+          .filter(({ item }) => item.value > 0)
+          .map(({ item, offset }) => {
+            const dash = (item.value / total) * circumference;
+            return (
+              <circle
+                key={item.label}
+                cx="70"
+                cy="70"
+                r={radius}
+                fill="none"
+                stroke={item.color}
+                strokeWidth="16"
+                strokeDasharray={`${Math.max(0, dash - 2)} ${circumference}`}
+                strokeDashoffset={-offset}
+                strokeLinecap="round"
+                transform="rotate(-90 70 70)"
+              />
+            );
+          })}
         <text x="70" y="68" textAnchor="middle" className={styles.donutCenter}>
           {centerValue}
         </text>

@@ -94,6 +94,8 @@ interface SidebarProps {
   role: ShellRole;
   collapsed: boolean;
   mobileOpen: boolean;
+  narrow: boolean;
+  onNavigate: () => void;
   onToggleCollapsed: () => void;
   onDismissMobile: () => void;
 }
@@ -102,6 +104,8 @@ export function Sidebar({
   role,
   collapsed,
   mobileOpen,
+  narrow,
+  onNavigate,
   onToggleCollapsed,
   onDismissMobile,
 }: SidebarProps) {
@@ -125,18 +129,63 @@ export function Sidebar({
     role: isCoordinator ? t("Coordinator") : t("Volunteer"),
     photo: isCoordinator ? undefined : (volunteer?.photo ?? session.volunteerProfile.photo),
   };
-  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [workspacePath, setWorkspacePath] = useState<string | null>(null);
+  const routeIdentity = `${location.key}:${location.pathname}:${narrow}`;
+  const workspaceOpen = workspacePath === routeIdentity && (!narrow || mobileOpen);
   const workspaceRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   const workspaceTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const frame = requestAnimationFrame(() => closeRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [mobileOpen]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      const sidebar = sidebarRef.current;
+      if (!sidebar?.contains(document.activeElement) || event.defaultPrevented) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (workspaceOpen && workspaceRef.current?.contains(document.activeElement)) {
+          setWorkspacePath(null);
+          workspaceTriggerRef.current?.focus();
+        } else {
+          setWorkspacePath(null);
+          onDismissMobile();
+        }
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = Array.from(
+        sidebar.querySelectorAll<HTMLElement>("a[href], button:not(:disabled)"),
+      ).filter((control) => control.getClientRects().length > 0);
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [mobileOpen, workspaceOpen, onDismissMobile]);
 
   useEffect(() => {
     if (!workspaceOpen) return;
     function onPointerDown(event: PointerEvent) {
-      if (!workspaceRef.current?.contains(event.target as Node)) setWorkspaceOpen(false);
+      if (!workspaceRef.current?.contains(event.target as Node)) setWorkspacePath(null);
     }
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setWorkspaceOpen(false);
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        event.preventDefault();
+        setWorkspacePath(null);
         workspaceTriggerRef.current?.focus();
       }
     }
@@ -148,9 +197,14 @@ export function Sidebar({
     };
   }, [workspaceOpen]);
 
-  function dismissOnNavigate() {
-    setWorkspaceOpen(false);
+  function closeMobile() {
+    setWorkspacePath(null);
     onDismissMobile();
+  }
+
+  function dismissOnNavigate() {
+    setWorkspacePath(null);
+    onNavigate();
   }
 
   function switchWorkspace(organizationId: string) {
@@ -167,11 +221,16 @@ export function Sidebar({
         className={styles.mobileBackdrop}
         data-open={mobileOpen}
         aria-hidden="true"
-        onClick={onDismissMobile}
+        onClick={closeMobile}
       />
       <aside
+        ref={sidebarRef}
+        id="primary-navigation"
         className={styles.sidebar}
         aria-label="Primary"
+        role={mobileOpen ? "dialog" : undefined}
+        aria-modal={mobileOpen ? true : undefined}
+        inert={narrow && !mobileOpen}
         data-mobile-open={mobileOpen}
         data-collapsed={collapsed}
         data-rail="true"
@@ -179,6 +238,7 @@ export function Sidebar({
         <div className={styles.brandRow}>
           <Link
             className={styles.brand}
+            aria-label="CivicFlow"
             to={isCoordinator ? "/coordinator/mission-control" : "/volunteer/home"}
             onClick={dismissOnNavigate}
           >
@@ -200,8 +260,9 @@ export function Sidebar({
           {mobileOpen ? (
             <button
               type="button"
+              ref={closeRef}
               className={styles.frameButton}
-              onClick={onDismissMobile}
+              onClick={closeMobile}
               aria-label="Close navigation"
             >
               <X size={16} />
@@ -226,9 +287,9 @@ export function Sidebar({
             type="button"
             className={styles.orgSwitcher}
             aria-label={`${t("Workspace")}: ${organizationName}. ${t("Open workspace menu")}`}
-            aria-haspopup="menu"
             aria-expanded={workspaceOpen}
-            onClick={() => setWorkspaceOpen((open) => !open)}
+            aria-controls={workspaceOpen ? "workspace-navigation" : undefined}
+            onClick={() => setWorkspacePath(workspaceOpen ? null : routeIdentity)}
           >
             <span className={styles.orgBadge} aria-hidden="true">
               {organizationInitials}
@@ -245,12 +306,15 @@ export function Sidebar({
           </button>
 
           {workspaceOpen ? (
-            <div className={styles.workspaceMenu} role="menu" aria-label="Workspace">
-              <span className={styles.menuLabel} role="presentation">
-                {t("Workspaces")}
-              </span>
+            <div
+              className={styles.workspaceMenu}
+              id="workspace-navigation"
+              role="region"
+              aria-label="Workspace"
+            >
+              <span className={styles.menuLabel}>{t("Workspaces")}</span>
               {organizationWorkspace.organizations.length === 0 ? (
-                <p className={styles.menuEmpty} role="none">
+                <p className={styles.menuEmpty}>
                   Join or create an organization to start scheduling.
                 </p>
               ) : (
@@ -260,8 +324,7 @@ export function Sidebar({
                     <button
                       key={organization.id}
                       type="button"
-                      role="menuitemradio"
-                      aria-checked={active}
+                      aria-pressed={active}
                       className={styles.menuWorkspace}
                       data-active={active}
                       onClick={() => switchWorkspace(organization.id)}
@@ -280,11 +343,10 @@ export function Sidebar({
                   );
                 })
               )}
-              <div className={styles.menuDivider} role="separator" />
+              <div className={styles.menuDivider} />
               <Link
                 to={isCoordinator ? "/coordinator/start" : "/volunteer/start"}
                 className={styles.menuItem}
-                role="menuitem"
                 onClick={dismissOnNavigate}
               >
                 {isCoordinator ? "Join another organization" : "Discover organizations"}
@@ -293,19 +355,17 @@ export function Sidebar({
                 <Link
                   to="/coordinator/organization/new"
                   className={styles.menuItem}
-                  role="menuitem"
                   onClick={dismissOnNavigate}
                 >
                   Create an organization
                 </Link>
               ) : null}
-              <div className={styles.menuDivider} role="separator" />
+              <div className={styles.menuDivider} />
               {isCoordinator ? (
                 <>
                   <Link
                     to="/coordinator/access"
                     className={styles.menuItem}
-                    role="menuitem"
                     onClick={dismissOnNavigate}
                   >
                     Organization &amp; access
@@ -313,7 +373,6 @@ export function Sidebar({
                   <Link
                     to="/coordinator/settings"
                     className={styles.menuItem}
-                    role="menuitem"
                     onClick={dismissOnNavigate}
                   >
                     Workspace settings
@@ -321,7 +380,6 @@ export function Sidebar({
                   <Link
                     to="/coordinator/audit"
                     className={styles.menuItem}
-                    role="menuitem"
                     onClick={dismissOnNavigate}
                   >
                     Audit log
@@ -330,7 +388,6 @@ export function Sidebar({
                     <Link
                       to="/coordinator/backup"
                       className={styles.menuItem}
-                      role="menuitem"
                       onClick={dismissOnNavigate}
                     >
                       Installation backups
@@ -338,20 +395,10 @@ export function Sidebar({
                   ) : null}
                 </>
               ) : null}
-              <Link
-                to="/help"
-                className={styles.menuItem}
-                role="menuitem"
-                onClick={dismissOnNavigate}
-              >
+              <Link to="/help" className={styles.menuItem} onClick={dismissOnNavigate}>
                 Help
               </Link>
-              <Link
-                to="/credits"
-                className={styles.menuItem}
-                role="menuitem"
-                onClick={dismissOnNavigate}
-              >
+              <Link to="/credits" className={styles.menuItem} onClick={dismissOnNavigate}>
                 Photo credits
               </Link>
             </div>
@@ -378,6 +425,7 @@ export function Sidebar({
                           .filter(Boolean)
                           .join(" ")
                       }
+                      aria-label={t(item.label)}
                       title={t(item.label)}
                       aria-current={
                         location.pathname === item.to ||

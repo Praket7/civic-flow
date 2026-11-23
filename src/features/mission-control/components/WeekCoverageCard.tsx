@@ -55,13 +55,15 @@ export function WeekCoverageCard({ days }: WeekCoverageCardProps) {
                 data-tone={toneFor(day.percent)}
                 aria-hidden="true"
               >
-                {day.percent}%
+                {day.capacity > 0 ? `${day.percent}%` : "—"}
               </span>
               <span className={styles.barTrack} aria-hidden="true">
                 <span
                   className={styles.barFill}
                   data-tone={toneFor(day.percent)}
-                  style={{ height: `${Math.max(day.percent, 6)}%` }}
+                  style={{
+                    height: `${day.capacity > 0 ? Math.max(0, Math.min(100, day.percent)) : 0}%`,
+                  }}
                 />
               </span>
             </li>
@@ -103,7 +105,7 @@ export function WeekCoverageCard({ days }: WeekCoverageCardProps) {
               </th>
               <td>{day.confirmed}</td>
               <td>{day.capacity}</td>
-              <td>{day.percent}%</td>
+              <td>{day.capacity > 0 ? `${day.percent}%` : "—"}</td>
             </tr>
           ))}
         </tbody>

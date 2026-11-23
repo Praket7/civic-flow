@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { ArrowRight, ArrowLeft, X } from "lucide-react";
+import { ArrowRight, ArrowLeft, ChevronDown, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import styles from "./FirstRunTour.module.css";
 
@@ -105,6 +105,7 @@ export function FirstRunTour({ role }: { role: TourRole }) {
   const titleId = useId();
   const [step, setStep] = useState<number | "done">(() => readStep(role));
   const [dismissed, setDismissed] = useState(() => readStep(role) === "done");
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     function onReplay(event: Event) {
@@ -112,6 +113,7 @@ export function FirstRunTour({ role }: { role: TourRole }) {
       if (detail?.role !== role) return;
       setStep(0);
       setDismissed(false);
+      setExpanded(true);
     }
     window.addEventListener(EVENT, onReplay);
     return () => window.removeEventListener(EVENT, onReplay);
@@ -149,42 +151,80 @@ export function FirstRunTour({ role }: { role: TourRole }) {
   }
 
   return (
-    <section className={styles.tour} role="dialog" aria-labelledby={titleId} aria-live="polite">
-      <header className={styles.header}>
-        <p className={styles.kicker}>
-          Guided tour · {currentStep + 1} of {steps.length}
-        </p>
-        <button type="button" className={styles.close} onClick={finish} aria-label="Skip the tour">
-          <X size={15} aria-hidden="true" />
-        </button>
-      </header>
-      <h2 id={titleId} className={styles.title}>
-        {current.title}
-      </h2>
-      <p className={styles.body}>{current.body}</p>
-      <Link className={styles.open} to={current.to} onClick={finish}>
-        {current.link} <ArrowRight size={12} aria-hidden="true" />
-      </Link>
-      <div className={styles.actions}>
-        <button
-          type="button"
-          className={styles.ghost}
-          onClick={previous}
-          disabled={currentStep === 0}
-          aria-label="Previous step"
-        >
-          <ArrowLeft size={13} aria-hidden="true" />
-          Back
-        </button>
-        <div className={styles.right}>
-          <button type="button" className={styles.textButton} onClick={finish}>
-            Skip
+    <section className={styles.tour} aria-label="Guided tour" data-expanded={expanded}>
+      {!expanded ? (
+        <div className={styles.collapsed}>
+          <button
+            type="button"
+            className={styles.start}
+            aria-expanded={false}
+            onClick={() => setExpanded(true)}
+          >
+            Guided tour
+            <span aria-hidden="true"> · </span>
+            {currentStep + 1} / {steps.length}
+            <ChevronDown size={14} aria-hidden="true" />
           </button>
-          <button type="button" className={styles.primary} onClick={next}>
-            {last ? "Finish" : "Next"}
+          <button
+            type="button"
+            className={styles.close}
+            onClick={finish}
+            aria-label="Skip the tour"
+          >
+            <X size={15} aria-hidden="true" />
           </button>
         </div>
-      </div>
+      ) : (
+        <>
+          <header className={styles.header}>
+            <p className={styles.kicker}>
+              Guided tour · {currentStep + 1} of {steps.length}
+            </p>
+            <button
+              type="button"
+              className={styles.close}
+              onClick={finish}
+              aria-label="Skip the tour"
+            >
+              <X size={15} aria-hidden="true" />
+            </button>
+          </header>
+          <h2 id={titleId} className={styles.title} aria-live="polite">
+            {current.title}
+          </h2>
+          <p className={styles.body}>{current.body}</p>
+          <Link className={styles.open} to={current.to} onClick={finish}>
+            {current.link} <ArrowRight size={12} aria-hidden="true" />
+          </Link>
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.ghost}
+              onClick={previous}
+              disabled={currentStep === 0}
+              aria-label="Previous step"
+            >
+              <ArrowLeft size={13} aria-hidden="true" />
+              Back
+            </button>
+            <div className={styles.right}>
+              <button
+                type="button"
+                className={styles.textButton}
+                onClick={() => setExpanded(false)}
+              >
+                Minimize
+              </button>
+              <button type="button" className={styles.textButton} onClick={finish}>
+                Skip
+              </button>
+              <button type="button" className={styles.primary} onClick={next}>
+                {last ? "Finish" : "Next"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </section>
   );
 }

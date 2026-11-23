@@ -52,13 +52,13 @@ jobs:
       - name: Accessibility-tree audit
         run: node scripts/audit-accessibility-tree.mjs
       - name: 200% zoom audit and core screen captures
-        run: node scripts/audit-zoom.mjs --screenshots ui-review
+        run: node scripts/audit-zoom.mjs --screenshots ui-review --out ui-review/viewport-report.json
       - name: Upload core visual review snapshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ui-core-screenshots
-          path: ui-review/*.png
+          path: ui-review/
           retention-days: 14
           if-no-files-found: ignore
       - name: Contrast audit

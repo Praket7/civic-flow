@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import type { RefObject } from "react";
 import { format, parseISO } from "date-fns";
 import { Menu, Moon, Search, Sun } from "lucide-react";
 import { useDisplayPreferences } from "../../lib/display";
@@ -11,9 +12,16 @@ import styles from "./TopBar.module.css";
 interface TopBarProps {
   onOpenPalette: () => void;
   onOpenSidebar: () => void;
+  sidebarTriggerRef?: RefObject<HTMLButtonElement | null>;
+  sidebarOpen?: boolean;
 }
 
-export function TopBar({ onOpenPalette, onOpenSidebar }: TopBarProps) {
+export function TopBar({
+  onOpenPalette,
+  onOpenSidebar,
+  sidebarTriggerRef,
+  sidebarOpen,
+}: TopBarProps) {
   const { workspace } = useWorkspace();
   const today = parseISO(workspace.now);
   const { resolvedTheme, toggleTheme } = useDisplayPreferences();
@@ -39,7 +47,10 @@ export function TopBar({ onOpenPalette, onOpenSidebar }: TopBarProps) {
       <div className={styles.left}>
         <button
           type="button"
+          ref={sidebarTriggerRef}
           className={styles.menuButton}
+          aria-expanded={sidebarOpen ?? false}
+          aria-controls="primary-navigation"
           onClick={onOpenSidebar}
           aria-label="Open navigation"
         >

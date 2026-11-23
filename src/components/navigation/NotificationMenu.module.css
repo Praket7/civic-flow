@@ -188,3 +188,19 @@
   text-align: center;
   background: var(--surface-paper);
 }
+
+.panel {
+  max-height: calc(100dvh - 72px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface-raised);
+  backdrop-filter: none;
+}
+
+.item[data-read="true"] {
+  opacity: 1;
+}
+
+.item[data-read="true"] .itemDot {
+  visibility: hidden;
+}

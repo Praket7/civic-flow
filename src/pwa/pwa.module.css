@@ -1949,3 +1949,55 @@
     max-width: none;
   }
 }
+
+/* Keep focused controls clear of the fixed volunteer navigation. */
+.main {
+  scroll-margin-block-start: 86px;
+}
+
+.main :is(a, button, input, select, textarea, summary) {
+  scroll-margin-block: 88px;
+}
+
+.orgButton,
+.orgCopy {
+  min-width: 0;
+}
+
+.orgMark,
+.topActions {
+  flex: none;
+}
+
+.iconButton {
+  width: 44px;
+  height: 44px;
+}
+
+.navItem {
+  min-width: 0;
+  min-height: 48px;
+}
+
+.syncBar,
+.rowActions {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 360px) {
+  .main {
+    padding-inline: 12px;
+  }
+
+  .card {
+    padding: 14px;
+  }
+
+  .statRow {
+    gap: 6px;
+  }
+
+  .stat {
+    padding: 10px 8px;
+  }
+}

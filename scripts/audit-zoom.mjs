@@ -28,7 +28,23 @@ const bestEffort = args.includes("--best-effort");
 const explicitBase = flag("base", null);
 const OUT = flag("out", "zoom-report.json");
 const SCREENSHOTS = flag("screenshots", null);
-const REVIEW_ROUTES = new Set(["01", "02", "04", "09", "11", "17", "24"]);
+const REVIEW_ROUTES = new Set([
+  "01",
+  "02",
+  "04",
+  "09",
+  "10",
+  "11",
+  "17",
+  "24",
+  "28",
+  "30",
+  "32",
+  "34",
+  "35",
+  "37",
+  "42",
+]);
 const PORT = Number(flag("port", "9334"));
 const SERVER_PORT = Number(flag("server-port", "5200"));
 const CHROME_CANDIDATES = [
@@ -121,6 +137,8 @@ const AUDIT = String.raw`(() => {
     documentWidth: root.scrollWidth,
     bodyWidth: body ? body.scrollWidth : 0,
     horizontalOverflow: root.scrollWidth > root.clientWidth + 1,
+    mainWidth: document.querySelector("main")?.clientWidth ?? 0,
+    mainScrollWidth: document.querySelector("main")?.scrollWidth ?? 0,
     heading: document.querySelector("main h1, body > h1")?.textContent?.trim() ?? "",
     overflowing,
   };
@@ -294,12 +312,13 @@ try {
     );
 
     // Keep visual review images as CI artifacts, not hardcoded screenshots.
-    // Capture only seven representative seeded demo screens: no live user data.
+    // Capture principal seeded demo screens; no live user data.
     if (SCREENSHOTS && REVIEW_ROUTES.has(number)) {
       await fs.mkdir(SCREENSHOTS, { recursive: true });
       for (const viewport of [
         { name: "zoom200", width: 800, height: 500, mobile: false },
         { name: "desktop", width: 1440, height: 900, mobile: false },
+        { name: "tablet", width: 1024, height: 768, mobile: false },
         { name: "mobile", width: 390, height: 844, mobile: true },
       ]) {
         await send("Emulation.setDeviceMetricsOverride", {
@@ -309,6 +328,21 @@ try {
           mobile: viewport.mobile,
         });
         await sleep(300);
+        const { result: viewportResult } = await send("Runtime.evaluate", {
+          expression: AUDIT,
+          returnByValue: true,
+        });
+        const measured = viewportResult.value;
+        const viewportBad =
+          measured.horizontalOverflow ||
+          measured.mainScrollWidth > measured.mainWidth + 2 ||
+          !measured.heading;
+        report[number + "-" + viewport.name] = {
+          path: routePath,
+          ...measured,
+          passed: !viewportBad,
+        };
+        if (viewportBad) failures += 1;
         const shot = await send("Page.captureScreenshot", {
           format: "png",
           captureBeyondViewport: false,
@@ -331,10 +365,12 @@ try {
   ws.close();
 
   if (failures > 0) {
-    console.error(`\n${failures} route(s) failed the 200% zoom check. See ${OUT}.`);
+    console.error(`\n${failures} viewport checks failed. See ${OUT}.`);
     process.exitCode = 1;
   } else {
-    console.log(`\nAll routes render at 200% zoom without horizontal overflow. Report: ${OUT}`);
+    console.log(
+      `\nAll tested route/viewport combinations render without document or main-content horizontal overflow in the captured viewports. Report: ${OUT}`,
+    );
   }
 } finally {
   chrome?.kill();

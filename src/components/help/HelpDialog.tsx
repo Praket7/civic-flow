@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { ArrowRight, CircleHelp, X } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
@@ -45,7 +46,13 @@ function isTypingTarget(target: EventTarget | null): boolean {
 export function HelpProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
   const [open, setOpen] = useState(false);
-  const openHelp = useCallback(() => setOpen(true), []);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const openHelp = useCallback(() => {
+    returnFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setOpen(true);
+  }, []);
+  const closeHelp = useCallback(() => setOpen(false), []);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -54,21 +61,28 @@ export function HelpProvider({ children }: { children: ReactNode }) {
         event.metaKey ||
         event.ctrlKey ||
         event.altKey ||
+        event.defaultPrevented ||
+        (event.target instanceof HTMLElement &&
+          event.target.closest('[aria-modal="true"], dialog[open]')) ||
         isTypingTarget(event.target)
       ) {
         return;
       }
       event.preventDefault();
-      setOpen(true);
+      openHelp();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [openHelp]);
 
   return (
     <HelpContext.Provider value={{ available: true, openHelp }}>
-      {children}
-      {open ? <HelpDialog pathname={location.pathname} onClose={() => setOpen(false)} /> : null}
+      <div inert={open} style={{ display: "contents" }}>
+        {children}
+      </div>
+      {open ? (
+        <HelpDialog pathname={location.pathname} onClose={closeHelp} returnFocus={returnFocus} />
+      ) : null}
     </HelpContext.Provider>
   );
 }
@@ -93,15 +107,22 @@ export function HelpButton() {
   );
 }
 
-function HelpDialog({ pathname, onClose }: { pathname: string; onClose: () => void }) {
+function HelpDialog({
+  pathname,
+  onClose,
+  returnFocus,
+}: {
+  pathname: string;
+  onClose: () => void;
+  returnFocus: RefObject<HTMLElement | null>;
+}) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const restoreRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const topic = topicForPath(pathname);
 
   useEffect(() => {
-    restoreRef.current = document.activeElement as HTMLElement | null;
+    const opener = returnFocus.current;
     closeRef.current?.focus();
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -127,9 +148,11 @@ function HelpDialog({ pathname, onClose }: { pathname: string; onClose: () => vo
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      restoreRef.current?.focus();
+      requestAnimationFrame(() => {
+        if (opener?.isConnected) opener.focus();
+      });
     };
-  }, [onClose]);
+  }, [onClose, returnFocus]);
 
   return (
     <div

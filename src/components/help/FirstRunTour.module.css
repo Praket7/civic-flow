@@ -166,3 +166,53 @@
     bottom: calc(12px + env(safe-area-inset-bottom));
   }
 }
+
+/* The guide is in the document flow, never over an operational control. */
+.tour {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto 14px;
+  padding: 12px 16px;
+  box-shadow: none;
+  animation: none;
+}
+
+.tour[data-expanded="false"] {
+  padding-block: 4px;
+  background: var(--surface-paper);
+}
+
+.collapsed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.start {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--action-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.actions,
+.right {
+  flex-wrap: wrap;
+}
+
+@media print {
+  .tour {
+    display: none;
+  }
+}

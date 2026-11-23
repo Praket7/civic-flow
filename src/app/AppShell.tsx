@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { HelpProvider } from "../components/help/HelpDialog";
 import { FirstRunTour } from "../components/help/FirstRunTour";
@@ -24,7 +24,13 @@ export function AppShell() {
     }
   });
   const [mobilePath, setMobilePath] = useState<string | null>(null);
-  const mobileOpen = mobilePath === location.pathname;
+  const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 760px)").matches);
+  const routeIdentity = `${location.key}:${location.pathname}`;
+  const mobileOpen = narrow && mobilePath === routeIdentity;
+  const mainRef = useRef<HTMLElement>(null);
+  const previousPath = useRef(location.pathname);
+  const sidebarTriggerRef = useRef<HTMLButtonElement>(null);
+  const restoreDrawerFocus = useRef(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const role: "coordinator" | "volunteer" =
     user?.role === "coordinator" ? "coordinator" : "volunteer";
@@ -38,16 +44,52 @@ export function AppShell() {
   const surface = location.pathname === "/volunteer/check-in" ? "checkin" : undefined;
 
   useEffect(() => {
+    const media = window.matchMedia("(max-width: 760px)");
+    function update() {
+      setNarrow(media.matches);
+      if (!media.matches) setMobilePath(null);
+    }
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (previousPath.current === location.pathname) return;
+    previousPath.current = location.pathname;
+    const frame = requestAnimationFrame(() => {
+      mainRef.current?.scrollTo({ top: 0, behavior: "instant" });
+      mainRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [location.pathname]);
+
+  const dismissMobile = useCallback(() => {
+    restoreDrawerFocus.current = true;
+    setMobilePath(null);
+  }, []);
+
+  useEffect(() => {
+    if (mobileOpen || !restoreDrawerFocus.current) return;
+    restoreDrawerFocus.current = false;
+    sidebarTriggerRef.current?.focus({ preventScroll: true });
+  }, [mobileOpen]);
+
+  useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      if (
+        !mobileOpen &&
+        !event.defaultPrevented &&
+        !(event.target instanceof HTMLElement && event.target.closest('[aria-modal="true"]')) &&
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === "k"
+      ) {
         event.preventDefault();
         setPaletteOpen((open) => !open);
       }
-      if (event.key === "Escape") setMobilePath(null);
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [mobileOpen]);
 
   function toggleCollapsed() {
     setCollapsed((value) => {
@@ -63,7 +105,15 @@ export function AppShell() {
   return (
     <HelpProvider>
       <div className={`shell ${styles.shell}`} data-collapsed={collapsed}>
-        <a className={styles.skipLink} href="#main-content">
+        <a
+          className={styles.skipLink}
+          href="#main-content"
+          inert={mobileOpen}
+          onClick={(event) => {
+            event.preventDefault();
+            mainRef.current?.focus();
+          }}
+        >
           Skip to main content
         </a>
         <Sidebar
@@ -71,18 +121,31 @@ export function AppShell() {
           role={role}
           collapsed={collapsed}
           mobileOpen={mobileOpen}
+          narrow={narrow}
           onToggleCollapsed={toggleCollapsed}
-          onDismissMobile={() => setMobilePath(null)}
+          onDismissMobile={dismissMobile}
+          onNavigate={() => {
+            if (mobileOpen) setMobilePath(null);
+          }}
         />
-        <div className={styles.main} data-surface={surface}>
+        <div className={styles.main} data-surface={surface} inert={mobileOpen}>
           {surface ? null : (
             <TopBar
               key={`topbar-${copyKey}`}
               onOpenPalette={() => setPaletteOpen(true)}
-              onOpenSidebar={() => setMobilePath(location.pathname)}
+              onOpenSidebar={() => setMobilePath(routeIdentity)}
+              sidebarTriggerRef={sidebarTriggerRef}
+              sidebarOpen={mobileOpen}
             />
           )}
-          <main id="main-content" className={styles.content} data-surface={surface} tabIndex={-1}>
+          <main
+            ref={mainRef}
+            id="main-content"
+            className={styles.content}
+            data-surface={surface}
+            tabIndex={-1}
+          >
+            {showTour && !surface ? <FirstRunTour key={role} role={role} /> : null}
             <div key={location.pathname} className={styles.pageTransition}>
               <Fragment key={copyKey}>
                 <Outlet />
@@ -95,7 +158,6 @@ export function AppShell() {
           open={paletteOpen}
           onClose={() => setPaletteOpen(false)}
         />
-        {showTour ? <FirstRunTour role={role} /> : null}
       </div>
     </HelpProvider>
   );

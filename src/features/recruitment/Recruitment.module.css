@@ -255,3 +255,37 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Keep all recruitment metrics readable without horizontal page scrolling. */
+.statStrip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.detailEmail,
+.detailRow dd,
+.applicantName,
+.applicantMeta {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .statStrip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .detailPanel {
+    position: static;
+  }
+
+  .column {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 360px) {
+  .statStrip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
