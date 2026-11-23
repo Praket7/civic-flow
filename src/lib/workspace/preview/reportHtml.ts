@@ -23,10 +23,7 @@ export function renderPrintableReport(report: ReportDocument): string {
     .join("");
   const rows = report.rows
     .map(
-      (row) =>
-        "<tr>" +
-        row.map((cell) => "<td>" + escapeHtml(cell) + "</td>").join("") +
-        "</tr>",
+      (row) => "<tr>" + row.map((cell) => "<td>" + escapeHtml(cell) + "</td>").join("") + "</tr>",
     )
     .join("");
   const summary = report.summary
@@ -35,7 +32,9 @@ export function renderPrintableReport(report: ReportDocument): string {
 
   return [
     '<!doctype html><html lang="en"><head><meta charset="utf-8">',
-    "<title>", escapeHtml(report.title), "</title>",
+    "<title>",
+    escapeHtml(report.title),
+    "</title>",
     "<style>",
     "body{font:12px system-ui;padding:32px;color:#111}",
     "h1{font-size:20px}h2{font-size:14px;font-weight:500}",
@@ -43,10 +42,21 @@ export function renderPrintableReport(report: ReportDocument): string {
     "th,td{border-bottom:1px solid #ddd;padding:6px;text-align:left;font-size:10px}",
     "th{background:#f2f2f2}",
     "@media print{thead{display:table-header-group}tr{break-inside:avoid}}",
-    "</style></head><body><h1>", escapeHtml(report.organization), "</h1>",
-    "<h2>", escapeHtml(report.title), " · ", escapeHtml(report.period), "</h2>",
-    "<p>", summary, "</p>",
-    "<table><thead><tr>", headers, "</tr></thead><tbody>", rows,
+    "</style></head><body><h1>",
+    escapeHtml(report.organization),
+    "</h1>",
+    "<h2>",
+    escapeHtml(report.title),
+    " · ",
+    escapeHtml(report.period),
+    "</h2>",
+    "<p>",
+    summary,
+    "</p>",
+    "<table><thead><tr>",
+    headers,
+    "</tr></thead><tbody>",
+    rows,
     "</tbody></table></body></html>",
   ].join("");
 }

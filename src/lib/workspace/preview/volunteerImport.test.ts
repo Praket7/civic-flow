@@ -40,7 +40,6 @@ describe("browser volunteer CSV importer", () => {
     expect(result.rows[2].problems.join(" ")).toContain("Two rows use");
   });
 
-
   it("accepts escaped quotes and embedded line breaks in quoted CSV fields", () => {
     const result = previewVolunteerCsv(
       'Name,Email,Skills\r\n"Pat ""Buddy"" Lee",pat@example.org,"First aid;\n Tutoring"\r\n',

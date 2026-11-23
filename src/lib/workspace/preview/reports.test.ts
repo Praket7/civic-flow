@@ -107,7 +107,6 @@ describe("pure preview reporting", () => {
     expect(result.summary).toContainEqual({ label: "Outcome records", value: "1" });
   });
 
-
   it("includes completed shifts in an explicitly selected historical coverage period", () => {
     const historical = {
       ...workspace,
@@ -122,11 +121,7 @@ describe("pure preview reporting", () => {
       ],
     } as DemoWorkspace;
     const selected = buildPreviewReport(request, historical, state);
-    expect(selected.rows.map((row) => row[0])).toEqual([
-      "2026-11-15",
-      "2026-11-23",
-      "2026-11-24",
-    ]);
+    expect(selected.rows.map((row) => row[0])).toEqual(["2026-11-15", "2026-11-23", "2026-11-24"]);
     expect(selected.summary).toContainEqual({ label: "Required role slots", value: "8" });
     const upcoming = buildPreviewReport(
       { ...request, dateStart: undefined, dateEnd: undefined },

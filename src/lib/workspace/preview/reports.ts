@@ -55,9 +55,7 @@ export function buildPreviewReport(
     // explicit range, coverage remains an upcoming-capacity planning view.
     const hasSelectedPeriod = Boolean(request.dateStart || request.dateEnd);
     for (const shift of workspace.shifts.filter((row) =>
-      hasSelectedPeriod
-        ? inRange(row.startsAt.slice(0, 10))
-        : row.startsAt >= workspace.now,
+      hasSelectedPeriod ? inRange(row.startsAt.slice(0, 10)) : row.startsAt >= workspace.now,
     )) {
       const opportunity = workspace.opportunities.find((row) => row.id === shift.opportunityId);
       if (!opportunity || (cause && opportunity.cause !== cause)) continue;
