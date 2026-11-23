@@ -154,6 +154,26 @@ try {
   assert.equal(publicEntry.signin, true, "returning visitors must see sign in");
   assert.equal(publicEntry.demo, true, "judges must access the sample without an account");
   assert.equal(publicEntry.passwordForm, false, "root must show welcome, not sign in");
+  // Click the real CTA instead of only checking that the demo URL loads. This
+  // protects the judging path from inadvertently sending visitors to sign in.
+  const demoAction = await evaluate(`(() => {
+    const link = document.querySelector('a[href="/judge/demo/#/welcome"]');
+    return { primary: Boolean(link?.className?.includes("welcomePrimary")) };
+  })()`);
+  assert.equal(demoAction.primary, true, "the no-account demo must be the primary welcome action");
+  await evaluate("document.querySelector('a[href=\\\"/judge/demo/#/welcome\\\"]')?.click()");
+  await until(
+    () => evaluate('location.pathname === "/judge/demo/" && location.hash === "#/welcome"'),
+    "welcome links directly into the no-account judging sample",
+  );
+  await heading("Service, organized");
+  assert.equal(
+    await evaluate("Boolean(document.querySelector('input[type=\"password\"]'))"),
+    false,
+    "the sample must never start at sign in",
+  );
+  await open("/");
+  await heading("Service, organized");
   await open("/#/create-account");
   await heading("Get started with CivicFlow");
   assert.equal(
@@ -169,6 +189,26 @@ try {
     "sign in must link back to registration",
   );
 
+  // A mistaken sign-in deep link must never trap a judge behind credentials.
+  await open("/#/sign-in");
+  await heading("Your next shift is waiting.");
+  const demoEscape = await evaluate(`(() => {
+    const link = document.querySelector('a[href="/judge/demo/#/welcome"]');
+    if (!link) return false;
+    const rect = link.getBoundingClientRect();
+    return rect.height >= 40 && rect.top >= 0 && rect.bottom <= innerHeight;
+  })()`);
+  assert.equal(
+    demoEscape,
+    true,
+    "No-account demo link must be visible before scrolling on sign in",
+  );
+  await evaluate("document.querySelector('a[href=\"/judge/demo/#/welcome\"]')?.click()");
+  await until(
+    () => evaluate('location.pathname === "/judge/demo/" && location.hash === "#/welcome"'),
+    "sign-in escape must open the sample welcome, not another password form",
+  );
+  await heading("Service, organized.");
   await open("/judge/");
   await heading("More time for service");
   await open("/judge/demo/#/welcome");
