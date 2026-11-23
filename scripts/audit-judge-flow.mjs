@@ -140,6 +140,35 @@ try {
     }, `heading contains "${expected}"`);
   }
 
+  // A fresh visitor to the hosted root must reach onboarding without
+  // an existing organization or Supabase password. This failed in PR #13.
+  await open("/");
+  await heading("Service, organized.");
+  const publicEntry = await evaluate(`(() => ({
+    signup: Boolean(document.querySelector('a[href="#/create-account"]')),
+    signin: Boolean(document.querySelector('a[href="#/sign-in"]')),
+    demo: Boolean(document.querySelector('a[href="/judge/demo/#/welcome"]')),
+    passwordForm: Boolean(document.querySelector('input[type="password"]')),
+  }))()`);
+  assert.equal(publicEntry.signup, true, "new visitors must see account creation");
+  assert.equal(publicEntry.signin, true, "returning visitors must see sign in");
+  assert.equal(publicEntry.demo, true, "judges must access the sample without an account");
+  assert.equal(publicEntry.passwordForm, false, "root must show welcome, not sign in");
+  await open("/#/create-account");
+  await heading("Get started with CivicFlow");
+  assert.equal(
+    await evaluate('Boolean(document.querySelector("input[autocomplete=\"new-password\"]"))'),
+    true,
+    "account creation must have a password field",
+  );
+  await open("/#/sign-in");
+  await heading("Your next shift is waiting.");
+  assert.equal(
+    await evaluate('Boolean(document.querySelector("a[href=\"#/create-account\"]"))'),
+    true,
+    "sign in must link back to registration",
+  );
+
   await open("/judge/");
   await heading("More time for service");
   await open("/judge/demo/#/welcome");
