@@ -19,7 +19,11 @@ fn fixture(people: usize, seats: usize) -> (Vec<Candidate>, Vec<Slot>) {
             id: format!("candidate-{index:04}"),
             name: format!("Volunteer {index}"),
             initials: "VT".into(),
-            skills: if index % 2 == 0 { vec!["Food Safety".into()] } else { vec![] },
+            skills: if index % 2 == 0 {
+                vec!["Food Safety".into()]
+            } else {
+                vec![]
+            },
             languages: vec!["English".into()],
             causes: vec!["food".into()],
             availability: available.clone(),
@@ -73,7 +77,10 @@ fn verify_equivalent(people: usize, seats: usize) {
     let began = Instant::now();
     let second = plan(&candidates, &slots, &policy, &options);
     let second_elapsed = began.elapsed();
-    assert_eq!(first, second, "same inputs must yield identical plans and explanations");
+    assert_eq!(
+        first, second,
+        "same inputs must yield identical plans and explanations"
+    );
     assert_eq!(first.slots_considered, seats);
     assert_eq!(first.candidates_considered, people);
     assert_eq!(first.assignments.len() + first.unfilled.len(), seats);
