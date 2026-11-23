@@ -344,10 +344,11 @@ export function WorkspaceSessionProvider({ children }: { children: ReactNode }) 
       checkIn: (shiftId, volunteerId, code) =>
         enqueue(() => runChecked(() => repository.checkIn(shiftId, volunteerId, code))),
       manualCheckIn: (shiftId, volunteerId, reason) =>
-        run(() => repository.manualCheckIn(shiftId, volunteerId, reason)),
+        enqueue(() => runChecked(() => repository.manualCheckIn(shiftId, volunteerId, reason))),
       checkOut: (shiftId, volunteerId) =>
         enqueue(() => runChecked(() => repository.checkOut(shiftId, volunteerId))),
-      markNoShow: (shiftId, volunteerId) => run(() => repository.markNoShow(shiftId, volunteerId)),
+      markNoShow: (shiftId, volunteerId) =>
+        enqueue(() => runChecked(() => repository.markNoShow(shiftId, volunteerId))),
       cancelRegistration: (shiftId, volunteerId, reason) =>
         enqueue(() =>
           runChecked(() => repository.cancelRegistration(shiftId, volunteerId, reason)),
@@ -404,7 +405,7 @@ export function WorkspaceSessionProvider({ children }: { children: ReactNode }) 
       saveReportView: (name, scope, filtersJson) =>
         run(() => repository.saveReportView(name, scope, filtersJson)),
       promoteWaitlist: (shiftId, volunteerId) =>
-        run(() => repository.promoteWaitlist(shiftId, volunteerId)),
+        enqueue(() => runChecked(() => repository.promoteWaitlist(shiftId, volunteerId))),
       reviewHours: (entryId, decision) =>
         enqueue(() => runChecked(() => repository.reviewHours(entryId, decision))),
       updateSettings: (patch) => run(() => repository.updateSettings(patch)),

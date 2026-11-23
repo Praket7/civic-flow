@@ -49,6 +49,7 @@ import {
 import type { RosterRow } from "../../lib/workspace/selectors";
 import { OpenSeatsCard } from "./OpenSeatsCard";
 import styles from "./ShiftRosterPage.module.css";
+import { messageOf } from "../../lib/errors";
 
 type RosterTableRow = RosterRow & { id: string };
 
@@ -66,6 +67,8 @@ export function ShiftRosterPage() {
   const shift = id ? shiftById(id, workspace) : undefined;
   const opportunity = shift ? opportunityById(shift.opportunityId, workspace) : undefined;
   const [message, setMessage] = useState("");
+  const [problem, setProblem] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const roster = useMemo(
     () => (shift ? getAttendanceRoster(shift.id, session, workspace) : []),
@@ -91,9 +94,19 @@ export function ShiftRosterPage() {
     );
   }
 
-  function runAction(label: string, action: () => void) {
-    action();
-    setMessage(label);
+  async function runAction(label: string, action: () => Promise<void>) {
+    if (busy) return;
+    setBusy(true);
+    setMessage("");
+    setProblem("");
+    try {
+      await action();
+      setMessage(label);
+    } catch (caught) {
+      setProblem(messageOf(caught));
+    } finally {
+      setBusy(false);
+    }
   }
 
   const columns: Column<RosterTableRow>[] = [
@@ -152,8 +165,9 @@ export function ShiftRosterPage() {
               size="small"
               variant="secondary"
               icon={<LogOut size={12} aria-hidden="true" />}
+              disabled={busy}
               onClick={() =>
-                runAction(`${row.volunteer.name} checked out.`, () =>
+                void runAction(`${row.volunteer.name} checked out.`, () =>
                   actions.checkOut(shift.id, row.volunteer.id),
                 )
               }
@@ -169,8 +183,9 @@ export function ShiftRosterPage() {
                 size="small"
                 variant="primary"
                 icon={<LogIn size={12} aria-hidden="true" />}
+                disabled={busy}
                 onClick={() =>
-                  runAction(`${row.volunteer.name} checked in.`, () =>
+                  void runAction(`${row.volunteer.name} checked in.`, () =>
                     actions.manualCheckIn(
                       shift.id,
                       row.volunteer.id,
@@ -185,8 +200,9 @@ export function ShiftRosterPage() {
                 size="small"
                 variant="ghost"
                 aria-label={`Mark ${row.volunteer.name} as a no-show`}
+                disabled={busy}
                 onClick={() =>
-                  runAction(`${row.volunteer.name} marked as a no-show.`, () =>
+                  void runAction(`${row.volunteer.name} marked as a no-show.`, () =>
                     actions.markNoShow(shift.id, row.volunteer.id),
                   )
                 }
@@ -217,7 +233,7 @@ export function ShiftRosterPage() {
             Message team
           </a>
           <ButtonLink
-            to="/coordinator/kiosk"
+            to={`/coordinator/kiosk?shift=${encodeURIComponent(shift.id)}`}
             variant="primary"
             icon={<ShieldCheck size={14} aria-hidden="true" />}
           >
@@ -304,6 +320,8 @@ export function ShiftRosterPage() {
       <p className={styles.liveRegion} role="status" aria-live="polite">
         {message}
       </p>
+
+      {problem ? <p role="alert">{problem}</p> : null}
 
       <div className={styles.layout}>
         <div className={styles.mainColumn}>
@@ -463,8 +481,9 @@ export function ShiftRosterPage() {
                         <Button
                           size="small"
                           variant="secondary"
+                          disabled={busy}
                           onClick={() =>
-                            runAction(`${row.volunteer.name} promoted into the shift.`, () =>
+                            void runAction(`${row.volunteer.name} promoted into the shift.`, () =>
                               actions.promoteWaitlist(shift.id, row.volunteer.id),
                             )
                           }
@@ -489,7 +508,10 @@ export function ShiftRosterPage() {
                 <ArrowLeft size={12} aria-hidden="true" />
                 Coverage Command Center
               </Link>
-              <Link to="/coordinator/attendance" className={styles.inlineLink}>
+              <Link
+                to={`/coordinator/attendance?shift=${encodeURIComponent(shift.id)}`}
+                className={styles.inlineLink}
+              >
                 Attendance
                 <ArrowRight size={12} aria-hidden="true" />
               </Link>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { CSSProperties } from "react";
 import { CalendarDays, Clock3, MapPin, MonitorUp, UserCheck, UserX, Users } from "lucide-react";
 import {
@@ -30,12 +31,16 @@ import type { RosterRow } from "../../lib/workspace/selectors";
 import { WorkAreaTabs } from "../../components/navigation/WorkAreaTabs";
 import { scheduleTabs } from "../../app/workAreas";
 import styles from "./Attendance.module.css";
+import { messageOf } from "../../lib/errors";
 
 export function AttendancePage() {
   const { workspace, session, actions } = useWorkspace();
-  const event = getLiveEvent(session, workspace);
+  const [params] = useSearchParams();
+  const event = getLiveEvent(session, workspace, params.get("shift") ?? undefined);
   const { data: checkinWindow } = useCheckinWindow(event?.shift.id ?? "");
   const [message, setMessage] = useState("");
+  const [problem, setProblem] = useState("");
+  const [busy, setBusy] = useState(false);
   if (!event) {
     return (
       <Page>
@@ -64,8 +69,19 @@ export function AttendancePage() {
     (row) => row.status === "expected" || row.status === "no_show",
   );
 
-  function announce(text: string) {
-    setMessage(text);
+  async function runAction(text: string, action: () => Promise<void>) {
+    if (busy) return;
+    setBusy(true);
+    setMessage("");
+    setProblem("");
+    try {
+      await action();
+      setMessage(text);
+    } catch (caught) {
+      setProblem(messageOf(caught));
+    } finally {
+      setBusy(false);
+    }
   }
 
   const columns: Column<RosterRow & { id: string }>[] = [
@@ -107,10 +123,12 @@ export function AttendancePage() {
             <button
               type="button"
               className={styles.actionButton}
-              onClick={() => {
-                actions.checkOut(event.shift.id, row.volunteer.id);
-                announce(t("{name} checked out.", { name: row.volunteer.name }));
-              }}
+              disabled={busy}
+              onClick={() =>
+                void runAction(t("{name} checked out.", { name: row.volunteer.name }), () =>
+                  actions.checkOut(event.shift.id, row.volunteer.id),
+                )
+              }
             >
               Check out
             </button>
@@ -118,15 +136,16 @@ export function AttendancePage() {
             <button
               type="button"
               className={styles.actionButton}
-              disabled={row.status === "completed" || row.status === "no_show"}
-              onClick={() => {
-                actions.manualCheckIn(
-                  event.shift.id,
-                  row.volunteer.id,
-                  "Recorded by a coordinator at the attendance board",
-                );
-                announce(t("{name} checked in.", { name: row.volunteer.name }));
-              }}
+              disabled={busy || row.status === "completed" || row.status === "no_show"}
+              onClick={() =>
+                void runAction(t("{name} checked in.", { name: row.volunteer.name }), () =>
+                  actions.manualCheckIn(
+                    event.shift.id,
+                    row.volunteer.id,
+                    "Recorded by a coordinator at the attendance board",
+                  ),
+                )
+              }
             >
               Check in
             </button>
@@ -135,10 +154,12 @@ export function AttendancePage() {
             <button
               type="button"
               className={styles.actionButton}
-              onClick={() => {
-                actions.markNoShow(event.shift.id, row.volunteer.id);
-                announce(t("{name} marked as no-show.", { name: row.volunteer.name }));
-              }}
+              disabled={busy}
+              onClick={() =>
+                void runAction(t("{name} marked as no-show.", { name: row.volunteer.name }), () =>
+                  actions.markNoShow(event.shift.id, row.volunteer.id),
+                )
+              }
             >
               No-show
             </button>
@@ -166,7 +187,11 @@ export function AttendancePage() {
             >
               Full schedule
             </ButtonLink>
-            <ButtonLink to="/coordinator/kiosk" variant="primary" icon={<MonitorUp size={14} />}>
+            <ButtonLink
+              to={`/coordinator/kiosk?shift=${encodeURIComponent(event.shift.id)}`}
+              variant="primary"
+              icon={<MonitorUp size={14} />}
+            >
               Open kiosk
             </ButtonLink>
           </>
@@ -266,6 +291,8 @@ export function AttendancePage() {
         {message}
       </p>
 
+      {problem ? <p role="alert">{problem}</p> : null}
+
       <div className={styles.bodyGrid}>
         <Card padding="compact">
           <div className={styles.railTitle}>
@@ -311,14 +338,16 @@ export function AttendancePage() {
                       <Button
                         size="small"
                         variant="secondary"
-                        onClick={() => {
-                          actions.manualCheckIn(
-                            event.shift.id,
-                            row.volunteer.id,
-                            "Recorded by a coordinator at the attendance board",
-                          );
-                          announce(t("{name} checked in.", { name: row.volunteer.name }));
-                        }}
+                        disabled={busy}
+                        onClick={() =>
+                          void runAction(t("{name} checked in.", { name: row.volunteer.name }), () =>
+                            actions.manualCheckIn(
+                              event.shift.id,
+                              row.volunteer.id,
+                              "Recorded by a coordinator at the attendance board",
+                            ),
+                          )
+                        }
                       >
                         Check in
                       </Button>
