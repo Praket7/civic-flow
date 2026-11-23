@@ -596,21 +596,12 @@
   min-width: 0;
 }
 
-.photoStrip {
-  display: flex;
-  align-items: stretch;
-  gap: 5px;
+.motionPhoto {
+  width: 120px;
+  height: 88px;
   flex: none;
-  width: 150px;
-  height: 82px;
-}
-
-.photoStrip img {
-  width: 46px;
-  height: 82px;
+  border-radius: 4px;
   object-fit: cover;
-  border: 0;
-  border-radius: 0;
   filter: saturate(0.85);
 }
 

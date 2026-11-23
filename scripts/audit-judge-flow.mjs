@@ -180,9 +180,12 @@ try {
   })()`);
   assert.equal(sidebarAudit.accessVisible, true, "Accessibility control must be visible");
   assert.equal(sidebarAudit.aboveIdentity, true, "Accessibility must precede account identity");
-  assert.ok(sidebarAudit.weekHeight > 0 && sidebarAudit.weekHeight < 410, "Weekly chart must be compact");
+  assert.ok(
+    sidebarAudit.weekHeight > 0 && sidebarAudit.weekHeight < 410,
+    "Weekly chart must be compact",
+  );
   assert.equal(sidebarAudit.summaryPresent, true, "Weekly chart must include staffing totals");
-  await evaluate('document.querySelector(\'button[aria-label^="Workspace:"]\')?.click()');
+  await evaluate("document.querySelector('button[aria-label^=\"Workspace:\"]')?.click()");
   assert.equal(
     await evaluate('Boolean(document.querySelector(\'[role="menu"] [href*="accessibility"]\'))'),
     false,
