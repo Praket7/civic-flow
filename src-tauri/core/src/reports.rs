@@ -205,7 +205,7 @@ fn participation(
         "SELECT v.name, o.title, h.date, h.status,
                 CASE WHEN h.status = 'verified' THEN COALESCE(h.approved_minutes, h.minutes) ELSE NULL END,
                 h.verification_id, o.cause,
-                COALESCE(reg.role, ''), h.minutes, h.id
+                COALESCE(reg.role, ''), h.minutes, h.id, v.id
          FROM hour_entries h
          JOIN volunteers v ON v.id = h.volunteer_id
          JOIN opportunities o ON o.id = h.opportunity_id
@@ -240,6 +240,7 @@ fn participation(
         let role: String = row.get(7)?;
         let requested: i64 = row.get(8)?;
         let record_id: String = row.get(9)?;
+        let volunteer_id: String = row.get(10)?;
         let approved = if status == "verified" {
             approved_value.unwrap_or(0).max(0)
         } else {
@@ -248,7 +249,7 @@ fn participation(
         match status.as_str() {
             "verified" => {
                 verified_minutes += approved;
-                volunteers.insert(volunteer.clone());
+                volunteers.insert(volunteer_id);
             }
             "pending" => pending_minutes += requested.max(0),
             "rejected" => rejected += 1,
