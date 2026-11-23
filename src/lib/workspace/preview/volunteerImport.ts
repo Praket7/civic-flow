@@ -102,7 +102,10 @@ function importEmailProblem(raw: string): { email: string; problem: string } {
   return { email, problem: valid ? "" : "Use an email address like name@example.org." };
 }
 
-export function previewVolunteerCsv(text: string, existingEmails: readonly string[]): VolunteerImportPreview {
+export function previewVolunteerCsv(
+  text: string,
+  existingEmails: readonly string[],
+): VolunteerImportPreview {
   const preview: VolunteerImportPreview = {
     columns: [],
     required: ["Name", "Email"],
