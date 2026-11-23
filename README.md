@@ -161,6 +161,10 @@ Previously published installers may lack signing or notarization. Verify provena
 CivicFlow is released under the [MIT License](LICENSE). The generated [third-party notices](THIRD_PARTY_NOTICES.md) list the direct dependencies and licenses. Bundled photography and fonts are credited in the in-app credits screen and in [`public/media/LICENSE.md`](public/media/LICENSE.md).
 
 
+## Stage 2: software quality and competition evidence
+
+The [Stage 2 engineering and 110-point rubric evidence guide](docs/FBLA-STAGE2-QUALITY.md) documents the extracted preview report/CSV modules, cross-platform error recovery contract, deterministic AutoRoster benchmarks, exact test commands, and the seven-minute demonstration. The [Stage 2 draft pull request](https://github.com/Praket7/civic-flow/pull/9) is not a release. Do not describe a passing build as verified production authorization, successful backup recovery or signed installation.
+
 ## FBLA judging review
 
 A reviewed **dedicated judging hostname** serves a **separate judging page** at `/judge/`. It links to

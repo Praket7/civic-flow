@@ -162,6 +162,38 @@ try {
     () => evaluate('document.querySelector("main h1")?.textContent?.trim() || ""'),
     "coordinator dashboard heading",
   );
+  // Accessibility must be available at the bottom of the coordinator sidebar,
+  // immediately above the account identity, not buried in the workspace menu.
+  await open("/judge/demo/#/coordinator/mission-control");
+  await heading("Good morning");
+  const sidebarAudit = await evaluate(`(() => {
+    const aside = document.querySelector('aside[aria-label="Primary"]');
+    const access = aside?.querySelector('a[aria-label="Accessibility settings"]');
+    const identity = aside?.querySelector('[class*="personName"]');
+    const week = document.querySelector('[aria-labelledby="mc-week"]');
+    return {
+      accessVisible: Boolean(access && access.getBoundingClientRect().height > 0),
+      aboveIdentity: Boolean(access && identity && (access.compareDocumentPosition(identity) & Node.DOCUMENT_POSITION_FOLLOWING)),
+      weekHeight: week?.getBoundingClientRect().height ?? 0,
+      summaryPresent: Boolean(week?.querySelector('[aria-label="Weekly staffing summary"]')),
+    };
+  })()`);
+  assert.equal(sidebarAudit.accessVisible, true, "Accessibility control must be visible");
+  assert.equal(sidebarAudit.aboveIdentity, true, "Accessibility must precede account identity");
+  assert.ok(
+    sidebarAudit.weekHeight > 0 && sidebarAudit.weekHeight < 410,
+    "Weekly chart must be compact",
+  );
+  assert.equal(sidebarAudit.summaryPresent, true, "Weekly chart must include staffing totals");
+  await evaluate("document.querySelector('button[aria-label^=\"Workspace:\"]')?.click()");
+  assert.equal(
+    await evaluate('Boolean(document.querySelector(\'[role="menu"] [href*="accessibility"]\'))'),
+    false,
+    "Accessibility must not remain in the workspace dropdown",
+  );
+  await open("/judge/demo/#/coordinator/accessibility");
+  await heading("Accessibility");
+
   for (const [route, title] of [
     ["/coordinator/autoroster", "AutoRoster"],
     ["/coordinator/schedule", "Schedule"],

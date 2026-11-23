@@ -10,12 +10,15 @@
 //! The flow allows one slot per calendar day, so a second pass offers remaining
 //! same-day slots to candidates with no time overlap.
 
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use chrono::{DateTime, Datelike, FixedOffset, NaiveDate, Timelike};
 use serde::{Deserialize, Serialize};
 
 use crate::policy::RosterPolicy;
+
+mod flow;
+use flow::Flow;
 
 pub const MAX_SCORE: i32 = 100;
 
@@ -422,119 +425,6 @@ pub fn evaluate_roster(
         revision: 0,
         plan,
         candidates: rows,
-    }
-}
-
-#[derive(Debug, Clone)]
-struct Edge {
-    to: usize,
-    rev: usize,
-    capacity: i32,
-    original_capacity: i32,
-    cost: i32,
-}
-
-#[derive(Debug, Clone)]
-struct Flow {
-    graph: Vec<Vec<Edge>>,
-}
-
-impl Flow {
-    fn new(nodes: usize) -> Self {
-        Self {
-            graph: vec![Vec::new(); nodes],
-        }
-    }
-
-    fn add_edge(&mut self, from: usize, to: usize, capacity: i32, cost: i32) {
-        let forward = Edge {
-            to,
-            rev: self.graph[to].len(),
-            capacity,
-            original_capacity: capacity,
-            cost,
-        };
-        let reverse = Edge {
-            to: from,
-            rev: self.graph[from].len(),
-            capacity: 0,
-            original_capacity: 0,
-            cost: -cost,
-        };
-        self.graph[from].push(forward);
-        self.graph[to].push(reverse);
-    }
-
-    /// SPFA handles the negative edge costs a mandatory-role bonus produces.
-    fn min_cost_max_flow(&mut self, source: usize, sink: usize) -> (i32, i32) {
-        let nodes = self.graph.len();
-        let mut total_flow = 0;
-        let mut total_cost: i32 = 0;
-
-        loop {
-            let mut distance = vec![i32::MAX; nodes];
-            let mut in_queue = vec![false; nodes];
-            let mut previous: Vec<Option<(usize, usize)>> = vec![None; nodes];
-            let mut queue = VecDeque::new();
-
-            distance[source] = 0;
-            queue.push_back(source);
-            in_queue[source] = true;
-
-            while let Some(node) = queue.pop_front() {
-                in_queue[node] = false;
-                let Some(node_distance) = distance.get(node).copied() else {
-                    continue;
-                };
-                if node_distance == i32::MAX {
-                    continue;
-                }
-                for (edge_index, edge) in self.graph[node].iter().enumerate() {
-                    if edge.capacity <= 0 {
-                        continue;
-                    }
-                    let next = edge.to;
-                    let candidate_distance = node_distance.saturating_add(edge.cost);
-                    if candidate_distance < distance[next] {
-                        distance[next] = candidate_distance;
-                        previous[next] = Some((node, edge_index));
-                        if !in_queue[next] {
-                            in_queue[next] = true;
-                            queue.push_back(next);
-                        }
-                    }
-                }
-            }
-
-            if distance[sink] == i32::MAX {
-                break;
-            }
-
-            let mut node = sink;
-            while node != source {
-                let (from, edge_index) = previous[node].expect("augmenting path is complete");
-                let edge = &self.graph[from][edge_index];
-                let reverse_index = edge.rev;
-                let capacity = edge.capacity;
-                self.graph[from][edge_index].capacity = capacity - 1;
-                self.graph[node][reverse_index].capacity += 1;
-                node = from;
-            }
-
-            total_flow += 1;
-            total_cost = total_cost.saturating_add(distance[sink]);
-        }
-
-        (total_flow, total_cost)
-    }
-
-    fn used_edges(&self, from: usize) -> Vec<usize> {
-        self.graph[from]
-            .iter()
-            .enumerate()
-            .filter(|(_, edge)| edge.original_capacity == 1 && edge.capacity == 0)
-            .map(|(index, _)| index)
-            .collect()
     }
 }
 
@@ -1327,10 +1217,20 @@ fn plan_inner(
     let source = 0;
     let mut nodes = 1;
     let mut day_nodes: BTreeMap<(String, String), usize> = BTreeMap::new();
+    // Allocate one node per actual candidate/day, not per candidate/slot.
+    // First-occurrence order remains identical, preserving tie-breaking IDs.
+    let mut seen_days = HashSet::new();
+    let days: Vec<&str> = ordered_slots
+        .iter()
+        .filter_map(|slot| {
+            let day = slot.day_key.as_str();
+            seen_days.insert(day).then_some(day)
+        })
+        .collect();
     for candidate in &ordered_candidates {
-        for slot in &ordered_slots {
+        for day in &days {
             day_nodes
-                .entry((candidate.id.clone(), slot.day_key.clone()))
+                .entry((candidate.id.clone(), (*day).to_string()))
                 .or_insert_with(|| {
                     let node = nodes;
                     nodes += 1;
@@ -1440,12 +1340,11 @@ fn plan_inner(
         let Some(candidate) = candidate_by_id.get(candidate_id.as_str()) else {
             continue;
         };
-        for index in flow.used_edges(*node) {
-            let edge = &flow.graph[*node][index];
-            if edge.to < slot_offset || edge.to >= slot_offset + ordered_slots.len() {
+        for destination in flow.used_destinations(*node) {
+            if destination < slot_offset || destination >= slot_offset + ordered_slots.len() {
                 continue;
             }
-            let slot_index = edge.to - slot_offset;
+            let slot_index = destination - slot_offset;
             let slot = ordered_slots[slot_index];
             if is_forced(&candidate.id, slot) {
                 continue;
@@ -2239,5 +2138,45 @@ mod tests {
         let elapsed = started.elapsed();
         assert_eq!(plan.assignments.len(), 100);
         assert!(elapsed.as_secs_f64() < 5.0, "planner took {elapsed:?}");
+    }
+    /// Reproducible local performance harness. Ignored in normal unit CI;
+    /// run explicitly with --ignored --nocapture. Times are diagnostics, not
+    /// a service-level guarantee, and include the explainable eligibility pass.
+    #[test]
+    #[ignore = "manual AutoRoster scale benchmark"]
+    fn benchmark_realistic_volunteer_and_shift_counts() {
+        use std::time::Instant;
+        for (volunteer_count, slot_count) in [(50, 12), (120, 30), (200, 50)] {
+            let candidates: Vec<Candidate> = (0..volunteer_count)
+                .map(|i| candidate(&format!("benchmark-v-{i:03}"), &[], &["sat:morning"]))
+                .collect();
+            let slots: Vec<Slot> = (0..slot_count)
+                .map(|i| {
+                    slot(
+                        &format!("benchmark-slot-{i:03}"),
+                        "General",
+                        None,
+                        "2026-10-17T09:00:00-04:00",
+                    )
+                })
+                .collect();
+            let mut timings_ms: Vec<f64> = Vec::new();
+            let baseline = plan(&candidates, &slots, &policy(), &options());
+            assert_eq!(baseline.assignments.len(), slot_count);
+            for _ in 0..5 {
+                let begin = Instant::now();
+                let again = plan(&candidates, &slots, &policy(), &options());
+                timings_ms.push(begin.elapsed().as_secs_f64() * 1000.0);
+                assert_eq!(
+                    again.assignments, baseline.assignments,
+                    "Optimizer changed its answer"
+                );
+            }
+            timings_ms.sort_by(|a, b| a.total_cmp(b));
+            println!(
+                "AutoRoster volunteers={} slots={} median_ms={:.2} max_ms={:.2}",
+                volunteer_count, slot_count, timings_ms[2], timings_ms[4]
+            );
+        }
     }
 }

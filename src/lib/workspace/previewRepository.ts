@@ -6,7 +6,7 @@
 
 import rawSessionSeed from "../../../shared/session-seed.json";
 import { isTauri } from "../platform";
-import { csvText, downloadCsv } from "../csv";
+import { downloadCsv } from "../csv";
 import rawWorkspace from "../../../shared/demo-workspace.json";
 import type {
   Account,
@@ -17,14 +17,12 @@ import type {
   BackupRestoreResult,
   BackupSnapshot,
   CandidateAnswer,
-  Cause,
   CheckinCode,
   CheckinStatus,
   CheckinWindow,
   ConstraintCheck,
   Credential,
   AuthSession,
-  DayKey,
   DemoWorkspace,
   DisruptedRole,
   DisruptedShift,
@@ -36,12 +34,8 @@ import type {
   MatchExplanation,
   NewOpportunityInput,
   Opportunity,
-  PeriodKey,
   PlannedAssignment,
   PriorityLevel,
-  ReportDocument,
-  ReportRequest,
-  ReportSummaryItem,
   RetentionCohort,
   CredentialReadiness,
   EngagementMetrics,
@@ -79,10 +73,19 @@ import type {
 } from "../../types/domain";
 import * as previewOrganizations from "../organizations/preview";
 import { buildMissionControl } from "./compute";
+import { buildPreviewReport } from "./preview/reports";
+import { renderPrintableReport } from "./preview/reportHtml";
+import { IMPORT_COLUMNS, previewVolunteerCsv } from "./preview/volunteerImport";
 import { demoWorkspace } from "./dataset";
 import { blankWorkspaceForOrganization, withRoster } from "./organizationWorkspace";
 import type { OrganizationScope } from "./organizationWorkspace";
 import type { WorkspaceRepository } from "./repository";
+import {
+  PREVIEW_ACCOUNT_KEY,
+  PREVIEW_ACCOUNTS_KEY,
+  previewPasswords,
+  storedPreviewAccounts,
+} from "./previewAccountStorage";
 
 const STORAGE_KEY = "civicflow.workflow.v1";
 const READ_KEY = "civicflow.notifications.read";
@@ -110,43 +113,6 @@ function scoped(key: string): string {
   return scopeId() === DEMO_ORGANIZATION_ID ? key : `${key}:${scopeId()}`;
 }
 const BACKUP_RETENTION = 20;
-const PREVIEW_ACCOUNT_KEY = "civicflow.auth.passwords";
-const PREVIEW_ACCOUNTS_KEY = "civicflow.auth.accounts";
-
-/** Accounts created in a previous preview session, newest last. */
-function storedPreviewAccounts(): Account[] {
-  try {
-    const raw = localStorage.getItem(PREVIEW_ACCOUNTS_KEY);
-    const parsed: unknown = raw ? JSON.parse(raw) : null;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((row): row is Account => {
-      const candidate = row as Partial<Account> | null;
-      return Boolean(
-        candidate &&
-        typeof candidate.id === "string" &&
-        typeof candidate.name === "string" &&
-        typeof candidate.email === "string" &&
-        (candidate.role === "coordinator" ||
-          candidate.role === "volunteer" ||
-          candidate.role === "none"),
-      );
-    });
-  } catch {
-    return [];
-  }
-}
-
-function previewPasswords(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(PREVIEW_ACCOUNT_KEY);
-    const parsed: unknown = raw ? JSON.parse(raw) : null;
-    if (parsed && typeof parsed === "object") return parsed as Record<string, string>;
-  } catch {
-    // The preview keeps the demo password when storage is unavailable.
-  }
-  return {};
-}
-
 /** The identity the preview screens are operating as. */
 let activePreviewAccount: Account | null = null;
 
@@ -767,302 +733,9 @@ function withAttendance(
   };
 }
 
-const REPORT_TITLES: Record<string, string> = {
-  participation: "Volunteer participation",
-  coverage: "Coverage by program",
-  attendance: "Attendance and no-shows",
-  retention: "Retention and engagement",
-  skills: "Credentials and skills",
-  credentials: "Credentials and skills",
-  impact: "Community impact",
-  custom: "Custom report",
-};
-
-const REPORT_FIELD_LABELS: Record<string, string> = {
-  volunteer: "Volunteer",
-  program: "Program",
-  date: "Service date",
-  hours: "Approved minutes",
-  status: "Status",
-  verification: "Verification",
-  cause: "Cause",
-  role: "Role",
-};
-
-function buildPreviewReport(request: ReportRequest): ReportDocument {
-  const end = request.dateEnd ?? workspace.now.slice(0, 10);
-  const start = request.dateStart ?? `${end.slice(0, 4)}-01-01`;
-  const template = REPORT_TITLES[request.template] ? request.template : "custom";
-  const cause = request.cause ?? "";
-  const inRange = (date: string) => date >= start && date <= end;
-  let headers: string[];
-  let rows: string[][] = [];
-  let summary: ReportSummaryItem[];
-
-  if (template === "coverage") {
-    headers = ["Date", "Program", "Role", "Required", "Filled", "Gap", "Shift status"];
-    let required = 0;
-    let filled = 0;
-    for (const shift of workspace.shifts.filter((row) => row.startsAt >= workspace.now)) {
-      const opportunity = workspace.opportunities.find((row) => row.id === shift.opportunityId);
-      if (!opportunity || (cause && opportunity.cause !== cause)) continue;
-      for (const role of shift.roles) {
-        required += role.required;
-        filled += role.filled;
-        rows.push([
-          shift.startsAt.slice(0, 10),
-          opportunity.title,
-          role.name,
-          String(role.required),
-          String(role.filled),
-          String(Math.max(0, role.required - role.filled)),
-          shift.status,
-        ]);
-      }
-    }
-    summary = [
-      { label: "Required role slots", value: String(required) },
-      { label: "Filled slots", value: String(filled) },
-      {
-        label: "Role coverage",
-        value: `${required === 0 ? 100 : Math.round((filled / required) * 100)}%`,
-      },
-    ];
-  } else if (template === "attendance") {
-    headers = ["Date", "Program", "Volunteer", "Role", "Status", "Checked in", "Checked out"];
-    let arrivals = 0;
-    let completed = 0;
-    let noShow = 0;
-    for (const [shiftId, entries] of Object.entries(state.attendance)) {
-      const shift = workspace.shifts.find((row) => row.id === shiftId);
-      const opportunity = workspace.opportunities.find((row) => row.id === shift?.opportunityId);
-      if (!shift || !opportunity || !inRange(shift.startsAt.slice(0, 10))) continue;
-      if (cause && opportunity.cause !== cause) continue;
-      for (const entry of entries) {
-        const volunteer = workspace.volunteers.find((row) => row.id === entry.volunteerId);
-        if (entry.status === "checked_in") arrivals += 1;
-        if (entry.status === "completed") completed += 1;
-        if (entry.status === "no_show") noShow += 1;
-        rows.push([
-          shift.startsAt.slice(0, 10),
-          opportunity.title,
-          volunteer?.name ?? "Volunteer",
-          entry.role,
-          entry.status,
-          entry.checkedInAt ?? "",
-          entry.checkedOutAt ?? "",
-        ]);
-      }
-    }
-    summary = [
-      { label: "Arrivals", value: String(arrivals) },
-      { label: "Completed", value: String(completed) },
-      { label: "No-shows", value: String(noShow) },
-    ];
-  } else if (template === "retention") {
-    headers = ["Cohort", "Eligible", "Returned in 30 days", "Rate"];
-    rows = state.retention.map((row) => [
-      row.label,
-      String(row.eligible),
-      String(row.returned),
-      `${row.rate}%`,
-    ]);
-    const eligible = state.retention.reduce((sum, row) => sum + row.eligible, 0);
-    const returned = state.retention.reduce((sum, row) => sum + row.returned, 0);
-    summary = [
-      { label: "Cohort eligible", value: String(eligible) },
-      { label: "Returned", value: String(returned) },
-      {
-        label: "Average 30-day return",
-        value: `${eligible === 0 ? 0 : Math.round((returned / eligible) * 100)}%`,
-      },
-    ];
-  } else if (template === "skills" || template === "credentials") {
-    headers = ["Volunteer", "Skill", "Credential", "Valid through", "Status"];
-    let expiring = 0;
-    for (const volunteer of workspace.volunteers) {
-      for (const skill of volunteer.skills) {
-        const credential = state.credentials.find((row) => row.volunteerId === volunteer.id);
-        if (credential && credential.status !== "current") expiring += 1;
-        rows.push([
-          volunteer.name,
-          skill,
-          credential?.name ?? "—",
-          credential?.validThrough ?? "—",
-          credential?.status ?? "no credential",
-        ]);
-      }
-    }
-    summary = [
-      { label: "Skill rows", value: String(rows.length) },
-      { label: "Expiring or expired", value: String(expiring) },
-    ];
-  } else if (template === "impact") {
-    headers = ["Program", "Metric", "Unit", "Value", "Recorded"];
-    rows = state.impactMetrics.map((metric) => [
-      workspace.opportunities.find((row) => row.id === metric.opportunityId)?.title ?? "Program",
-      metric.name,
-      metric.unit,
-      String(metric.value),
-      metric.recordedAt.slice(0, 10),
-    ]);
-    summary = [{ label: "Outcome records", value: String(rows.length) }];
-  } else {
-    const fields =
-      request.fields.length > 0
-        ? request.fields.filter((field) => field in REPORT_FIELD_LABELS)
-        : ["volunteer", "program", "date", "hours", "status", "verification"];
-    headers = fields.map((field) => REPORT_FIELD_LABELS[field]);
-    let total = 0;
-    let verified = 0;
-    const volunteers = new Set<string>();
-    for (const entry of [...workspace.hourEntries, ...workspace.mayaEntries]) {
-      const opportunity = workspace.opportunities.find((row) => row.id === entry.opportunityId);
-      const volunteer = workspace.volunteers.find((row) => row.id === entry.volunteerId);
-      if (!opportunity || !volunteer || !inRange(entry.date)) continue;
-      if (cause && opportunity.cause !== cause) continue;
-      const decision = state.hoursDecisions[entry.id];
-      const status = decision?.status ?? entry.status;
-      const minutes = decision?.approvedMinutes ?? entry.minutes;
-      total += minutes;
-      if (status === "verified") {
-        verified += minutes;
-        volunteers.add(volunteer.id);
-      }
-      const registration = state.registrations.find(
-        (row) => row.volunteerId === volunteer.id && row.status === "registered",
-      );
-      const values: Record<string, string> = {
-        volunteer: volunteer.name,
-        program: opportunity.title,
-        date: entry.date,
-        hours: String(minutes),
-        status,
-        verification: entry.verificationId ?? "",
-        cause: opportunity.cause,
-        role: registration?.role ?? "",
-      };
-      rows.push(fields.map((field) => values[field] ?? ""));
-    }
-    summary = [
-      { label: "Records", value: String(rows.length) },
-      { label: "Approved or recorded", value: `${Math.floor(total / 60)}h ${total % 60}m` },
-      { label: "Verified", value: `${Math.floor(verified / 60)}h ${verified % 60}m` },
-      { label: "Volunteers", value: String(volunteers.size) },
-    ];
-  }
-
-  return {
-    template,
-    title: REPORT_TITLES[template],
-    organization: state.settings.organizationName || workspace.organization.name,
-    period: `${start} – ${end}`,
-    generatedAt: workspace.now,
-    headers,
-    rows,
-    summary,
-  };
-}
-
 const IMPORTED_VOLUNTEERS_KEY = "civicflow.imported-volunteers.v1";
 
 /** The heads the importer reads, mirroring the desktop column list. */
-const IMPORT_COLUMNS: [string, string][] = [
-  ["name", "Name"],
-  ["email", "Email"],
-  ["phone", "Phone"],
-  ["status", "Status"],
-  ["skills", "Skills"],
-  ["availability", "Availability"],
-  ["interests", "Interests"],
-  ["causes", "Causes"],
-];
-
-const IMPORT_DAYS: DayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-const IMPORT_PERIODS: PeriodKey[] = ["morning", "afternoon", "evening"];
-const IMPORT_STATUSES = ["active", "onboarding", "inactive"];
-const IMPORT_CAUSES: Cause[] = [
-  "food",
-  "education",
-  "environment",
-  "health",
-  "community",
-  "animals",
-];
-const IMPORT_EXAMPLE = [
-  "Maya Chen",
-  "maya.chen@example.org",
-  "(716) 555-0142",
-  "onboarding",
-  "Food handling; Tutoring",
-  "mon:morning; wed:evening",
-  "Weekend pantry shifts, school tutoring",
-  "food; education",
-];
-
-/** Splits a cell that holds several values, matching what the importer accepts. */
-function splitCell(value: string, comma: boolean): string[] {
-  return value
-    .split(comma ? /[;|,]/ : /[;|]/)
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
-}
-
-/** A minimal RFC 4180 reader: quoted cells may hold commas and newlines. */
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cell = "";
-  let quoted = false;
-  const characters = [...text.replace(/^\ufeff/, "")];
-  for (let index = 0; index < characters.length; index += 1) {
-    const character = characters[index];
-    if (character === '"') {
-      if (quoted && characters[index + 1] === '"') {
-        cell += '"';
-        index += 1;
-      } else {
-        quoted = !quoted;
-      }
-    } else if (character === "," && !quoted) {
-      row.push(cell);
-      cell = "";
-    } else if ((character === "\n" || character === "\r") && !quoted) {
-      if (character === "\r" && characters[index + 1] === "\n") index += 1;
-      row.push(cell);
-      rows.push(row);
-      row = [];
-      cell = "";
-    } else {
-      cell += character;
-    }
-  }
-  if (cell.trim().length > 0 || row.length > 0) {
-    row.push(cell);
-    rows.push(row);
-  }
-  return rows.filter((cells) => cells.some((value) => value.trim().length > 0));
-}
-
-function importTemplate(): string {
-  return `${csvText([IMPORT_COLUMNS.map(([, label]) => label), IMPORT_EXAMPLE])}\r\n`;
-}
-
-function importEmailProblem(raw: string): { email: string; problem: string } {
-  const email = raw.trim().toLowerCase();
-  const parts = email.split("@");
-  const domain = parts[1] ?? "";
-  const valid =
-    parts.length === 2 &&
-    (parts[0] ?? "").length > 0 &&
-    domain.includes(".") &&
-    !domain.startsWith(".") &&
-    !domain.endsWith(".") &&
-    !/\s/.test(email) &&
-    email.length <= 160;
-  return { email, problem: valid ? "" : "Use an email address like name@example.org." };
-}
-
 function readImportedRoster(): RosterVolunteer[] {
   try {
     const raw = localStorage.getItem(scoped(IMPORTED_VOLUNTEERS_KEY));
@@ -1113,122 +786,12 @@ function workspaceRoster(): RosterVolunteer[] {
  * The same check the desktop importer runs, so the browser preview refuses the
  * same files rather than accepting what SQLite would reject.
  */
+/** Keep the browser preview's existing scoped roster as the duplicate-email oracle. */
 function previewVolunteers(text: string): VolunteerImportPreview {
-  const preview: VolunteerImportPreview = {
-    columns: [],
-    required: ["Name", "Email"],
-    template: importTemplate(),
-    total: 0,
-    valid: 0,
-    invalid: 0,
-    problems: [],
-    rows: [],
-  };
-  const rows = parseCsv(text);
-  const header = rows.shift();
-  if (!header) {
-    preview.problems.push("Choose a CSV file or paste its rows first.");
-    return preview;
-  }
-
-  const indexes = new Map<string, number>();
-  for (const [position, value] of header.entries()) {
-    const cleaned = value.trim().toLowerCase();
-    if (!cleaned) continue;
-    preview.columns.push(value.trim());
-    const column = IMPORT_COLUMNS.find(
-      ([key, label]) => key === cleaned || label.toLowerCase() === cleaned,
-    );
-    if (column && !indexes.has(column[0])) indexes.set(column[0], position);
-  }
-  const missing = ["name", "email"].filter((key) => !indexes.has(key));
-  if (missing.length > 0) {
-    const labels = missing.map((key) => IMPORT_COLUMNS.find(([id]) => id === key)?.[1] ?? key);
-    preview.problems.push(
-      `The first row must name these columns: ${labels.join(", ")}. No rows were read.`,
-    );
-    return preview;
-  }
-
-  const read = (cells: string[], key: string) => {
-    const position = indexes.get(key);
-    return position === undefined ? "" : (cells[position] ?? "").trim();
-  };
-  const known = new Set(workspaceRoster().map((record) => record.email.toLowerCase()));
-  const seen = new Set<string>();
-
-  for (const [offset, cells] of rows.entries()) {
-    const problems: string[] = [];
-    const notes: string[] = [];
-    const name = read(cells, "name").split(/\s+/).filter(Boolean).join(" ");
-    if (name.length < 2) problems.push("Enter the name to show on this account.");
-    if (name.length > 80) problems.push("Keep the name under 80 characters.");
-
-    const { email, problem } = importEmailProblem(read(cells, "email"));
-    if (problem) problems.push(problem);
-    else if (seen.has(email)) problems.push(`Two rows use ${email}.`);
-    else {
-      seen.add(email);
-      if (known.has(email)) problems.push(`${email} is already on this roster.`);
-    }
-
-    const statusCell = read(cells, "status").toLowerCase();
-    let status = "onboarding";
-    if (statusCell) {
-      if (IMPORT_STATUSES.includes(statusCell)) status = statusCell;
-      else problems.push(`"${statusCell}" is not a status. Use active, onboarding or inactive.`);
-    }
-
-    const skills = splitCell(read(cells, "skills"), false);
-    if (skills.length === 0) notes.push("No skills listed yet.");
-
-    const availability: string[] = [];
-    for (const token of splitCell(read(cells, "availability"), false)) {
-      const [day, period = ""] = token.toLowerCase().split(":");
-      if (IMPORT_DAYS.includes(day as DayKey) && IMPORT_PERIODS.includes(period as PeriodKey)) {
-        availability.push(`${day}:${period}`);
-      } else {
-        problems.push(`"${token}" needs a day and a period, like mon:morning.`);
-      }
-    }
-    if (availability.length === 0 && !problems.some((entry) => entry.includes("mon:morning"))) {
-      notes.push("No availability windows listed yet.");
-    }
-
-    const causes: string[] = [];
-    for (const token of splitCell(read(cells, "causes"), true)) {
-      const cause = token.toLowerCase();
-      if (IMPORT_CAUSES.includes(cause as Cause)) causes.push(cause);
-      else {
-        problems.push(
-          `"${cause}" is not a cause. Use food, education, environment, health, community or animals.`,
-        );
-      }
-    }
-
-    preview.rows.push({
-      line: offset + 2,
-      name,
-      email,
-      phone: read(cells, "phone"),
-      status,
-      skills,
-      availability,
-      interests: read(cells, "interests"),
-      causes,
-      outcome: problems.length === 0 ? "create" : "invalid",
-      problems,
-      notes,
-    });
-    preview.total += 1;
-    if (problems.length === 0) preview.valid += 1;
-    else preview.invalid += 1;
-  }
-
-  if (preview.total === 0) {
-    preview.problems.push("The file has a header but no volunteer rows yet.");
-  }
-  return preview;
+  return previewVolunteerCsv(
+    text,
+    workspaceRoster().map((record) => record.email),
+  );
 }
 
 export const previewRepository: WorkspaceRepository = {
@@ -2438,10 +2001,10 @@ export const previewRepository: WorkspaceRepository = {
     });
   },
   async generateReport(request) {
-    return buildPreviewReport(request);
+    return buildPreviewReport(request, workspace, state);
   },
   async exportReport(request, format) {
-    const report = buildPreviewReport(request);
+    const report = buildPreviewReport(request, workspace, state);
     if (format === "csv") {
       const blob = downloadCsv(`civicflow-${report.template}-${report.period.slice(0, 10)}.csv`, [
         report.headers,
@@ -2456,14 +2019,7 @@ export const previewRepository: WorkspaceRepository = {
     }
     const printWindow = window.open("", "_blank", "width=960,height=1000");
     if (!printWindow) throw new Error("Allow pop-ups to open the printable report.");
-    printWindow.document.write(
-      `<!doctype html><title>${report.title}</title><style>body{font:12px system-ui;padding:32px;color:#111}h1{font-size:20px}h2{font-size:14px;font-weight:500}table{border-collapse:collapse;width:100%;margin-top:16px}th,td{border-bottom:1px solid #ddd;padding:6px;text-align:left;font-size:10px}th{background:#f2f2f2}</style>` +
-        `<h1>${report.organization}</h1><h2>${report.title} · ${report.period}</h2>` +
-        `<p>${report.summary.map((item) => `${item.label}: ${item.value}`).join(" · ")}</p>` +
-        `<table><thead><tr>${report.headers.map((header) => `<th>${header}</th>`).join("")}</tr></thead><tbody>${report.rows
-          .map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`)
-          .join("")}</tbody></table>`,
-    );
+    printWindow.document.write(renderPrintableReport(report));
     printWindow.document.close();
     printWindow.focus();
     printWindow.setTimeout(() => printWindow.print(), 250);

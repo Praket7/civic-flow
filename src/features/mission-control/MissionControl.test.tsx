@@ -53,6 +53,13 @@ describe("Mission Control", () => {
     expect(within(table).getByRole("cell", { name: "62%" })).toBeInTheDocument();
   });
 
+  it("uses a single community photo with a correctly labeled monthly metric", async () => {
+    renderPage();
+    const section = await screen.findByRole("region", { name: "Community impact" });
+    expect(section.querySelectorAll("img")).toHaveLength(1);
+    expect(within(section).getByText("this month")).toBeInTheDocument();
+  });
+
   it("has no serious axe violations", async () => {
     const { container } = renderPage();
     await screen.findByRole("heading", { name: "Good morning, Praket." });
