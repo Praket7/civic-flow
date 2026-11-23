@@ -1,0 +1,51 @@
+name: Stage 4 One-Time Formatting
+
+on:
+  push:
+    branches: [stage4-reporting-accuracy-impact]
+    paths:
+      - "src/**"
+      - "src-tauri/core/**"
+      - "docs/FBLA-STAGE4-REPORTING.md"
+      - ".github/workflows/stage4-format-once.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stage4-format-once
+  cancel-in-progress: true
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: stage4-reporting-accuracy-impact
+          persist-credentials: true
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: pnpm install --frozen-lockfile
+      - name: Format only Stage 4 touched files
+        run: |
+          pnpm exec prettier --write src/types/domain.ts src/lib/workspace/selectors.ts src/lib/workspace/preview/reports.ts src/lib/workspace/preview/reports.test.ts src/features/reports/CustomReportPage.tsx src/features/reports/CustomReportPage.test.ts src/features/reports/ReportsPage.tsx src/features/reports/ImpactReportPage.tsx docs/FBLA-STAGE4-REPORTING.md
+          cd src-tauri/core
+          cargo fmt --all
+      - name: Commit formatting to feature branch if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/types/domain.ts src/lib/workspace/selectors.ts src/lib/workspace/preview/reports.ts src/lib/workspace/preview/reports.test.ts src/features/reports/CustomReportPage.tsx src/features/reports/CustomReportPage.test.ts src/features/reports/ReportsPage.tsx src/features/reports/ImpactReportPage.tsx src-tauri/core/src/reports.rs src-tauri/core/tests/reports.rs docs/FBLA-STAGE4-REPORTING.md
+          if ! git diff --cached --quiet; then
+            git commit -m "style(stage4): format reporting changes"
+            git push origin HEAD:stage4-reporting-accuracy-impact
+          fi
