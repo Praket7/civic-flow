@@ -521,7 +521,7 @@ export function getCauseHours(
     .map(([cause, hours]) => ({
       cause,
       label: CAUSE_LABELS[cause],
-      hours: Math.round(hours),
+      hours: Math.round(hours * 100) / 100,
       percent: Math.round((hours / grand) * 100),
     }))
     .sort((a, b) => b.hours - a.hours);
@@ -725,13 +725,31 @@ export function getReportPreview(session: SessionOverrides = {}, workspace: Demo
       (minutesByVolunteer.get(row.volunteer.id) ?? 0) + (row.approvedMinutes ?? 0),
     );
   }
-  const attendanceEntries = Object.values(session.attendance ?? {})
-    .flat()
-    .filter((row) => ["checked_in", "completed", "no_show"].includes(row.status));
+  const attendanceEntries = Object.entries(session.attendance ?? {}).flatMap(
+    ([shiftId, entries]) => {
+      const shift = workspace.shifts.find((row) => row.id === shiftId);
+      if (
+        !shift ||
+        shift.status === "canceled" ||
+        shift.startsAt.slice(0, 10) < yearStart ||
+        shift.startsAt.slice(0, 10) > today
+      ) return [];
+      return entries.filter((row) =>
+        ["checked_in", "completed", "no_show"].includes(row.status),
+      );
+    },
+  );
   const arrived = attendanceEntries.filter((row) => row.status !== "no_show").length;
   const causes = getCauseHours(session, workspace);
   const upcoming = getUpcomingShiftRows(workspace);
-  const outcomes = getImpactOutcomes(session);
+  const yearMetrics = (session.impactMetrics ?? []).filter(
+    (row) => row.recordedAt.slice(0, 10) >= yearStart && row.recordedAt.slice(0, 10) <= today,
+  );
+  const outcomes = getImpactOutcomes({ ...session, impactMetrics: yearMetrics });
+  const monthlyOutcomes = getImpactOutcomes({
+    ...session,
+    impactMetrics: yearMetrics.filter((row) => row.recordedAt.startsWith(month)),
+  });
   return {
     organization: workspace.organization,
     generatedAt: workspace.now,
@@ -751,7 +769,7 @@ export function getReportPreview(session: SessionOverrides = {}, workspace: Demo
       mealsPacked: outcomes.get("meals_packed")?.value ?? 0,
       tutoringSessions: outcomes.get("tutoring_sessions")?.value ?? 0,
       treesPlanted: outcomes.get("trees_planted")?.value ?? 0,
-      familiesServedThisMonth: outcomes.get("families_served")?.value ?? 0,
+      familiesServedThisMonth: monthlyOutcomes.get("families_served")?.value ?? 0,
     },
     outcomes: [...outcomes.entries()],
     attendanceObservations: attendanceEntries.length,
