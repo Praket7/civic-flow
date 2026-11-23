@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 use std::time::Instant;
 
-use chrono::{DateTime, Duration, FixedOffset, NaiveDate};
+use chrono::{DateTime, Duration, NaiveDate};
 use civicflow_core::matching::{day_key, plan, Candidate, RosterOptions, Slot};
 use civicflow_core::policy::RosterPolicy;
 
