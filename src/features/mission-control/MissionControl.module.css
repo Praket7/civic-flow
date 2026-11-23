@@ -316,14 +316,18 @@
 /* ---------- Weekly chart ---------- */
 .weekCard {
   min-height: 0;
-  align-self: start;
+  /* Share the row height with Needs Attention instead of leaving an empty
+     canvas rectangle beneath the chart. */
+  align-self: stretch;
 }
 
 .bars {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 10px;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-height: 208px;
+  align-items: center;
 }
 
 .barColumn {
@@ -917,6 +921,12 @@
 
   .mid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bars {
+    flex: 0 0 auto;
+    min-height: 0;
+    padding: 12px 0;
   }
 
   .bottom {
