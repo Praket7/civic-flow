@@ -818,7 +818,10 @@ function workspaceRoster(): RosterVolunteer[] {
  */
 /** Keep the browser preview's existing scoped roster as the duplicate-email oracle. */
 function previewVolunteers(text: string): VolunteerImportPreview {
-  return previewVolunteerCsv(text, workspaceRoster().map((record) => record.email));
+  return previewVolunteerCsv(
+    text,
+    workspaceRoster().map((record) => record.email),
+  );
 }
 
 export const previewRepository: WorkspaceRepository = {
