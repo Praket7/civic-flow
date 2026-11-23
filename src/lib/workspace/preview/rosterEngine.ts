@@ -15,6 +15,22 @@ import type {
   SessionSnapshot,
   Volunteer,
 } from "../../../types/domain";
+export function roleRequirement(role: string): { skill: string; credential: string | null } {
+  const lower = role.toLowerCase();
+  if (lower.includes("spanish")) return { skill: "Spanish", credential: null };
+  if (lower.includes("driver") || lower.includes("delivery")) {
+    return { skill: "Driver", credential: "Safe driver clearance" };
+  }
+  if (lower.includes("tutor")) return { skill: "Tutoring", credential: "Tutor certification" };
+  if (lower.includes("food") || lower.includes("pantry") || lower.includes("sort")) {
+    return { skill: "Food handling", credential: "Food safety handler" };
+  }
+  if (lower.includes("garden") || lower.includes("tool")) {
+    return { skill: "Gardening", credential: "Garden tool safety" };
+  }
+  return { skill: "", credential: null };
+}
+
 /** Demo-only matching implementation; native Rust remains the production authority. */
 export function createPreviewRosterEngine(context: {
   workspace: DemoWorkspace;
@@ -70,31 +86,16 @@ export function createPreviewRosterEngine(context: {
    * desktop here, otherwise the preview would show a different shortlist than
    * the optimizer actually used.
    */
-  function previewRoleRequirement(role: string): { skill: string; credential: string | null } {
-    const lower = role.toLowerCase();
-    if (lower.includes("spanish")) return { skill: "Spanish", credential: null };
-    if (lower.includes("driver") || lower.includes("delivery")) {
-      return { skill: "Driver", credential: "Safe driver clearance" };
-    }
-    if (lower.includes("tutor")) return { skill: "Tutoring", credential: "Tutor certification" };
-    if (lower.includes("food") || lower.includes("pantry") || lower.includes("sort")) {
-      return { skill: "Food handling", credential: "Food safety handler" };
-    }
-    if (lower.includes("garden") || lower.includes("tool")) {
-      return { skill: "Gardening", credential: "Garden tool safety" };
-    }
-    return { skill: "", credential: null };
-  }
 
   function previewSeats(shiftIds: string[]): PreviewSeat[] {
     const seats: PreviewSeat[] = [];
-    for (const shift of workspace.shifts.filter((row) => shiftIds.includes(row.id))) {
+    for (const shift of workspace.shifts.filter((row) => shiftIds.includes(row.id) && row.status === "scheduled")) {
       const opportunity = workspace.opportunities.find((row) => row.id === shift.opportunityId);
       const live = state.registrations.filter(
         (row) => row.shiftId === shift.id && row.status === "registered",
       );
       for (const role of shift.roles) {
-        const requirement = previewRoleRequirement(role.name);
+        const requirement = roleRequirement(role.name);
         const filled = live.filter((row) => row.role === role.name).length;
         for (let seat = 0; seat < Math.max(0, role.required - filled); seat += 1) {
           seats.push({
@@ -209,7 +210,7 @@ export function createPreviewRosterEngine(context: {
           row.volunteerId === volunteer.id &&
           row.name.toLowerCase() === seat.requiredCredential!.toLowerCase(),
       );
-      const current = held.some((row) => row.validThrough.slice(0, 10) >= on);
+      const current = held.some((row) => row.verifiedAt && row.validFrom.slice(0, 10) <= on && row.validThrough.slice(0, 10) >= on);
       const expired = !current && held.length > 0;
       checks.push({
         name: "Required credential",

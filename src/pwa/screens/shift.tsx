@@ -40,14 +40,14 @@ export function ShiftDetailScreen() {
   const range = formatShiftRange(shift.startsAt, shift.endsAt, timezone);
   const statusPill = shiftStatus(shift);
 
-  async function run(command: CommandType, payload: Record<string, unknown>, note: string) {
-    if (!shift || !view) return;
+  async function run(command: CommandType, payload: Record<string, unknown>) {
+    if (!shift || !view || busy || pending) return;
     setBusy(command);
     setProblem(null);
     setMessage(null);
     try {
       await queue(command, { shiftId: shift.id, volunteerId: view.volunteerId, ...payload });
-      setMessage(note);
+      setMessage("Request saved on this device. The server will confirm the result.");
     } catch (caught) {
       setProblem(messageOf(caught));
     } finally {
@@ -95,8 +95,8 @@ export function ShiftDetailScreen() {
         </Card>
       ) : null}
 
-      {message ? <p className={styles.success}>{message}</p> : null}
-      {problem ? <p className={styles.error}>{problem}</p> : null}
+      {message ? <p className={styles.queuedNote} role="status">{message}</p> : null}
+      {problem ? <p className={styles.error} role="alert">{problem}</p> : null}
       {pending ? (
         <p className={styles.queuedNote}>
           <TriangleAlert aria-hidden size={15} /> Saved on this device. It will send when you're
@@ -156,7 +156,8 @@ export function ShiftDetailScreen() {
                 <Button
                   variant="secondary"
                   loading={busy === "CHECK_OUT"}
-                  onClick={() => void run("CHECK_OUT", {}, "Check-out saved.")}
+                  disabled={pending || busy !== null}
+                  onClick={() => void run("CHECK_OUT", {})}
                 >
                   Check out
                 </Button>
@@ -165,11 +166,11 @@ export function ShiftDetailScreen() {
                 <Button
                   variant="ghost"
                   loading={busy === "CANCEL_REGISTRATION"}
+                  disabled={pending || busy !== null}
                   onClick={() =>
                     void run(
                       "CANCEL_REGISTRATION",
                       { reason: "Canceled from the volunteer app" },
-                      "Your seat was released.",
                     )
                   }
                 >
@@ -187,11 +188,11 @@ export function ShiftDetailScreen() {
             <Button
               variant="ghost"
               loading={busy === "CANCEL_REGISTRATION"}
+                  disabled={pending || busy !== null}
               onClick={() =>
                 void run(
                   "CANCEL_REGISTRATION",
                   { reason: "Left the waitlist" },
-                  "You left the waitlist.",
                 )
               }
             >
@@ -208,13 +209,11 @@ export function ShiftDetailScreen() {
             <div className={styles.rowActions}>
               <Button
                 loading={busy === "REGISTER_FOR_SHIFT"}
+                  disabled={pending || busy !== null}
                 onClick={() =>
                   void run(
                     "REGISTER_FOR_SHIFT",
                     { role: shift.roles[0]?.name ?? "", allowWaitlist: true },
-                    shift.seatsLeft === 0
-                      ? "You're on the waitlist."
-                      : "Seat saved. It will sync when you're online.",
                   )
                 }
               >
@@ -224,11 +223,11 @@ export function ShiftDetailScreen() {
                 <Button
                   variant="secondary"
                   loading={busy === "JOIN_WAITLIST"}
+                  disabled={pending || busy !== null}
                   onClick={() =>
                     void run(
                       "JOIN_WAITLIST",
                       { role: shift.roles[0]?.name ?? "" },
-                      "You joined the waitlist.",
                     )
                   }
                 >

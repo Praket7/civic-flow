@@ -44,6 +44,7 @@ import { demoWorkspace } from "./dataset";
 import {
   DEMO_ORGANIZATION,
   withCreatedShifts,
+  withCreatedPrograms,
   withRoster,
   workspaceForOrganization,
 } from "./organizationWorkspace";
@@ -198,7 +199,7 @@ export function WorkspaceSessionProvider({ children }: { children: ReactNode }) 
   const visibleWorkspace = useMemo(() => {
     // The seed's roster plus everyone added or imported since.
     const base = withCreatedShifts(
-      withRoster(workspace, session?.roster ?? []),
+      withCreatedPrograms(withRoster(workspace, session?.roster ?? []), session?.createdOpportunities ?? []),
       session?.createdSeries ?? [],
       session?.createdShifts ?? [],
     );
@@ -333,15 +334,15 @@ export function WorkspaceSessionProvider({ children }: { children: ReactNode }) 
       setApplicationStage: (applicationId, stage) =>
         run(() => repository.setApplicationStage(applicationId, stage)),
       checkIn: (shiftId, volunteerId, code) =>
-        run(() => repository.checkIn(shiftId, volunteerId, code)),
+        enqueue(() => runChecked(() => repository.checkIn(shiftId, volunteerId, code))),
       manualCheckIn: (shiftId, volunteerId, reason) =>
         run(() => repository.manualCheckIn(shiftId, volunteerId, reason)),
-      checkOut: (shiftId, volunteerId) => run(() => repository.checkOut(shiftId, volunteerId)),
+      checkOut: (shiftId, volunteerId) => enqueue(() => runChecked(() => repository.checkOut(shiftId, volunteerId))),
       markNoShow: (shiftId, volunteerId) => run(() => repository.markNoShow(shiftId, volunteerId)),
       cancelRegistration: (shiftId, volunteerId, reason) =>
-        run(() => repository.cancelRegistration(shiftId, volunteerId, reason)),
+        enqueue(() => runChecked(() => repository.cancelRegistration(shiftId, volunteerId, reason))),
       joinWaitlist: (shiftId, volunteerId, role) =>
-        run(() => repository.joinWaitlist(shiftId, volunteerId, role)),
+        enqueue(() => runChecked(() => repository.joinWaitlist(shiftId, volunteerId, role))),
       getCheckinCode: (shiftId) => repository.getCheckinCode(shiftId),
       checkinWindow: (shiftId) => repository.checkinWindow(shiftId),
       autoRoster: (shiftIds, options) => repository.autoRoster(shiftIds, options),
@@ -400,7 +401,7 @@ export function WorkspaceSessionProvider({ children }: { children: ReactNode }) 
           return result.opportunity;
         }),
       registerForShift: (shiftId, volunteerId, role) =>
-        run(() => repository.registerForShift(shiftId, volunteerId, role)),
+        enqueue(() => runChecked(() => repository.registerForShift(shiftId, volunteerId, role))),
       saveVolunteerProfile: (patch) => run(() => repository.saveVolunteerProfile(patch)),
       resetDemo: () => run(() => repository.resetDemo()),
       createBackup: (note) =>
