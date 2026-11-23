@@ -2240,4 +2240,35 @@ mod tests {
         assert_eq!(plan.assignments.len(), 100);
         assert!(elapsed.as_secs_f64() < 5.0, "planner took {elapsed:?}");
     }
+    /// Reproducible local performance harness. Ignored in normal unit CI;
+    /// run explicitly with --ignored --nocapture. Times are diagnostics, not
+    /// a service-level guarantee, and include the explainable eligibility pass.
+    #[test]
+    #[ignore = "manual AutoRoster scale benchmark"]
+    fn benchmark_realistic_volunteer_and_shift_counts() {
+        use std::time::Instant;
+        for (volunteer_count, slot_count) in [(50, 12), (120, 30), (200, 50)] {
+            let candidates: Vec<Candidate> = (0..volunteer_count)
+                .map(|i| candidate(&format!("benchmark-v-{i:03}"), &[], &["sat:morning"]))
+                .collect();
+            let slots: Vec<Slot> = (0..slot_count)
+                .map(|i| slot(&format!("benchmark-slot-{i:03}"), "General", None, "2026-10-17T09:00:00-04:00"))
+                .collect();
+            let mut timings_ms: Vec<f64> = Vec::new();
+            let baseline = plan(&candidates, &slots, &policy(), &options());
+            assert_eq!(baseline.assignments.len(), slot_count);
+            for _ in 0..5 {
+                let begin = Instant::now();
+                let again = plan(&candidates, &slots, &policy(), &options());
+                timings_ms.push(begin.elapsed().as_secs_f64() * 1000.0);
+                assert_eq!(again.assignments, baseline.assignments, "Optimizer changed its answer");
+            }
+            timings_ms.sort_by(|a, b| a.total_cmp(b));
+            println!(
+                "AutoRoster volunteers={} slots={} median_ms={:.2} max_ms={:.2}",
+                volunteer_count, slot_count, timings_ms[2], timings_ms[4]
+            );
+        }
+    }
+
 }

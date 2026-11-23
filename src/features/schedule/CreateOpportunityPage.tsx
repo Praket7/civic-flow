@@ -15,7 +15,8 @@ import { useAuth } from "../../lib/auth/session";
 import { currentOrganizationFor, recordOrganizationUpdate } from "../../lib/organizations/store";
 import { useWorkspace } from "../../lib/workspace/session";
 import { CAUSE_LABELS } from "../../lib/workspace/selectors";
-import type { Cause, NewOpportunityInput, Opportunity } from "../../types/domain";
+import type { Cause, Opportunity } from "../../types/domain";
+import { validateOpportunityDraft, type OpportunityDraft, type OpportunityDraftField } from "../../lib/workspace/opportunityValidation";
 import { SeriesScheduleCard } from "./SeriesScheduleCard";
 import styles from "./Schedule.module.css";
 import { messageOf } from "../../lib/errors";
@@ -52,6 +53,7 @@ export function CreateOpportunityPage() {
   const [duration, setDuration] = useState("2 hours");
   const [requirements, setRequirements] = useState("Reliable arrival, Water bottle");
   const [error, setError] = useState("");
+  const [invalidField, setInvalidField] = useState<OpportunityDraftField | null>(null);
   const [created, setCreated] = useState<Opportunity | null>(null);
 
   function generatePlan() {
@@ -99,49 +101,44 @@ export function CreateOpportunityPage() {
     setError("");
   }
 
+  function draft(): OpportunityDraft {
+    return { title, cause, description, address, capacity, duration, requirements };
+  }
+
   function next() {
     if (step === 0) {
-      if (!title.trim()) {
-        setError("Give the opportunity a clear name.");
+      if (title.trim().length < 3 || title.trim().length > 100) {
+        setError("Use an opportunity name between 3 and 100 characters.");
+        setInvalidField("title");
         return;
       }
     }
     if (step === 1) {
-      if (description.trim().length < 20) {
-        setError("Write at least one sentence about what volunteers will do.");
-        return;
-      }
-      const seats = Number(capacity);
-      if (!Number.isFinite(seats) || seats < 1 || seats > 200) {
-        setError("Capacity must be between 1 and 200 volunteers.");
-        return;
-      }
-      if (!address.trim()) {
-        setError("Add the location where volunteers should arrive.");
+      const validation = validateOpportunityDraft(draft());
+      if (!validation.valid) {
+        setError(validation.message);
+        setInvalidField(validation.field);
+        if (validation.field === "title" || validation.field === "cause") setStep(0);
         return;
       }
     }
     setError("");
+    setInvalidField(null);
     setStep((current) => Math.min(2, current + 1));
   }
 
   async function save() {
-    if (!title.trim() || description.trim().length < 20) {
-      setError("The opportunity needs a name and a description before it can be saved.");
+    // The same checks run again at commit time; passing an earlier wizard
+    // step is not permission to persist an invalid or stale draft.
+    const validation = validateOpportunityDraft(draft());
+    if (!validation.valid) {
+      setError(validation.message);
+      setInvalidField(validation.field);
+      setStep(validation.field === "title" || validation.field === "cause" ? 0 : 1);
       return;
     }
-    const input: NewOpportunityInput = {
-      title: title.trim(),
-      cause,
-      description: description.trim(),
-      address: address.trim(),
-      capacity: Number(capacity),
-      duration,
-      requirements: requirements
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
-    };
+    const input = validation.input;
+    setInvalidField(null);
     try {
       const opportunity = await actions.createOpportunity(input);
       const organization = user ? currentOrganizationFor(user.email) : null;
@@ -284,6 +281,8 @@ export function CreateOpportunityPage() {
               <div className={styles.formGrid}>
                 <TextField
                   label="Opportunity name"
+                  aria-invalid={Boolean(error && invalidField === "title")}
+                  aria-describedby={error && invalidField === "title" ? "opportunity-form-error" : undefined}
                   placeholder="Community Food Distribution"
                   value={title}
                   onChange={(event) => {
@@ -316,6 +315,8 @@ export function CreateOpportunityPage() {
                 <div className={styles.full}>
                   <TextareaField
                     label="What volunteers will do"
+                  aria-invalid={Boolean(error && invalidField === "description")}
+                  aria-describedby={error && invalidField === "description" ? "opportunity-form-error" : undefined}
                     hint="At least one sentence. Mention the pace, the team, and the impact."
                     value={description}
                     onChange={(event) => {
@@ -327,6 +328,8 @@ export function CreateOpportunityPage() {
                 <div className={styles.full}>
                   <TextField
                     label="Where to arrive"
+                  aria-invalid={Boolean(error && invalidField === "address")}
+                  aria-describedby={error && invalidField === "address" ? "opportunity-form-error" : undefined}
                     value={address}
                     onChange={(event) => {
                       setAddress(event.target.value);
@@ -336,20 +339,28 @@ export function CreateOpportunityPage() {
                 </div>
                 <TextField
                   label="Volunteer capacity"
+                  aria-invalid={Boolean(error && invalidField === "capacity")}
+                  aria-describedby={error && invalidField === "capacity" ? "opportunity-form-error" : undefined}
                   type="number"
                   min={1}
                   max={200}
+                  step={1}
+                  inputMode="numeric"
                   value={capacity}
                   onChange={(event) => setCapacity(event.target.value)}
                 />
                 <TextField
                   label="Typical shift length"
+                  aria-invalid={Boolean(error && invalidField === "duration")}
+                  aria-describedby={error && invalidField === "duration" ? "opportunity-form-error" : undefined}
                   value={duration}
                   onChange={(event) => setDuration(event.target.value)}
                 />
                 <div className={styles.full}>
                   <TextField
                     label="Requirements"
+                  aria-invalid={Boolean(error && invalidField === "requirements")}
+                  aria-describedby={error && invalidField === "requirements" ? "opportunity-form-error" : undefined}
                     hint="Comma separated. Keep it to what actually matters on site."
                     value={requirements}
                     onChange={(event) => setRequirements(event.target.value)}
@@ -399,7 +410,7 @@ export function CreateOpportunityPage() {
           ) : null}
 
           {error ? (
-            <p style={{ marginTop: 12, fontSize: 13, color: "var(--tone-red-ink)" }} role="alert">
+            <p id="opportunity-form-error" style={{ marginTop: 12, fontSize: 13, color: "var(--tone-red-ink)" }} role="alert">
               {error}
             </p>
           ) : null}

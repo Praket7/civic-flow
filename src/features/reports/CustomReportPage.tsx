@@ -24,7 +24,6 @@ import {
   CAUSE_LABELS,
   formatDate,
   formatMinutes,
-  getCauseHours,
   getHourRows,
   REPORT_TEMPLATES,
 } from "../../lib/workspace/selectors";
@@ -58,6 +57,30 @@ export function buildTrendPoints(rows: HourRow[]): { label: string; value: numbe
     .map(([date, value]) => ({ label: formatDate(date), value }));
 }
 
+/** The summary and chart must use the exact same filters as the table. */
+export function buildCausePoints(rows: HourRow[]): { label: string; value: number; color: string }[] {
+  const totals = new Map<string, number>();
+  for (const row of rows) {
+    const cause = row.opportunity.cause;
+    totals.set(cause, (totals.get(cause) ?? 0) + (row.approvedMinutes ?? row.requestedMinutes));
+  }
+  const colors: Record<string, string> = {
+    food: "var(--color-coral)",
+    education: "var(--color-violet)",
+    environment: "var(--color-teal)",
+    health: "var(--color-orange)",
+    community: "var(--color-cobalt)",
+    animals: "var(--color-green)",
+  };
+  return Object.entries(CAUSE_LABELS)
+    .filter(([cause]) => (totals.get(cause) ?? 0) > 0)
+    .map(([cause, label]) => ({
+      label,
+      value: totals.get(cause) ?? 0,
+      color: colors[cause] ?? "var(--color-cobalt)",
+    }));
+}
+
 export function CustomReportPage() {
   const { workspace, session, actions } = useWorkspace();
   const [params] = useSearchParams();
@@ -81,14 +104,17 @@ export function CustomReportPage() {
     () => reportRange(workspace.now, range as ReportPeriod),
     [workspace.now, range],
   );
-  const rows = useMemo<Row[]>(() => {
-    return allRows
-      .filter((row) => (cause === "all" ? true : row.opportunity.cause === cause))
-      .filter((row) => inRange(row.date, selectedRange))
-      .map((row) => ({ ...row, id: row.id }))
-      .sort((left, right) => right.date.localeCompare(left.date))
-      .slice(0, 12);
-  }, [allRows, cause, selectedRange]);
+  const filteredRows = allRows
+    .filter((row) => cause === "all" || row.opportunity.cause === cause)
+    .filter((row) => inRange(row.date, selectedRange));
+  const rows: Row[] = filteredRows
+    .map((row) => ({ ...row, id: row.id }))
+    .sort((left, right) => right.date.localeCompare(left.date))
+    .slice(0, 12);
+  const causePoints = buildCausePoints(filteredRows);
+  const totalMinutes = filteredRows.reduce(
+    (sum, row) => sum + (row.approvedMinutes ?? row.requestedMinutes), 0,
+  );
 
   const columns: Column<Row>[] = [];
   if (fields.includes("volunteer")) {
@@ -235,8 +261,8 @@ export function CustomReportPage() {
             </SelectField>
           </div>
           <p className={styles.tableNote}>
-            {fields.length} field{fields.length === 1 ? "" : "s"} selected · {rows.length} preview
-            rows
+            {fields.length} field{fields.length === 1 ? "" : "s"} selected · {rows.length} of
+            {filteredRows.length} matching rows shown
           </p>
         </Card>
 
@@ -268,11 +294,7 @@ export function CustomReportPage() {
             <div style={{ marginTop: 14, minHeight: 176 }}>
               {chart === "trend" ? (
                 <AreaChart
-                  data={buildTrendPoints(
-                    getHourRows(session, workspace)
-                      .filter((row) => (cause === "all" ? true : row.opportunity.cause === cause))
-                      .filter((row) => inRange(row.date, selectedRange)),
-                  )}
+                  data={buildTrendPoints(filteredRows)}
                   height={176}
                   label="Hours trend preview"
                   formatValue={(value) => formatMinutes(value)}
@@ -280,21 +302,11 @@ export function CustomReportPage() {
               ) : null}
               {chart === "cause" ? (
                 <DonutChart
-                  data={getCauseHours(session, workspace).map((item) => ({
-                    label: item.label,
-                    value: item.hours,
-                    color:
-                      item.cause === "food"
-                        ? "var(--color-coral)"
-                        : item.cause === "education"
-                          ? "var(--color-violet)"
-                          : item.cause === "environment"
-                            ? "var(--color-teal)"
-                            : "var(--color-orange)",
-                  }))}
-                  centerValue={`${getCauseHours(session, workspace).length}`}
-                  centerLabel="causes"
-                  label="Cause preview"
+                  data={causePoints}
+                  centerValue={formatMinutes(totalMinutes)}
+                  centerLabel="service time"
+                  label="Service time by cause for selected period and filters"
+                  valueFormatter={formatMinutes}
                 />
               ) : null}
               {chart === "table" ? (
@@ -391,7 +403,7 @@ export function CustomReportPage() {
                       }),
                     );
                     setSaved(
-                      `Saved “${name}” with ${fields.length} fields and ${rows.length} rows.`,
+                      `Saved “${name}” with ${fields.length} fields and ${filteredRows.length} matching rows.`,
                     );
                     setError("");
                   } catch (caught) {

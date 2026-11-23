@@ -83,6 +83,12 @@ import { demoWorkspace } from "./dataset";
 import { blankWorkspaceForOrganization, withRoster } from "./organizationWorkspace";
 import type { OrganizationScope } from "./organizationWorkspace";
 import type { WorkspaceRepository } from "./repository";
+import {
+  PREVIEW_ACCOUNT_KEY,
+  PREVIEW_ACCOUNTS_KEY,
+  previewPasswords,
+  storedPreviewAccounts,
+} from "./previewAccountStorage";
 
 const STORAGE_KEY = "civicflow.workflow.v1";
 const READ_KEY = "civicflow.notifications.read";
@@ -110,43 +116,6 @@ function scoped(key: string): string {
   return scopeId() === DEMO_ORGANIZATION_ID ? key : `${key}:${scopeId()}`;
 }
 const BACKUP_RETENTION = 20;
-const PREVIEW_ACCOUNT_KEY = "civicflow.auth.passwords";
-const PREVIEW_ACCOUNTS_KEY = "civicflow.auth.accounts";
-
-/** Accounts created in a previous preview session, newest last. */
-function storedPreviewAccounts(): Account[] {
-  try {
-    const raw = localStorage.getItem(PREVIEW_ACCOUNTS_KEY);
-    const parsed: unknown = raw ? JSON.parse(raw) : null;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((row): row is Account => {
-      const candidate = row as Partial<Account> | null;
-      return Boolean(
-        candidate &&
-        typeof candidate.id === "string" &&
-        typeof candidate.name === "string" &&
-        typeof candidate.email === "string" &&
-        (candidate.role === "coordinator" ||
-          candidate.role === "volunteer" ||
-          candidate.role === "none"),
-      );
-    });
-  } catch {
-    return [];
-  }
-}
-
-function previewPasswords(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(PREVIEW_ACCOUNT_KEY);
-    const parsed: unknown = raw ? JSON.parse(raw) : null;
-    if (parsed && typeof parsed === "object") return parsed as Record<string, string>;
-  } catch {
-    // The preview keeps the demo password when storage is unavailable.
-  }
-  return {};
-}
-
 /** The identity the preview screens are operating as. */
 let activePreviewAccount: Account | null = null;
 
