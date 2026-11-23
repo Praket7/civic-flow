@@ -39,7 +39,7 @@ The Stage 4 fixture supplies 45 approved minutes for an originally submitted 90-
 - [_The Complexities of Volunteer Data_ (2024)](https://scispace.com/papers/the-complexities-of-volunteer-data-96s7d2cpnywv) — real nonprofit volunteer records are challenging to gather and maintain.
 - [W3C Data on the Web Best Practices](https://www.w3.org/TR/dwbp/) — data provenance, metadata and accuracy.
 - [W3C Accessible Tables](https://www.w3.org/WAI/tutorials/tables/) — meaningful accessible table headers.
-- [VolunteerBadge documentation](https://support.volunteerbadge.com/volunteer-hours-logging) — operational distinction between submitted and verified volunteer hours, correction history, stable record IDs and filtering.
+- [VolunteerBadge hour-tracking guide](https://www.volunteerbadge.com/blog/how-to-track-your-volunteer-hours) — operational distinction between submitted and verified volunteer hours, correction history, stable record IDs and filtering.
 
 ## Explicit boundaries
 
