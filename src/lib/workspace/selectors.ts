@@ -430,10 +430,11 @@ export function getHourRows(session: SessionOverrides = {}, workspace: DemoWorks
       opportunity,
       date: entry.date,
       requestedMinutes: entry.minutes,
-      approvedMinutes: decision
-        ? decision.approvedMinutes
-        : entry.status === "verified"
-          ? entry.minutes
+      // A rejected or pending record must never contribute approved minutes,
+      // even when an older decision retains a non-null amount.
+      approvedMinutes:
+        (decision?.status ?? entry.status) === "verified"
+          ? (decision?.approvedMinutes ?? entry.minutes)
           : null,
       status: decision?.status ?? entry.status,
       verificationId: entry.verificationId,
@@ -489,13 +490,13 @@ export function getHoursTrend(
   workspace: DemoWorkspace,
 ): { label: string; hours: number }[] {
   const end = parseISO(workspace.now);
-  const rows = getHourRows(session, workspace).filter((row) => row.status !== "rejected");
+  const rows = getHourRows(session, workspace).filter((row) => row.status === "verified");
   return Array.from({ length: 12 }, (_, index) => {
     const month = new Date(end.getFullYear(), end.getMonth() - (11 - index), 1);
     const key = format(month, "yyyy-MM");
     const minutes = rows
       .filter((row) => row.date.startsWith(key))
-      .reduce((sum, row) => sum + (row.approvedMinutes ?? row.requestedMinutes), 0);
+      .reduce((sum, row) => sum + (row.approvedMinutes ?? 0), 0);
     return { label: format(month, "MMM"), hours: Math.round(minutes / 60) };
   });
 }
@@ -506,7 +507,13 @@ export function getCauseHours(
 ): { cause: Cause; label: string; hours: number; percent: number }[] {
   const totals = new Map<Cause, number>();
   for (const row of getHourRows(session, workspace)) {
-    const hours = (row.approvedMinutes ?? row.requestedMinutes) / 60;
+    if (
+      row.status !== "verified" ||
+      row.date < workspace.now.slice(0, 4) + "-01-01" ||
+      row.date > workspace.now.slice(0, 10)
+    )
+      continue;
+    const hours = (row.approvedMinutes ?? 0) / 60;
     totals.set(row.opportunity.cause, (totals.get(row.opportunity.cause) ?? 0) + hours);
   }
   const grand = [...totals.values()].reduce((sum, value) => sum + value, 0) || 1;
@@ -514,7 +521,7 @@ export function getCauseHours(
     .map(([cause, hours]) => ({
       cause,
       label: CAUSE_LABELS[cause],
-      hours: Math.round(hours),
+      hours: Math.round(hours * 100) / 100,
       percent: Math.round((hours / grand) * 100),
     }))
     .sort((a, b) => b.hours - a.hours);
@@ -640,42 +647,42 @@ export const REPORT_TEMPLATES: ReportTemplate[] = [
     title: "Volunteer participation",
     description: "Hours, shifts, and attendance by volunteer for a chosen date range.",
     category: "participation",
-    range: "This quarter",
+    range: "Filterable period",
   },
   {
     id: "report-coverage",
     title: "Coverage by program",
     description: "Required and filled role slots with risk flags for every upcoming shift.",
     category: "coverage",
-    range: "Next 30 days",
+    range: "Upcoming or historical",
   },
   {
     id: "report-impact",
     title: "Community impact",
     description: "Hours, meals, families served, and tutoring outcomes for the year.",
     category: "impact",
-    range: "Jan 1 – Dec 31, 2026",
+    range: "Custom date range",
   },
   {
     id: "report-attendance",
     title: "Attendance and no-shows",
     description: "Check-in evidence, late arrivals, and no-show follow-up list.",
     category: "operations",
-    range: "Last 90 days",
+    range: "Custom date range",
   },
   {
     id: "report-retention",
     title: "Retention and engagement",
     description: "Return rate by cohort and volunteers who have gone quiet.",
     category: "participation",
-    range: "Rolling 12 months",
+    range: "Cohort snapshot",
   },
   {
     id: "report-credentials",
     title: "Credentials and skills",
     description: "Expiring certifications and supply against scheduled demand.",
     category: "operations",
-    range: "Next 60 days",
+    range: "Credential snapshot",
   },
 ];
 
@@ -699,21 +706,72 @@ export function getImpactOutcomes(
 }
 
 export function getReportPreview(session: SessionOverrides = {}, workspace: DemoWorkspace) {
+  const today = workspace.now.slice(0, 10);
+  const yearStart = today.slice(0, 4) + "-01-01";
+  const month = today.slice(0, 7);
+  const verified = getHourRows(session, workspace).filter(
+    (row) => row.status === "verified" && row.date >= yearStart && row.date <= today,
+  );
+  const hoursYtd = verified.reduce((sum, row) => sum + (row.approvedMinutes ?? 0), 0) / 60;
+  const hoursThisMonth =
+    verified
+      .filter((row) => row.date.startsWith(month))
+      .reduce((sum, row) => sum + (row.approvedMinutes ?? 0), 0) / 60;
+  const uniqueVolunteersYtd = new Set(verified.map((row) => row.volunteer.id)).size;
+  const minutesByVolunteer = new Map<string, number>();
+  for (const row of verified) {
+    minutesByVolunteer.set(
+      row.volunteer.id,
+      (minutesByVolunteer.get(row.volunteer.id) ?? 0) + (row.approvedMinutes ?? 0),
+    );
+  }
+  const attendanceEntries = Object.entries(session.attendance ?? {}).flatMap(
+    ([shiftId, entries]) => {
+      const shift = workspace.shifts.find((row) => row.id === shiftId);
+      if (
+        !shift ||
+        shift.status === "canceled" ||
+        shift.startsAt.slice(0, 10) < yearStart ||
+        shift.startsAt.slice(0, 10) > today
+      )
+        return [];
+      return entries.filter((row) => ["checked_in", "completed", "no_show"].includes(row.status));
+    },
+  );
+  const arrived = attendanceEntries.filter((row) => row.status !== "no_show").length;
   const causes = getCauseHours(session, workspace);
   const upcoming = getUpcomingShiftRows(workspace);
-  const outcomes = getImpactOutcomes(session);
+  const yearMetrics = (session.impactMetrics ?? []).filter(
+    (row) => row.recordedAt.slice(0, 10) >= yearStart && row.recordedAt.slice(0, 10) <= today,
+  );
+  const outcomes = getImpactOutcomes({ ...session, impactMetrics: yearMetrics });
+  const monthlyOutcomes = getImpactOutcomes({
+    ...session,
+    impactMetrics: yearMetrics.filter((row) => row.recordedAt.startsWith(month)),
+  });
   return {
     organization: workspace.organization,
     generatedAt: workspace.now,
-    period: "January 1 – October 13, 2026",
+    period: yearStart + " – " + today,
     totals: {
       ...workspace.impact,
+      hoursYtd,
+      hoursThisMonth,
+      uniqueVolunteersYtd,
+      activeVolunteers: workspace.volunteers.filter((row) => row.status === "active").length,
+      shiftsCompleted: workspace.shifts.filter(
+        (row) => row.status === "completed" && row.startsAt.slice(0, 10) <= today,
+      ).length,
+      attendanceRate: attendanceEntries.length
+        ? Math.round((arrived / attendanceEntries.length) * 100)
+        : 0,
       mealsPacked: outcomes.get("meals_packed")?.value ?? 0,
       tutoringSessions: outcomes.get("tutoring_sessions")?.value ?? 0,
       treesPlanted: outcomes.get("trees_planted")?.value ?? 0,
-      familiesServedThisMonth: outcomes.get("families_served")?.value ?? 0,
+      familiesServedThisMonth: monthlyOutcomes.get("families_served")?.value ?? 0,
     },
     outcomes: [...outcomes.entries()],
+    attendanceObservations: attendanceEntries.length,
     causes,
     coverage: {
       upcomingShifts: upcoming.length,
@@ -727,7 +785,10 @@ export function getReportPreview(session: SessionOverrides = {}, workspace: Demo
       ),
     },
     topVolunteers: workspace.volunteers
-      .slice()
+      .map((volunteer) => ({
+        ...volunteer,
+        hoursVerified: (minutesByVolunteer.get(volunteer.id) ?? 0) / 60,
+      }))
       .sort((a, b) => b.hoursVerified - a.hoursVerified)
       .slice(0, 5),
   };

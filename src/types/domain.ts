@@ -641,6 +641,8 @@ export interface ReportRequest {
   dateStart?: string | null;
   dateEnd?: string | null;
   cause?: string | null;
+  /** Stable opportunity ID, independent of the display name. */
+  programId?: string | null;
   groupBy: "none" | "cause" | "program";
 }
 

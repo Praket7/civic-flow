@@ -7,6 +7,7 @@ function row(date: string, minutes: number): HourRow {
     id: `${date}-${minutes}`,
     date,
     approvedMinutes: minutes,
+    status: "verified",
     requestedMinutes: minutes,
   } as HourRow;
 }
@@ -39,5 +40,16 @@ describe("custom report cause summary", () => {
   });
   it("handles an empty date range without inventing report hours", () => {
     expect(buildCausePoints([])).toEqual([]);
+  });
+});
+
+describe("verified-hour chart safeguards", () => {
+  it("excludes pending and rejected entries even if they retain a requested amount", () => {
+    const entries = [
+      row("2026-11-12", 30),
+      { ...row("2026-11-12", 120), status: "pending" as const, approvedMinutes: null },
+      { ...row("2026-11-12", 180), status: "rejected" as const, approvedMinutes: 180 },
+    ];
+    expect(buildTrendPoints(entries)).toEqual([{ label: expect.any(String), value: 30 }]);
   });
 });

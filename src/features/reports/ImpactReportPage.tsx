@@ -51,15 +51,16 @@ export function ImpactReportPage() {
             <p className={styles.coverKicker}>{`${workspace.organization.name} · Annual impact`}</p>
             <h2 className={styles.coverTitle}>Service that stays in the neighborhood.</h2>
             <p className={styles.coverMeta}>
-              {report.period} · Generated from {workspace.impact.uniqueVolunteersYtd} unique
-              volunteers and approved service records.
+              {report.period} · Generated from {report.totals.uniqueVolunteersYtd} unique volunteers
+              and approved service records.
             </p>
           </section>
 
           <section className={styles.reportSection}>
             <h2 className={styles.reportSectionTitle}>The year in numbers</h2>
             <p style={{ marginTop: 5, fontSize: 13.5, color: "var(--text-muted)" }}>
-              Every figure below comes from the same verified record used on volunteer certificates.
+              Approved hours come from reviewed service records. Program outcomes come from
+              separately recorded impact measurements.
             </p>
             <div className={styles.reportStats}>
               <div className={styles.reportStat}>
@@ -82,7 +83,7 @@ export function ImpactReportPage() {
                 <div className={styles.reportStatValue}>
                   {report.totals.familiesServedThisMonth}
                 </div>
-                <div className={styles.reportStatLabel}>families served this year</div>
+                <div className={styles.reportStatLabel}>families served this month</div>
               </div>
             </div>
           </section>
@@ -91,7 +92,7 @@ export function ImpactReportPage() {
             <h2 className={styles.reportSectionTitle}>Where the hours went</h2>
             <p style={{ marginTop: 5, fontSize: 13.5, color: "var(--text-muted)" }}>
               {topCause
-                ? `${topCause.label} accounts for ${topCause.percent}% of approved hours this month.`
+                ? `${topCause.label} accounts for ${topCause.percent}% of approved hours year-to-date.`
                 : "Approved hours will appear here once service records are reviewed."}
             </p>
             <div style={{ marginTop: 10 }}>
@@ -148,8 +149,8 @@ export function ImpactReportPage() {
               then reviewed by a coordinator. Adjustments require a reason. This report counts only
               approved minutes; pending and rejected submissions are excluded. Volunteer
               verification codes are generated from the same record. The demo workspace’s
-              participation totals describe {workspace.impact.activeVolunteers} currently active
-              volunteers and {workspace.impact.uniqueVolunteersYtd} unique volunteers served
+              participation totals describe {report.totals.activeVolunteers} currently active
+              volunteers and {report.totals.uniqueVolunteersYtd} unique volunteers served
               year-to-date, so the two numbers are labeled separately on every screen.
             </p>
             <p style={{ marginTop: 8, fontSize: 12.5, color: "var(--text-muted)" }}>
@@ -169,14 +170,14 @@ export function ImpactReportPage() {
             </div>
             <div className={styles.asideRow}>
               <span>Period</span>
-              <span>Jan 1 – Oct 13, 2026</span>
+              <span>{report.period}</span>
             </div>
             <div className={styles.asideRow}>
               <span>Source</span>
               <span>Approved hours only</span>
             </div>
             <div className={styles.asideRow}>
-              <span>Verification records</span>
+              <span>Completed shifts</span>
               <span>{report.totals.shiftsCompleted} shifts</span>
             </div>
             <div className={styles.asideRow}>
@@ -185,13 +186,15 @@ export function ImpactReportPage() {
             </div>
             <div className={styles.asideRow}>
               <span>Attendance</span>
-              <span>{report.totals.attendanceRate}%</span>
+              <span>
+                {report.attendanceObservations ? `${report.totals.attendanceRate}%` : "N/A"}
+              </span>
             </div>
             <div className={styles.asideRow}>
-              <span>Avg. approved session</span>
+              <span>Hours per contributing volunteer</span>
               <span>
                 {formatMinutes(
-                  (report.totals.hoursYtd / Math.max(1, report.totals.shiftsCompleted)) * 60,
+                  (report.totals.hoursYtd / Math.max(1, report.totals.uniqueVolunteersYtd)) * 60,
                 )}
               </span>
             </div>
