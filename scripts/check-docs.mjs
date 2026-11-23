@@ -79,6 +79,7 @@ const OPERATIONAL_DOCUMENTS = new Set([
   "docs/SECURITY-AUDIT.md",
   "docs/PUBLIC-RELEASE-READINESS.md",
   "docs/FBLA-STAGE1-JUDGING.md",
+  "docs/FBLA-STAGE2-QUALITY.md",
   "docs/FBLA-STAGE2-RUBRIC-TRACEABILITY.md",
 ]);
 const extra = [...markdown(".")].filter(
