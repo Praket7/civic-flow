@@ -273,8 +273,10 @@ try {
     assert.ok(bounds.signOutBottom <= height + 2, "Sign out clipped by viewport");
     assert.ok(bounds.personBottom <= height + 2, "Account avatar clipped by viewport");
     if (!collapsed) {
-      assert.ok(bounds.identityBottom > 0 && bounds.identityBottom <= height + 2,
-        "Coordinator identity clipped by viewport");
+      assert.ok(
+        bounds.identityBottom > 0 && bounds.identityBottom <= height + 2,
+        "Coordinator identity clipped by viewport",
+      );
     }
     assert.ok(bounds.navigationOverflow <= 2, "Desktop navigation must fit without scrolling");
     assert.ok(
