@@ -28,6 +28,13 @@ describe("form fields", () => {
     expect(input.getAttribute("aria-describedby")).toMatch(/-error$/);
   });
 
+  it("preserves instructions while announcing a validation error", () => {
+    render(<TextField label="Hours" hint="Use whole minutes." error="Required." />);
+    const input = screen.getByLabelText("Hours");
+    expect(input).toHaveAccessibleDescription("Use whole minutes. Required.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Required.");
+  });
+
   it("marks selects and textareas invalid too", () => {
     render(
       <>

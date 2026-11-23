@@ -217,6 +217,7 @@ export function Sidebar({
         <div className={styles.brandRow}>
           <Link
             className={styles.brand}
+            aria-label="CivicFlow"
             to={isCoordinator ? "/coordinator/mission-control" : "/volunteer/home"}
             onClick={dismissOnNavigate}
           >

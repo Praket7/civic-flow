@@ -368,7 +368,7 @@ try {
   })()`);
   await evaluate("document.querySelector('button[aria-label^=\"Workspace:\"]')?.click()");
   assert.equal(
-    await evaluate('Boolean(document.querySelector(\'[role="menu"] [href*="accessibility"]\'))'),
+    await evaluate('Boolean(document.querySelector(\'#workspace-navigation [href*="accessibility"]\'))'),
     false,
     "Accessibility must not remain in the workspace dropdown",
   );
@@ -388,6 +388,65 @@ try {
       "hash navigation must stay within the isolated judging app",
     );
   }
+  // Stage 5: exercise focus boundaries with real keyboard events and a narrow viewport.
+  await send("Emulation.setDeviceMetricsOverride", {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await until(
+    () => evaluate('document.querySelector("#primary-navigation")?.inert'),
+    "closed mobile navigation is inert",
+  );
+  const key = async (name, modifiers = 0) => {
+    await send("Input.dispatchKeyEvent", { type: "keyDown", key: name, code: name, modifiers });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key: name, code: name, modifiers });
+  };
+  await evaluate('document.querySelector(\'button[aria-label="Open navigation"]\').focus()');
+  await evaluate('document.querySelector(\'button[aria-label="Open navigation"]\').click()');
+  await until(
+    () => evaluate('document.activeElement?.getAttribute("aria-label") === "Close navigation"'),
+    "drawer moves focus to its close button",
+  );
+  assert.equal(
+    await evaluate('document.querySelector("main")?.parentElement.inert'),
+    true,
+    "Background must be inert while drawer is open",
+  );
+  await evaluate('document.querySelector(\'#primary-navigation button[aria-label="Sign out"]\').focus()');
+  await key("Tab");
+  assert.equal(
+    await evaluate('document.activeElement?.getAttribute("aria-label")'),
+    "CivicFlow",
+    "Tab wraps from the last drawer control to the first",
+  );
+  await key("Escape");
+  await until(
+    () => evaluate('document.activeElement?.getAttribute("aria-label") === "Open navigation"'),
+    "Escape restores the opener",
+  );
+  assert.equal(
+    await evaluate('document.querySelector("#primary-navigation").inert'),
+    true,
+    "Closed drawer must exclude keyboard focus",
+  );
+  await evaluate('document.querySelector(\'button[aria-label="Open navigation"]\').click()');
+  await until(() => evaluate('!document.querySelector("#primary-navigation").inert'), "drawer reopened");
+  await evaluate('document.querySelector(\'#primary-navigation a[aria-label="Schedule"]\').click()');
+  await heading("Schedule");
+  await until(
+    () => evaluate('document.activeElement?.id === "main-content"'),
+    "route navigation focuses the new main content",
+  );
+  assert.equal(
+    await evaluate('document.querySelector("#primary-navigation").inert'),
+    true,
+    "Navigation dismisses the drawer",
+  );
+  await send("Emulation.clearDeviceMetricsOverride");
+  console.log("Stage 5: mobile drawer focus containment, Escape, return focus, and route focus passed.");
+
   // Stage 4: changing a real date filter must recalculate the displayed report.
   await open("/judge/demo/#/coordinator/reports/custom");
   await heading("Custom report builder");
