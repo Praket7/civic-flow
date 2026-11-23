@@ -2,7 +2,7 @@
 
 **Project:** CivicFlow — FBLA Coding & Programming 2026–2027
 **Scope:** Local desktop SQLite and isolated browser judging sample.
-**Competition relevance:** The official [2026–2027 Coding & Programming guidelines](https://www.pafbla.org/wp-content/uploads/2026/09/26-27-Coding-and-Programming-PA.pdf) award up to **10 points** for a presentable, customizable, analyzable report and **5 points** for appropriate data structures. This document describes mechanisms, not a promised score.
+**Competition relevance:** The official [2026–2027 Coding & Programming guidelines](https://greektrack-fbla-public.s3.us-east-1.amazonaws.com/files/1/High%20School%20Competitive%20Events%20Resources/Individual%20Guidelines/Presentation%20Events/Coding-and-Programming.pdf) award up to **10 points** for a presentable, customizable, analyzable report and **5 points** for appropriate data structures. This document describes mechanisms, not a promised score.
 
 ## The source-to-report contract
 
@@ -34,9 +34,9 @@ The Stage 4 fixture supplies 45 approved minutes for an originally submitted 90-
 
 ## Design and research rationale
 
-- [FBLA 2026–2027 Coding & Programming event rubric](https://www.pafbla.org/wp-content/uploads/2026/09/26-27-Coding-and-Programming-PA.pdf) — configurable, accurate reports, validation and clear programming explanations.
+- [FBLA 2026–2027 Coding & Programming event rubric](https://greektrack-fbla-public.s3.us-east-1.amazonaws.com/files/1/High%20School%20Competitive%20Events%20Resources/Individual%20Guidelines/Presentation%20Events/Coding-and-Programming.pdf) — configurable, accurate reports, validation and clear programming explanations.
 - [Jarske et al., _Modeling the Dashboard Provenance_ (2023)](https://www.alphaxiv.org/abs/2308.06788) — indicate data origins, transformations and timing so users can trust dashboards.
-- [Shah & Jones, _The Complexities of Volunteer Data_ (2024)](https://scispace.com/papers/the-complexities-of-volunteer-data-96s7d2cpnywv) — real nonprofit volunteer records are challenging to gather and maintain.
+- [_The Complexities of Volunteer Data_ (2024)](https://scispace.com/papers/the-complexities-of-volunteer-data-96s7d2cpnywv) — real nonprofit volunteer records are challenging to gather and maintain.
 - [W3C Data on the Web Best Practices](https://www.w3.org/TR/dwbp/) — data provenance, metadata and accuracy.
 - [W3C Accessible Tables](https://www.w3.org/WAI/tutorials/tables/) — meaningful accessible table headers.
 - [VolunteerBadge documentation](https://support.volunteerbadge.com/volunteer-hours-logging) — operational distinction between submitted and verified volunteer hours, correction history, stable record IDs and filtering.
