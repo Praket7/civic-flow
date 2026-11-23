@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { RosterPlan } from "../../types/domain";
-import type { Candidate } from "./autoRosterModel";
+import type { RosterEvaluation, RosterPlan } from "../../types/domain";
+import { demoWorkspace } from "../../lib/workspace/dataset";
+import { previewRepository } from "../../lib/workspace/previewRepository";
+import type { Candidate, ShiftPlan } from "./autoRosterModel";
 import { auditRosterPlan } from "./planAudit";
 
 const candidate = (
@@ -148,6 +150,121 @@ describe("AutoRoster Stage 3 independent proposal audit", () => {
     const result = auditRosterPlan(proposed, [candidate("known")]);
     expect(result.safeToApply).toBe(false);
     expect(result.issues.join(" ")).toMatch(/inconsistent eligibility/);
+  });
+
+  const shift = (id: string, startsAt: string, endsAt: string, missing = 1): ShiftPlan =>
+    ({
+      row: { shift: { id, startsAt, endsAt } },
+      gaps: [{ name: "Packing", required: missing, filled: 0, missing }],
+    }) as ShiftPlan;
+
+  it("rejects a volunteer double-booked across overlapping shifts", () => {
+    const result = auditRosterPlan(
+      plan([assignment("a", "seat-1", 80, "shift-a"), assignment("a", "seat-2", 75, "shift-b")]),
+      [candidate("a")],
+      {
+        shifts: [
+          shift("shift-a", "2026-11-24T09:00:00Z", "2026-11-24T11:00:00Z"),
+          shift("shift-b", "2026-11-24T10:00:00Z", "2026-11-24T12:00:00Z"),
+        ],
+      },
+    );
+    expect(result.safeToApply).toBe(false);
+    expect(result.issues.join(" ")).toMatch(/overlapping assignments/);
+  });
+
+  it("allows back-to-back nonoverlapping assignments without mutating the proposal", () => {
+    const proposed = plan([
+      assignment("a", "seat-1", 80, "shift-a"),
+      assignment("a", "seat-2", 75, "shift-b"),
+    ]);
+    const before = JSON.stringify(proposed);
+    const result = auditRosterPlan(proposed, [candidate("a")], {
+      shifts: [
+        shift("shift-a", "2026-11-24T09:00:00Z", "2026-11-24T11:00:00Z"),
+        shift("shift-b", "2026-11-24T11:00:00Z", "2026-11-24T12:00:00Z"),
+      ],
+    });
+    expect(result.safeToApply).toBe(true);
+    expect(JSON.stringify(proposed)).toBe(before);
+  });
+
+  it("rejects assignments beyond the actual open-role capacity", () => {
+    const result = auditRosterPlan(
+      plan([assignment("a", "seat-1", 80), assignment("b", "seat-2", 70)]),
+      [candidate("a"), candidate("b")],
+      { shifts: [shift("shift-a", "2026-11-24T09:00:00Z", "2026-11-24T11:00:00Z")] },
+    );
+    expect(result.safeToApply).toBe(false);
+    expect(result.issues.join(" ")).toMatch(/capacity|scope/);
+  });
+
+  it("rejects unfilled seats outside the current role scope", () => {
+    const result = auditRosterPlan(
+      plan([], [
+        { shiftId: "shift-a", role: "Driver", reason: "Unavailable" },
+      ] as RosterPlan["unfilled"]),
+      [candidate("a")],
+      { shifts: [shift("shift-a", "2026-11-24T09:00:00Z", "2026-11-24T11:00:00Z")] },
+    );
+    expect(result.safeToApply).toBe(false);
+    expect(result.issues.join(" ")).toMatch(/outside the current planning scope/);
+  });
+
+  it("rejects a proposal that disagrees with its independently evaluated seat", () => {
+    const proposed = plan([assignment("a", "seat-1", 80)]);
+    const evaluation = {
+      candidates: [
+        {
+          candidateId: "a",
+          slots: [
+            {
+              slotId: "seat-1",
+              shiftId: "shift-a",
+              role: "Packing",
+              score: 80,
+              eligible: false,
+              selected: true,
+            },
+          ],
+        },
+      ],
+    } as RosterEvaluation;
+    expect(auditRosterPlan(proposed, [candidate("a")], { evaluation }).safeToApply).toBe(false);
+    evaluation.candidates[0].slots[0].eligible = true;
+    expect(auditRosterPlan(proposed, [candidate("a")], { evaluation }).safeToApply).toBe(true);
+  });
+
+  it("rejects a shift with invalid times", () => {
+    const result = auditRosterPlan(plan([assignment("a", "seat-1", 80)]), [candidate("a")], {
+      shifts: [shift("shift-a", "not-a-date", "2026-11-24T11:00:00Z")],
+    });
+    expect(result.issues.join(" ")).toMatch(/invalid time interval/);
+    expect(result.safeToApply).toBe(false);
+  });
+
+  it("accepts real demo optimizer assignments when separate evaluation agrees", async () => {
+    await previewRepository.resetDemo();
+    const ids = demoWorkspace.shifts
+      .filter((shift) => shift.startsAt >= demoWorkspace.now)
+      .slice(0, 14)
+      .map((shift) => shift.id);
+    const evaluation = await previewRepository.evaluateRoster(ids, {
+      preferSpanish: true,
+      blockConflicts: true,
+      capWeekly: true,
+      includeWaitlist: true,
+    });
+    const candidates = evaluation.candidates.map(
+      (row) =>
+        ({
+          volunteer: { id: row.candidateId },
+          availability: row.availability,
+          weeklyShifts: row.weeklyShifts,
+        }) as Candidate,
+    );
+    expect(evaluation.plan.assignments.length).toBeGreaterThan(0);
+    expect(auditRosterPlan(evaluation.plan, candidates, { evaluation }).issues).toEqual([]);
   });
 
   it("rejects inconsistent totals and explanations rather than approving a broken plan", () => {

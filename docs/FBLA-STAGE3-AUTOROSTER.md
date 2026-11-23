@@ -25,6 +25,12 @@ The browser judging workspace has its own demo matching implementation and golde
 
 ## Stage 3 follow-up: workload audit and reliable judging entry
 
+The read-only audit independently reconciles proposed shifts against the
+current seat-level evaluation, catches cross-shift time overlaps and excessive
+role capacity, and refuses malformed shift intervals or mismatched unfilled
+roles. Its integration tests include a real demo optimizer fixture so the
+extra verification does not wrongly reject valid recommendations.
+
 The read-only audit additionally rejects invalid numeric scores, fractional or negative
 candidate workloads, and duplicate candidate identifiers. Workload evidence now compares
 the _same represented candidate pool_ before and after assignment: minimum/maximum,
