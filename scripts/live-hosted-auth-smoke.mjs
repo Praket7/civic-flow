@@ -116,10 +116,7 @@ export async function verifyHostedAccess() {
         ["owner", "coordinator"].includes(w.role) &&
         w.organizationId !== coordinatorOrg?.organizationId,
     );
-    ensure(
-      coordinatorOrg && volunteerOrg && foreignOrg,
-      "test memberships are not properly isolated",
-    );
+    ensure(coordinatorOrg && volunteerOrg && foreignOrg, "test memberships are not properly isolated");
 
     ensure(
       !coordinator.workspaces.some((w) => w.organizationId === foreignOrg.organizationId),

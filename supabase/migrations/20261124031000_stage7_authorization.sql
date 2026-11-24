@@ -76,12 +76,14 @@ begin
         return jsonb_build_object('status', 'forbidden', 'code', 'not_a_member');
     end if;
 
-    insert into sync.devices (id, organization_id, user_id, cursor, last_seen_at, platform)
+    insert into sync.devices (id, organization_id, user_id, cursor, last_seen_at, platform,
+        pending_operations, oldest_pending_at, last_error, last_successful_sync_at)
     values (p_replica_id, p_organization_id, auth.uid(), greatest(coalesce(p_cursor, 0), 0),
-            now(), '')
+            now(), '', greatest(coalesce(p_pending, 0), 0), p_oldest_pending_at, p_error,
+            case when p_error is null then now() else null end)
     on conflict (id, organization_id, user_id) do update
         set cursor = greatest(coalesce(p_cursor, 0), 0),
-            pending_operations = coalesce(p_pending, 0),
+            pending_operations = greatest(coalesce(p_pending, 0), 0),
             oldest_pending_at = p_oldest_pending_at,
             last_error = p_error,
             last_seen_at = now(),
@@ -196,6 +198,7 @@ begin
     )
     into v_job
     from public.server_job_runs j
+    where j.job = 'reminders'
     order by j.started_at desc
     limit 1;
 

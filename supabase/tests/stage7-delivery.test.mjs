@@ -8,10 +8,7 @@ test("public push configuration reveals only the public key", async () => {
     await query(db, "select public.save_vapid_keys('public-test', 'private-test')");
     for (const read of [
       () => asAnon(db, () => query(db, "select public.vapid_public_key() as key")),
-      () =>
-        asUser(db, ids.volunteerUserA, () =>
-          query(db, "select public.vapid_public_key() as key"),
-        ),
+      () => asUser(db, ids.volunteerUserA, () => query(db, "select public.vapid_public_key() as key")),
     ]) {
       assert.equal((await read())[0].key, "public-test");
     }
