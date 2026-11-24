@@ -731,6 +731,22 @@ function previewSession(account: Account): AuthSession {
   };
 }
 
+function openOrganizationScope(
+  access: Awaited<ReturnType<WorkspaceRepository["createOrganization"]>>,
+  showCoordinator: boolean,
+): void {
+  const org = access.organization;
+  const role = access.membership.role;
+  applyScope({
+    id: org.id,
+    name: org.name,
+    coordinatorName:
+      showCoordinator || role === "owner" || role === "coordinator" ? org.name : undefined,
+    image: org.image ?? undefined,
+    imageAlt: org.imageAlt ?? undefined,
+  });
+}
+
 export const previewRepository: WorkspaceRepository = {
   source: "preview",
   async listOrganizations() {
@@ -745,26 +761,11 @@ export const previewRepository: WorkspaceRepository = {
       return;
     }
     const access = previewOrganizations.select(requirePreviewAccount(), organizationId);
-    applyScope({
-      id: access.organization.id,
-      name: access.organization.name,
-      coordinatorName:
-        access.membership.role === "owner" || access.membership.role === "coordinator"
-          ? access.organization.name
-          : undefined,
-      image: access.organization.image ?? undefined,
-      imageAlt: access.organization.imageAlt ?? undefined,
-    });
+    openOrganizationScope(access, false);
   },
   async createOrganization(input) {
     const access = previewOrganizations.create(requirePreviewAccount(), input);
-    applyScope({
-      id: access.organization.id,
-      name: access.organization.name,
-      coordinatorName: access.organization.name,
-      image: access.organization.image ?? undefined,
-      imageAlt: access.organization.imageAlt ?? undefined,
-    });
+    openOrganizationScope(access, true);
     return access;
   },
   async updateOrganization(organizationId, patch) {
@@ -784,24 +785,12 @@ export const previewRepository: WorkspaceRepository = {
   },
   async redeemOrganizationInvite(code) {
     const access = previewOrganizations.redeem(requirePreviewAccount(), code);
-    applyScope({
-      id: access.organization.id,
-      name: access.organization.name,
-      coordinatorName: access.organization.name,
-      image: access.organization.image ?? undefined,
-      imageAlt: access.organization.imageAlt ?? undefined,
-    });
+    openOrganizationScope(access, true);
     return access;
   },
   async joinPublicOrganization(organizationId) {
     const access = previewOrganizations.join(requirePreviewAccount(), organizationId);
-    applyScope({
-      id: access.organization.id,
-      name: access.organization.name,
-      coordinatorName: access.organization.name,
-      image: access.organization.image ?? undefined,
-      imageAlt: access.organization.imageAlt ?? undefined,
-    });
+    openOrganizationScope(access, true);
     return access;
   },
   async setOrganizationMemberRole(organizationId, userId, role) {

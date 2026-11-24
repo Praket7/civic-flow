@@ -2076,6 +2076,35 @@ pub fn mark_no_show(
     snapshot(conn)
 }
 
+/// Insert a seat once and update both occupancy counters in the same transaction.
+fn reserve_seat(
+    conn: &Connection,
+    shift_id: &str,
+    volunteer_id: &str,
+    role: &str,
+) -> Result<bool> {
+    let created = conn.execute(
+        "INSERT INTO registrations (shift_id, volunteer_id, role, created_at, status, updated_at)
+         VALUES (?1, ?2, ?3, ?4, 'registered', ?4)
+         ON CONFLICT(shift_id, volunteer_id) DO UPDATE SET
+           role = excluded.role, status = 'registered', updated_at = excluded.updated_at
+         WHERE registrations.status <> 'registered'",
+        params![shift_id, volunteer_id, role, now(conn)?],
+    )?;
+    if created != 0 {
+        conn.execute(
+            "UPDATE shifts SET confirmed = confirmed + 1 WHERE id = ?1",
+            params![shift_id],
+        )?;
+        conn.execute(
+            "UPDATE shift_roles SET filled = filled + 1
+             WHERE shift_id = ?1 AND name = ?2 AND filled < required",
+            params![shift_id, role],
+        )?;
+    }
+    Ok(created != 0)
+}
+
 pub fn promote_waitlist(
     conn: &Connection,
     shift_id: &str,
@@ -2101,15 +2130,8 @@ pub fn promote_waitlist(
     }
     validate_registration(conn, shift_id, volunteer_id, &role)?;
     let transaction = conn.unchecked_transaction()?;
-    let created = transaction.execute(
-        "INSERT INTO registrations (shift_id, volunteer_id, role, created_at, status, updated_at)
-         VALUES (?1, ?2, ?3, ?4, 'registered', ?4)
-         ON CONFLICT(shift_id, volunteer_id) DO UPDATE SET
-           role = excluded.role, status = 'registered', updated_at = excluded.updated_at
-         WHERE registrations.status <> 'registered'",
-        params![shift_id, volunteer_id, role, now(conn)?],
-    )?;
-    if created == 0 {
+    let created = reserve_seat(&transaction, shift_id, volunteer_id, &role)?;
+    if !created {
         // The seat was already held. The promotion still clears the waitlist
         // entry, but the counters have already counted this person.
         transaction.execute(
@@ -2122,15 +2144,6 @@ pub fn promote_waitlist(
     transaction.execute(
         "UPDATE waitlist_entries SET status = 'promoted' WHERE id = ?1",
         params![entry_id],
-    )?;
-    transaction.execute(
-        "UPDATE shifts SET confirmed = confirmed + 1 WHERE id = ?1",
-        params![shift_id],
-    )?;
-    transaction.execute(
-        "UPDATE shift_roles SET filled = filled + 1
-         WHERE shift_id = ?1 AND name = ?2 AND filled < required",
-        params![shift_id, role],
     )?;
     append_audit(
         &transaction,
@@ -2590,26 +2603,10 @@ pub fn register_for_shift(
     // Only a genuinely new seat may move the counters. The conditional update
     // makes a repeated or crafted call do nothing instead of counting the same
     // volunteer twice.
-    let created = transaction.execute(
-        "INSERT INTO registrations (shift_id, volunteer_id, role, created_at, status, updated_at)
-         VALUES (?1, ?2, ?3, ?4, 'registered', ?4)
-         ON CONFLICT(shift_id, volunteer_id) DO UPDATE SET
-           role = excluded.role, status = 'registered', updated_at = excluded.updated_at
-         WHERE registrations.status <> 'registered'",
-        params![shift_id, volunteer_id, role, now(conn)?],
-    )?;
-    if created == 0 {
+    let created = reserve_seat(&transaction, shift_id, volunteer_id, &role)?;
+    if !created {
         return snapshot(conn);
     }
-    transaction.execute(
-        "UPDATE shifts SET confirmed = confirmed + 1 WHERE id = ?1",
-        params![shift_id],
-    )?;
-    transaction.execute(
-        "UPDATE shift_roles SET filled = filled + 1
-         WHERE shift_id = ?1 AND name = ?2 AND filled < required",
-        params![shift_id, role],
-    )?;
     append_audit(
         &transaction,
         "shift.register",
