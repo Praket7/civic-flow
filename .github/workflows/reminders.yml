@@ -17,24 +17,26 @@ concurrency:
 jobs:
   dispatch:
     name: Dispatch due reminders
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Check configuration
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: https://imzdblvljdcbnxtwbmbw.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-            echo "::error title=Reminder dispatch unconfigured::Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY repository secrets; no reminders were sent."
+            echo "::error title=Reminder dispatch unconfigured::Set SUPABASE_SERVICE_ROLE_KEY repository secret; no reminders were sent."
             exit 1
           fi
-          if [[ "$SUPABASE_URL" != https://*.supabase.co ]]; then
+          if [[ "$SUPABASE_URL" != https://imzdblvljdcbnxtwbmbw.supabase.co ]]; then
             echo "::error title=Unexpected Supabase URL::The dispatcher URL must be the HTTPS Supabase project origin."
             exit 1
           fi
       - name: Invoke the dispatcher
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: https://imzdblvljdcbnxtwbmbw.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           response="$(curl --fail --silent --show-error --retry 3 --retry-delay 5 --max-time 60 \
@@ -46,9 +48,12 @@ jobs:
           printf '%s' "$response" | python3 -c '
           import json, sys
           payload = json.load(sys.stdin)
-          counts = {name: payload.get(name, 0) for name in ("generated", "claimed", "sent", "failed", "skipped", "deferred")}
+          names = ("generated", "claimed", "sent", "failed", "skipped", "deferred")
+          if any(type(payload.get(name)) is not int or payload[name] < 0 for name in names):
+              sys.exit("Invalid dispatcher counter response")
+          counts = {name: payload[name] for name in names}
           print("Reminder dispatch:", counts)
-          if payload.get("status") != "ok" or counts["failed"] or payload.get("failures"):
+          if payload.get("status") != "ok" or counts["failed"] or payload.get("failures") or counts["claimed"] != sum(counts[name] for name in ("sent", "failed", "skipped", "deferred")):
               print("::error title=Reminder delivery requires attention::One or more deliveries or audit writes failed; review Supabase server job logs.")
               sys.exit(1)
           '

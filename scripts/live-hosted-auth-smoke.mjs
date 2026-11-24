@@ -5,6 +5,7 @@
  * No privileged key, database writes, or user identities are logged.
  */
 import { createClient } from "@supabase/supabase-js";
+import { assertHostedConfiguration, DEFAULT_URL } from "./prepare-hosted-build.mjs";
 
 const required = (name) => {
   const value = (process.env[name] || "").trim();
@@ -43,21 +44,33 @@ async function pull(client, orgId) {
 async function expectForbidden(client, orgId, label) {
   const result = await pull(client, orgId);
   ensure(
-    result.data?.status === "forbidden" ||
-      (result.error &&
-        /forbidden|permission|not authorized|access denied/i.test(result.error.message)),
-    label + " could access an unrelated organization",
+    isExplicitDenial(result),
+    label + " could access an unrelated organization or denial was inconclusive",
   );
+}
+
+export function validateStagingTarget(url, key, ref) {
+  const config = assertHostedConfiguration({
+    VITE_SUPABASE_URL: url,
+    VITE_SUPABASE_ANON_KEY: key,
+  });
+  const origin = new URL(config.url).origin;
+  ensure(
+    /^[a-z0-9-]+$/.test(ref) && origin === "https://" + ref + ".supabase.co",
+    "staging project must match the independently configured project reference",
+  );
+  ensure(origin !== DEFAULT_URL, "production is not a staging fixture");
+  return config;
+}
+
+export function isExplicitDenial(result) {
+  return result.data?.status === "forbidden" || result.error?.code === "42501";
 }
 
 export async function verifyHostedAccess() {
   const url = required("CIVICFLOW_SMOKE_SUPABASE_URL");
   const key = required("CIVICFLOW_SMOKE_SUPABASE_ANON_KEY");
-  ensure(
-    /^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(url),
-    "staging origin must be a managed HTTPS project",
-  );
-  ensure(!key.startsWith("sb_secret_"), "server secret passed as an anonymous key");
+  validateStagingTarget(url, key, required("CIVICFLOW_SMOKE_STAGING_PROJECT_REF"));
 
   const [coordinator, volunteer, foreign] = await Promise.all([
     session(
@@ -83,63 +96,87 @@ export async function verifyHostedAccess() {
     ),
   ]);
 
-  const coordinatorOrg = coordinator.workspaces.find(
-    (w) => w.status === "active" && ["owner", "coordinator"].includes(w.role),
-  );
-  const volunteerOrg = volunteer.workspaces.find(
-    (w) =>
-      w.organizationId === coordinatorOrg?.organizationId &&
-      w.role === "volunteer" &&
-      w.status === "active",
-  );
-  const foreignOrg = foreign.workspaces.find(
-    (w) => w.status === "active" && w.organizationId !== coordinatorOrg?.organizationId,
-  );
-  ensure(
-    coordinatorOrg && volunteerOrg && foreignOrg,
-    "test memberships are not properly isolated",
-  );
+  try {
+    ensure(
+      new Set([coordinator.account.id, volunteer.account.id, foreign.account.id]).size === 3,
+      "three distinct authenticated accounts are required",
+    );
+    const coordinatorOrg = coordinator.workspaces.find(
+      (w) => w.status === "active" && ["owner", "coordinator"].includes(w.role),
+    );
+    const volunteerOrg = volunteer.workspaces.find(
+      (w) =>
+        w.organizationId === coordinatorOrg?.organizationId &&
+        w.role === "volunteer" &&
+        w.status === "active",
+    );
+    const foreignOrg = foreign.workspaces.find(
+      (w) =>
+        w.status === "active" &&
+        ["owner", "coordinator"].includes(w.role) &&
+        w.organizationId !== coordinatorOrg?.organizationId,
+    );
+    ensure(
+      coordinatorOrg && volunteerOrg && foreignOrg,
+      "test memberships are not properly isolated",
+    );
 
-  ensure(
-    !coordinator.workspaces.some((w) => w.organizationId === foreignOrg.organizationId),
-    "coordinator A enumerated organization B",
-  );
-  ensure(
-    !foreign.workspaces.some((w) => w.organizationId === coordinatorOrg.organizationId),
-    "coordinator B enumerated organization A",
-  );
-  for (const [label, subject, orgId] of [
-    ["coordinator A", coordinator, coordinatorOrg.organizationId],
-    ["volunteer A", volunteer, coordinatorOrg.organizationId],
-    ["coordinator B", foreign, foreignOrg.organizationId],
-  ]) {
-    const result = await pull(subject.client, orgId);
-    ensure(!result.error && result.data?.status === "ok", label + " cannot sync own organization");
+    ensure(
+      !coordinator.workspaces.some((w) => w.organizationId === foreignOrg.organizationId),
+      "coordinator A enumerated organization B",
+    );
+    ensure(
+      !foreign.workspaces.some((w) => w.organizationId === coordinatorOrg.organizationId),
+      "coordinator B enumerated organization A",
+    );
+    for (const [label, subject, orgId] of [
+      ["coordinator A", coordinator, coordinatorOrg.organizationId],
+      ["volunteer A", volunteer, coordinatorOrg.organizationId],
+      ["coordinator B", foreign, foreignOrg.organizationId],
+    ]) {
+      const result = await pull(subject.client, orgId);
+      ensure(!result.error && result.data?.status === "ok", label + " cannot sync own organization");
+    }
+
+    await Promise.all([
+      expectForbidden(coordinator.client, foreignOrg.organizationId, "coordinator A"),
+      expectForbidden(volunteer.client, foreignOrg.organizationId, "volunteer A"),
+      expectForbidden(foreign.client, coordinatorOrg.organizationId, "coordinator B"),
+    ]);
+
+    const health = await coordinator.client.rpc("health_snapshot", {
+      p_organization_id: coordinatorOrg.organizationId,
+    });
+    ensure(!health.error && health.data?.status === "ok", "coordinator cannot see workspace health");
+    const healthVolunteer = await volunteer.client.rpc("health_snapshot", {
+      p_organization_id: coordinatorOrg.organizationId,
+    });
+    ensure(
+      isExplicitDenial(healthVolunteer),
+      "volunteer can see staff health",
+    );
+
+    const foreignHealth = await foreign.client.rpc("health_snapshot", {
+      p_organization_id: coordinatorOrg.organizationId,
+    });
+    ensure(isExplicitDenial(foreignHealth), "foreign staff can see workspace health");
+    for (const subject of [coordinator, volunteer]) {
+      const foreignRows = await subject.client
+        .from("shifts")
+        .select("id")
+        .eq("organization_id", foreignOrg.organizationId);
+      ensure(
+        !foreignRows.error && foreignRows.data?.length === 0,
+        "foreign shift visibility was not denied by RLS",
+      );
+    }
+  } finally {
+    await Promise.allSettled([
+      coordinator.client.auth.signOut(),
+      volunteer.client.auth.signOut(),
+      foreign.client.auth.signOut(),
+    ]);
   }
-
-  await Promise.all([
-    expectForbidden(coordinator.client, foreignOrg.organizationId, "coordinator A"),
-    expectForbidden(volunteer.client, foreignOrg.organizationId, "volunteer A"),
-    expectForbidden(foreign.client, coordinatorOrg.organizationId, "coordinator B"),
-  ]);
-
-  const health = await coordinator.client.rpc("health_snapshot", {
-    p_organization_id: coordinatorOrg.organizationId,
-  });
-  ensure(!health.error && health.data?.status === "ok", "coordinator cannot see workspace health");
-  const healthVolunteer = await volunteer.client.rpc("health_snapshot", {
-    p_organization_id: coordinatorOrg.organizationId,
-  });
-  ensure(
-    healthVolunteer.error || healthVolunteer.data?.status !== "ok",
-    "volunteer can see staff health",
-  );
-
-  await Promise.all([
-    coordinator.client.auth.signOut(),
-    volunteer.client.auth.signOut(),
-    foreign.client.auth.signOut(),
-  ]);
   console.log(
     "Hosted staging sign-in, email verification, membership, own-org sync and cross-org denial: PASS",
   );

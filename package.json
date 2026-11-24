@@ -19,7 +19,7 @@
     "test:watch": "vitest",
     "build:web": "tsc && vite build",
     "build:hosted": "node scripts/prepare-hosted-build.mjs --check-config && pnpm build:web && node scripts/prepare-hosted-build.mjs",
-    "test:hosted": "node --test scripts/tests/hosted-build.test.mjs",
+    "test:hosted": "node --test scripts/tests/hosted-build.test.mjs scripts/tests/staging-guard.test.mjs",
     "test:ops": "bash -n scripts/backup-cloud.sh && bash -n scripts/verify-cloud-restore.sh",
     "db:verify": "node scripts/verify-database.mjs",
     "audit:contrast": "node scripts/audit-contrast.mjs",

@@ -27,6 +27,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Verify hosted identity and organization boundaries
         env:
+          CIVICFLOW_SMOKE_STAGING_PROJECT_REF: ${{ vars.CIVICFLOW_SMOKE_STAGING_PROJECT_REF }}
           CIVICFLOW_SMOKE_SUPABASE_URL: ${{ vars.CIVICFLOW_SMOKE_SUPABASE_URL }}
           CIVICFLOW_SMOKE_SUPABASE_ANON_KEY: ${{ secrets.CIVICFLOW_SMOKE_SUPABASE_ANON_KEY }}
           CIVICFLOW_SMOKE_COORD_A_EMAIL: ${{ secrets.CIVICFLOW_SMOKE_COORD_A_EMAIL }}

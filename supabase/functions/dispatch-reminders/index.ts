@@ -150,14 +150,15 @@ async function sendPush(client: SupabaseClient, job: DeliveryJob): Promise<Outco
       delivered += 1;
     } catch (error) {
       const status = (error as { statusCode?: number }).statusCode;
-      errors.push(`${status ?? "error"}: ${(error as Error).message ?? String(error)}`);
+      errors.push(String(status ?? "push_transport_error"));
 
       // A gone endpoint is retired once, not retried forever.
       if (status === 404 || status === 410) {
-        await client
+        const revoked = await client
           .from("push_subscriptions")
           .update({ revoked_at: new Date().toISOString() })
           .eq("endpoint", subscription.endpoint);
+        if (revoked.error) throw new Error("subscription_revocation_failed");
       }
     }
   }
@@ -207,8 +208,8 @@ async function dispatch(client: SupabaseClient, limit: number): Promise<Response
       p_error: outcome.error ?? null,
       p_provider: outcome.provider ?? "",
     });
-    if (completed.error) {
-      failures.push(`record ${job.deliveryId}: ${completed.error.message}`);
+    if (completed.error || completed.data?.status !== "ok") {
+      failures.push(`record ${job.deliveryId}: delivery_audit_failed`);
     }
   }
 
@@ -219,13 +220,15 @@ async function dispatch(client: SupabaseClient, limit: number): Promise<Response
     failures: failures.slice(0, 10),
   });
 
-  await client.rpc("record_server_job", {
+  const audit = await client.rpc("record_server_job", {
     p_job: "reminders",
     // A partially failed job is not healthy. The per-delivery outcomes remain
     // idempotent, but operators need a failed server-job status to investigate.
     p_status: failures.length > 0 ? "failed" : "succeeded",
     p_detail: detail,
   });
+
+  if (audit.error) failures.push("server_job_audit_failed");
 
   return json({
     status: "ok",
@@ -274,7 +277,7 @@ Deno.serve(async (request: Request) => {
   // The gateway verifies the JWT signature before this code runs, so the role
   // claim is trustworthy here. A signed-in volunteer's token says
   // "authenticated" and is still refused.
-  if (bearer !== serviceKey && apiKey !== serviceKey && jwtRole(bearer) !== "service_role") {
+  if (bearer !== serviceKey && apiKey !== serviceKey) {
     return json({ status: "forbidden", message: "This endpoint is for the scheduler." }, 401);
   }
 
