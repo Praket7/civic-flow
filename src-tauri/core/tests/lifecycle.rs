@@ -461,3 +461,19 @@ fn changing_the_matching_policy_invalidates_a_plan_built_on_the_old_rules() {
         other => panic!("expected a rule error, got {other:?}"),
     }
 }
+
+#[test]
+fn waitlist_rejects_nonexistent_roles_and_existing_registrations() {
+    let database = seeded();
+    let conn = database.connection();
+    let before = snapshot(conn).unwrap().waitlist.len();
+    for (volunteer, role, expected) in [
+        ("vol-055", "Not an offered role", "ROLE_NOT_FOUND"),
+        ("vol-maya", "Donation sorter", "ALREADY_REGISTERED"),
+    ] {
+        let error = join_waitlist(conn, "sh-tue-pantry", volunteer, role).unwrap_err();
+        let error = civicflow_core::error::AppError::from(error);
+        assert_eq!(error.code, expected);
+    }
+    assert_eq!(snapshot(conn).unwrap().waitlist.len(), before);
+}

@@ -43,6 +43,7 @@ fn a_guarded_open_seat(database: &Database) -> Option<Waiting> {
                  FROM shifts s
                  JOIN shift_roles sr ON sr.shift_id = s.id
                  WHERE s.status = 'scheduled' AND s.starts_at > ?1 AND sr.filled < sr.required
+                   AND s.confirmed < s.capacity
                  ORDER BY s.starts_at, sr.name LIMIT 40",
             )
             .expect("open seats");
@@ -74,13 +75,22 @@ fn a_guarded_open_seat(database: &Database) -> Option<Waiting> {
                  FROM volunteer_credentials vc
                  JOIN credential_types ct ON ct.id = vc.credential_type_id
                  JOIN volunteers v ON v.id = vc.volunteer_id
-                 WHERE v.status = 'active' AND vc.valid_through >= ?1
+                 WHERE v.status = 'active' AND date(vc.valid_from) <= ?1
+                   AND date(vc.valid_through) >= ?1
+                   AND vc.verified_at IS NOT NULL AND trim(vc.verified_at) <> ''
+                   AND NOT EXISTS (
+                     SELECT 1 FROM registrations r JOIN shifts s ON s.id = r.shift_id
+                     JOIN shifts target ON target.id = ?4
+                     WHERE r.volunteer_id = v.id AND r.status = 'registered'
+                       AND julianday(s.starts_at) < julianday(target.ends_at)
+                       AND julianday(s.ends_at) > julianday(target.starts_at)
+                   )
                    AND EXISTS (
                      SELECT 1 FROM availability_rules a
                      WHERE a.volunteer_id = v.id AND a.day = ?2 AND a.period = ?3
                    )
                  ORDER BY ct.name, v.id LIMIT 1",
-                params![date, day, period],
+                params![date, day, period, shift_id],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
             .ok();
@@ -161,9 +171,7 @@ fn the_seed_offers_a_guarded_open_seat_to_rank() {
 #[test]
 fn the_first_eligible_volunteer_is_the_recommendation() {
     let database = seeded();
-    let Some(seat) = a_guarded_open_seat(&database) else {
-        return;
-    };
+    let seat = a_guarded_open_seat(&database).expect("a credential-guarded open seat");
     wait(&database, &seat.shift_id, &seat.without, &seat.role, 1);
     wait(&database, &seat.shift_id, &seat.with, &seat.role, 2);
 
@@ -191,9 +199,7 @@ fn the_first_eligible_volunteer_is_the_recommendation() {
 #[test]
 fn a_line_with_nobody_eligible_says_so_without_a_recommendation() {
     let database = seeded();
-    let Some(seat) = a_guarded_open_seat(&database) else {
-        return;
-    };
+    let seat = a_guarded_open_seat(&database).expect("a credential-guarded open seat");
     wait(&database, &seat.shift_id, &seat.without, &seat.role, 1);
     let answer = waitlist::rank(database.connection(), &seat.shift_id, &seat.role).expect("rank");
     assert!(answer.recommended.is_none());
@@ -227,9 +233,7 @@ fn an_empty_line_is_not_an_error() {
 #[test]
 fn the_line_keeps_its_order_when_everybody_can_take_the_seat() {
     let database = seeded();
-    let Some(seat) = a_guarded_open_seat(&database) else {
-        return;
-    };
+    let seat = a_guarded_open_seat(&database).expect("a credential-guarded open seat");
     wait(&database, &seat.shift_id, &seat.with, &seat.role, 1);
     let answer = waitlist::rank(database.connection(), &seat.shift_id, &seat.role).expect("rank");
     let recommended = answer.recommended.expect("a recommendation");

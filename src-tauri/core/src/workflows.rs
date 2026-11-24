@@ -1144,6 +1144,16 @@ pub(crate) fn validate_registration(
     volunteer_id: &str,
     role: &str,
 ) -> Result<ShiftRules> {
+    validate_seat_request(conn, shift_id, volunteer_id, role, false)
+}
+
+fn validate_seat_request(
+    conn: &Connection,
+    shift_id: &str,
+    volunteer_id: &str,
+    role: &str,
+    waiting: bool,
+) -> Result<ShiftRules> {
     let shift = shift_rules(conn, shift_id)?;
     if shift.status != "scheduled" {
         return Err(CoreError::rule(
@@ -1185,7 +1195,7 @@ pub(crate) fn validate_registration(
             Some("CHOOSE_ROLE".into()),
         ));
     };
-    if filled >= required {
+    if !waiting && filled >= required {
         return Err(CoreError::rule(
             "ROLE_FULL",
             "That role is already filled.",
@@ -1238,6 +1248,9 @@ pub(crate) fn validate_registration(
                 ))
             }
         }
+    }
+    if waiting {
+        return Ok(shift);
     }
     ensure_available(conn, volunteer_id, shift_id)?;
     ensure_no_overlap(conn, volunteer_id, shift_id)?;
@@ -2636,49 +2649,7 @@ pub fn join_waitlist(
     } else {
         role.trim().to_string()
     };
-    let shift = shift_rules(conn, shift_id)?;
-    if shift.starts_at <= now_datetime(conn)? {
-        return Err(CoreError::rule(
-            "REGISTRATION_CLOSED",
-            "This shift has already started.",
-            Some("shiftId".into()),
-            None,
-        ));
-    }
-    let (skill, credential, minimum_age) = role_requirement(conn, shift_id, &role)?;
-    if let Some(skill) = &skill {
-        if !has_skill(conn, volunteer_id, skill)? {
-            return Err(CoreError::rule(
-                "MISSING_SKILL",
-                format!("This role requires the {skill} skill."),
-                Some("role".into()),
-                None,
-            ));
-        }
-    }
-    if let Some(credential) = &credential {
-        let valid_through = shift.starts_at.format("%Y-%m-%d").to_string();
-        if !has_credential(conn, volunteer_id, credential, &valid_through)? {
-            return Err(CoreError::rule(
-                "CREDENTIAL_EXPIRED",
-                format!("This role needs a valid {credential} on the shift date."),
-                Some("credentials".into()),
-                Some("RENEW_CREDENTIAL".into()),
-            ));
-        }
-    }
-    if let Some(minimum_age) = minimum_age {
-        if volunteer_age(conn, volunteer_id, shift.starts_at.date_naive())?.unwrap_or(0)
-            < minimum_age
-        {
-            return Err(CoreError::rule(
-                "AGE_REQUIREMENT",
-                format!("This role requires volunteers to be {minimum_age} or older."),
-                Some("birthdate".into()),
-                None,
-            ));
-        }
-    }
+    let shift = validate_seat_request(conn, shift_id, volunteer_id, &role, true)?;
     // Joining twice keeps the place already held. Only a new waitlist entry
     // takes the back of the queue, so a refresh never demotes somebody.
     let waiting: Option<i64> = conn
@@ -2692,12 +2663,27 @@ pub fn join_waitlist(
     if waiting.is_some() {
         return snapshot(conn);
     }
-    let position: i64 = conn.query_row(
+    let registered: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM registrations
+         WHERE shift_id = ?1 AND volunteer_id = ?2 AND status = 'registered')",
+        params![shift_id, volunteer_id],
+        |row| row.get(0),
+    )?;
+    if registered {
+        return Err(CoreError::rule(
+            "ALREADY_REGISTERED",
+            "This volunteer already holds a seat.",
+            Some("shiftId".into()),
+            None,
+        ));
+    }
+    let transaction = conn.unchecked_transaction()?;
+    let position: i64 = transaction.query_row(
         "SELECT COALESCE(MAX(position), 0) + 1 FROM waitlist_entries WHERE shift_id = ?1",
         params![shift_id],
         |row| row.get(0),
     )?;
-    conn.execute(
+    transaction.execute(
         "INSERT INTO waitlist_entries
          (id, shift_id, volunteer_id, created_at, status, position, eligible_role)
          VALUES (?1, ?2, ?3, ?4, 'waiting', ?5, ?6)
@@ -2713,7 +2699,7 @@ pub fn join_waitlist(
         ],
     )?;
     append_audit(
-        conn,
+        &transaction,
         "waitlist.join",
         "shift",
         shift_id,
@@ -2721,7 +2707,7 @@ pub fn join_waitlist(
         Some(format!("Position {position}")),
     )?;
     append_notification(
-        conn,
+        &transaction,
         "COVERAGE_REQUEST",
         "Waitlist joined",
         &format!("{name} is waiting for a {} seat.", shift.title),
@@ -2732,6 +2718,7 @@ pub fn join_waitlist(
             volunteer_id: None,
         },
     )?;
+    transaction.commit()?;
     snapshot(conn)
 }
 
