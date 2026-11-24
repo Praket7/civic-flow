@@ -48,8 +48,10 @@ jobs:
             src-tauri -> target
       - run: pnpm install --frozen-lockfile
       - name: Validate four release manifests
-        run: node scripts/check-release-version.mjs "v$(node -p \"require(\x27./package.json\x27).version\")"
         shell: bash
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          node scripts/check-release-version.mjs "v$version"
       - run: pnpm check:demo
       - run: pnpm test:hosted
       - run: pnpm build:web
