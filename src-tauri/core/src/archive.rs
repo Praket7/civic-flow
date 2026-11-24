@@ -78,8 +78,10 @@ fn derive_key(passphrase: &str, salt: &[u8], header: &Header) -> Result<[u8; KEY
     }
     // Version 1 writers always use these parameters. Reject unauthenticated
     // resource requests before allocating Argon2 memory.
-    if header.memory_kib != MEMORY_KIB || header.iterations != ITERATIONS
-        || header.parallelism != PARALLELISM || salt.len() != SALT_LEN
+    if header.memory_kib != MEMORY_KIB
+        || header.iterations != ITERATIONS
+        || header.parallelism != PARALLELISM
+        || salt.len() != SALT_LEN
     {
         return Err(validation("This archive has unsupported key settings."));
     }

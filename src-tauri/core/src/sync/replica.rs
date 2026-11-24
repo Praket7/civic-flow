@@ -182,32 +182,58 @@ fn ensure_replica_id(conn: &Connection) -> Result<String> {
 /// Local account binding is separate from the hosted account ID. Legacy
 /// replicas without a binding must be reconnected before any data is exposed.
 pub fn local_owner(conn: &Connection, organization_id: &str) -> Result<Option<String>> {
-    Ok(conn.query_row(
-        "SELECT value FROM app_settings WHERE key = ?1",
-        params![format!("replica_owner:{organization_id}")],
-        |row| row.get(0),
-    ).optional()?)
+    Ok(conn
+        .query_row(
+            "SELECT value FROM app_settings WHERE key = ?1",
+            params![format!("replica_owner:{organization_id}")],
+            |row| row.get(0),
+        )
+        .optional()?)
 }
 
-pub fn require_local_owner(conn: &Connection, organization_id: &str, local_user_id: &str) -> Result<()> {
+pub fn require_local_owner(
+    conn: &Connection,
+    organization_id: &str,
+    local_user_id: &str,
+) -> Result<()> {
     if local_owner(conn, organization_id)?.as_deref() != Some(local_user_id) {
-        return Err(CoreError::rule("FORBIDDEN", "Reconnect this shared workspace with your own account.", None, Some("CONNECT_SHARED".into())));
+        return Err(CoreError::rule(
+            "FORBIDDEN",
+            "Reconnect this shared workspace with your own account.",
+            None,
+            Some("CONNECT_SHARED".into()),
+        ));
     }
     Ok(())
 }
 
 pub fn require_hosted_owner(conn: &Connection, organization_id: &str, user_id: &str) -> Result<()> {
-    let owner: Option<String> = conn.query_row(
-        "SELECT user_id FROM shared_workspaces WHERE organization_id = ?1",
-        [organization_id], |row| row.get(0),
-    ).optional()?;
+    let owner: Option<String> = conn
+        .query_row(
+            "SELECT user_id FROM shared_workspaces WHERE organization_id = ?1",
+            [organization_id],
+            |row| row.get(0),
+        )
+        .optional()?;
     if owner.as_deref() != Some(user_id) {
-        return Err(CoreError::rule("FORBIDDEN", "This queued work belongs to another account.", None, None));
+        return Err(CoreError::rule(
+            "FORBIDDEN",
+            "This queued work belongs to another account.",
+            None,
+            None,
+        ));
     }
     Ok(())
 }
 
-pub fn configure_owned(conn: &Connection, organization_id: &str, user_id: &str, membership_epoch: i64, local_user_id: &str, verified_online: bool) -> Result<SyncStatus> {
+pub fn configure_owned(
+    conn: &Connection,
+    organization_id: &str,
+    user_id: &str,
+    membership_epoch: i64,
+    local_user_id: &str,
+    verified_online: bool,
+) -> Result<SyncStatus> {
     validate_organization(organization_id)?;
     let owner = local_owner(conn, organization_id)?;
     let previous = status(conn, organization_id)?;
@@ -215,24 +241,45 @@ pub fn configure_owned(conn: &Connection, organization_id: &str, user_id: &str, 
         require_local_owner(conn, organization_id, local_user_id)?;
         require_hosted_owner(conn, organization_id, user_id)?;
         if previous.membership_epoch != membership_epoch {
-            return Err(CoreError::rule("FORBIDDEN", "Reconnect to refresh workspace access.", None, None));
+            return Err(CoreError::rule(
+                "FORBIDDEN",
+                "Reconnect to refresh workspace access.",
+                None,
+                None,
+            ));
         }
         return Ok(previous);
     }
-    if owner.as_deref() != Some(local_user_id) || previous.user_id.as_deref() != Some(user_id) || previous.membership_epoch != membership_epoch {
+    if owner.as_deref() != Some(local_user_id)
+        || previous.user_id.as_deref() != Some(user_id)
+        || previous.membership_epoch != membership_epoch
+    {
         let tx = conn.unchecked_transaction()?;
-        tx.execute("DELETE FROM replica_entities WHERE organization_id = ?1", params![organization_id])?;
-        tx.execute("DELETE FROM sync_entity_versions WHERE organization_id = ?1", params![organization_id])?;
+        tx.execute(
+            "DELETE FROM replica_entities WHERE organization_id = ?1",
+            params![organization_id],
+        )?;
+        tx.execute(
+            "DELETE FROM sync_entity_versions WHERE organization_id = ?1",
+            params![organization_id],
+        )?;
         tx.execute("UPDATE shared_workspaces SET cursor = 0, revision = 0, last_successful_sync_at = NULL WHERE organization_id = ?1", params![organization_id])?;
         tx.commit()?;
     }
     let configured = configure(conn, organization_id, user_id, membership_epoch)?;
-    conn.execute("INSERT OR REPLACE INTO app_settings(key,value) VALUES (?1,?2)", params![format!("replica_owner:{organization_id}"), local_user_id])?;
+    conn.execute(
+        "INSERT OR REPLACE INTO app_settings(key,value) VALUES (?1,?2)",
+        params![format!("replica_owner:{organization_id}"), local_user_id],
+    )?;
     Ok(configured)
 }
 
 pub fn require_outbox_owner(conn: &Connection, id: i64, local_user_id: &str) -> Result<()> {
-    let (organization_id, user_id): (String, String) = conn.query_row("SELECT organization_id,user_id FROM sync_outbox WHERE id = ?1", params![id], |row| Ok((row.get(0)?, row.get(1)?)))?;
+    let (organization_id, user_id): (String, String) = conn.query_row(
+        "SELECT organization_id,user_id FROM sync_outbox WHERE id = ?1",
+        params![id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
     require_local_owner(conn, &organization_id, local_user_id)?;
     require_hosted_owner(conn, &organization_id, &user_id)
 }
@@ -761,15 +808,35 @@ pub fn read_report_entities(conn: &Connection, organization_id: &str) -> Result<
 
 /// One consistent local read for coordinator screens, with no silent row cap.
 pub fn read_workspace_entities(conn: &Connection, organization_id: &str) -> Result<Value> {
-    read_grouped_entities(conn, organization_id, &[
-        "organization", "opportunity", "shift", "shift_role", "role_requirement",
-        "volunteer", "volunteer_skill", "availability_rule", "credential_type",
-        "credential", "registration", "waitlist_entry", "attendance", "hour_entry",
-        "shift_series", "shift_series_role",
-    ])
+    read_grouped_entities(
+        conn,
+        organization_id,
+        &[
+            "organization",
+            "opportunity",
+            "shift",
+            "shift_role",
+            "role_requirement",
+            "volunteer",
+            "volunteer_skill",
+            "availability_rule",
+            "credential_type",
+            "credential",
+            "registration",
+            "waitlist_entry",
+            "attendance",
+            "hour_entry",
+            "shift_series",
+            "shift_series_role",
+        ],
+    )
 }
 
-fn read_grouped_entities(conn: &Connection, organization_id: &str, kinds: &[&str]) -> Result<Value> {
+fn read_grouped_entities(
+    conn: &Connection,
+    organization_id: &str,
+    kinds: &[&str],
+) -> Result<Value> {
     validate_organization(organization_id)?;
     let parameters = vec!["?"; kinds.len()].join(",");
     let query = format!(
@@ -1314,6 +1381,12 @@ pub fn enqueue(
     Ok(conn.last_insert_rowid())
 }
 
-pub fn recover_owned_sending(conn: &Connection, organization_id: &str, user_id: &str, cutoff: i64, now_ms: i64) -> Result<usize> {
+pub fn recover_owned_sending(
+    conn: &Connection,
+    organization_id: &str,
+    user_id: &str,
+    cutoff: i64,
+    now_ms: i64,
+) -> Result<usize> {
     Ok(conn.execute("UPDATE sync_outbox SET state = 'pending', sending_at = NULL, next_attempt_at = ?4, last_error = 'Recovered an interrupted upload. It will be retried.' WHERE organization_id = ?1 AND user_id = ?2 AND state = 'sending' AND sending_at < ?3", params![organization_id, user_id, cutoff, now_ms])?)
 }
