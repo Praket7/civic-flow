@@ -14,7 +14,12 @@ import {
   Tabs,
 } from "../../components/ui";
 import type { Column } from "../../components/ui";
-import { currentDay, reportRange, validIsoDate, type ReportPeriod } from "../../lib/workspace/dates";
+import {
+  currentDay,
+  reportRange,
+  validIsoDate,
+  type ReportPeriod,
+} from "../../lib/workspace/dates";
 import { useWorkspace } from "../../lib/workspace/session";
 import { WorkAreaTabs } from "../../components/navigation/WorkAreaTabs";
 import { reportTabs } from "../../app/workAreas";

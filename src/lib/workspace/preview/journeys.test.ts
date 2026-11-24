@@ -184,8 +184,8 @@ describe("connected sample journey", () => {
     expect(approved.waitlist.find((row) => row.shiftId === shift.id)?.status).toBe("promoted");
     expect(
       approved.registrations.some(
-        (row) => row.shiftId === shift.id && row.volunteerId === other.id &&
-          row.status === "registered",
+        (row) =>
+          row.shiftId === shift.id && row.volunteerId === other.id && row.status === "registered",
       ),
     ).toBe(true);
   });

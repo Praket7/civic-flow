@@ -161,8 +161,14 @@ describe("shared impact report", () => {
   });
 
   it("includes real service months beyond the empty-bucket cap", () => {
-    const report = buildSharedReport(data(), { from: "2000-01-01", to: "2026-03-31" }, { now: NOW });
-    expect(report.months.reduce((sum, month) => sum + month.verifiedMinutes, 0)).toBe(report.totals.verifiedMinutes);
+    const report = buildSharedReport(
+      data(),
+      { from: "2000-01-01", to: "2026-03-31" },
+      { now: NOW },
+    );
+    expect(report.months.reduce((sum, month) => sum + month.verifiedMinutes, 0)).toBe(
+      report.totals.verifiedMinutes,
+    );
     expect(report.months.at(-1)?.key).toBe("2026-03");
   });
 

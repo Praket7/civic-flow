@@ -55,7 +55,10 @@ function duration(minutes: number): string {
 }
 
 /** Distinct service days, with a complete 30-day observation window. */
-export function previewRetention(workspace: DemoWorkspace, state: SessionSnapshot): RetentionCohort[] {
+export function previewRetention(
+  workspace: DemoWorkspace,
+  state: SessionSnapshot,
+): RetentionCohort[] {
   const today = new Date(workspace.now.slice(0, 10) + "T00:00:00Z");
   const cutoff = today.getTime() - 30 * 86_400_000;
   const dates = new Map<string, Set<string>>();
@@ -105,7 +108,9 @@ export function buildPreviewReport(
   requireDate(end);
   if (start > end) throw new Error("The report start date must be before its end date.");
 
-  const template = Object.prototype.hasOwnProperty.call(REPORT_TITLES, request.template) ? request.template : "custom";
+  const template = Object.prototype.hasOwnProperty.call(REPORT_TITLES, request.template)
+    ? request.template
+    : "custom";
   const cause = request.cause ?? "";
   const programId = request.programId ?? "";
   const hasPeriod = Boolean(request.dateStart || request.dateEnd);
@@ -252,7 +257,9 @@ export function buildPreviewReport(
       if (status === "expired" || status === "expiring") expiring++;
       rows.push([name, "—", credential.name, credential.validThrough, status]);
     }
-    rows.sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]) || a[2].localeCompare(b[2]));
+    rows.sort(
+      (a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]) || a[2].localeCompare(b[2]),
+    );
     summary = [
       { label: "Skill rows", value: String(skillCount) },
       { label: "Credential rows", value: String(rows.length - skillCount) },
