@@ -577,3 +577,60 @@ test("canceling a shift releases seats and tells the volunteers", async () => {
 
   await db.close();
 });
+
+test("hosted eligibility requires verified credentials valid on the shift's local date", async () => {
+  const db = await fresh();
+  await asOwner(db, async () => {
+    await query(
+      db,
+      `update public.shifts set starts_at = (current_date + 10 + time '01:00') at time zone 'America/New_York',
+         ends_at = (current_date + 10 + time '03:00') at time zone 'America/New_York'
+       where id = $1`,
+      [ids.shiftOpen],
+    );
+    await query(
+      db,
+      `insert into public.role_requirements (organization_id, shift_id, role_name, credential_type_id, minimum_age)
+       values ($1, $2, 'Packer', $3, 21)`,
+      [ids.orgA, ids.shiftOpen, ids.credentialTypeA],
+    );
+    await query(
+      db,
+      "update public.volunteers set birthdate = (current_date + 10 - interval '21 years')::date where id = $1",
+      [ids.volunteerA],
+    );
+    await query(
+      db,
+      `insert into public.volunteer_credentials
+         (organization_id, volunteer_id, credential_type_id, identifier, valid_from, valid_through, verified_at)
+       values ($1, $2, $3, 'TEST', current_date - 1, current_date + 9, now())`,
+      [ids.orgA, ids.volunteerA, ids.credentialTypeA],
+    );
+  });
+
+  const register = () =>
+    sendCommand(db, ids.volunteerUserA, {
+      organizationId: ids.orgA,
+      command: "REGISTER_FOR_SHIFT",
+      payload: { shiftId: ids.shiftOpen, role: "Packer" },
+    });
+  assert.equal((await register()).code, "credential_missing");
+
+  await asOwner(db, () =>
+    query(
+      db,
+      `update public.volunteer_credentials set valid_from = current_date + 10,
+         valid_through = current_date + 20, verified_at = null where volunteer_id = $1`,
+      [ids.volunteerA],
+    ),
+  );
+  assert.equal((await register()).code, "credential_missing");
+
+  await asOwner(db, () =>
+    query(db, "update public.volunteer_credentials set verified_at = now() where volunteer_id = $1", [
+      ids.volunteerA,
+    ]),
+  );
+  assert.equal((await register()).status, "applied");
+  await db.close();
+});
