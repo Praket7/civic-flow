@@ -11,6 +11,7 @@ import type {
   ReportSummaryItem,
 } from "../../../types/domain";
 import { getHourRows } from "../selectors";
+import { validIsoDate } from "../dates";
 
 const REPORT_TITLES: Record<string, string> = {
   participation: "Volunteer participation",
@@ -42,8 +43,7 @@ function requireDate(value: string): void {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new Error("Report dates must use YYYY-MM-DD.");
   }
-  const parsed = new Date(value + "T00:00:00Z");
-  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+  if (!validIsoDate(value)) {
     throw new Error("Report date is not a real calendar day.");
   }
 }
@@ -69,7 +69,7 @@ export function buildPreviewReport(
   requireDate(end);
   if (start > end) throw new Error("The report start date must be before its end date.");
 
-  const template = REPORT_TITLES[request.template] ? request.template : "custom";
+  const template = Object.prototype.hasOwnProperty.call(REPORT_TITLES, request.template) ? request.template : "custom";
   const cause = request.cause ?? "";
   const programId = request.programId ?? "";
   const hasPeriod = Boolean(request.dateStart || request.dateEnd);

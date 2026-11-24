@@ -7,9 +7,16 @@ import {
   lastNDays,
   reportRange,
   yearToDate,
+  validIsoDate,
 } from "./dates";
 
 describe("workspace date ranges", () => {
+  it("rejects normalized impossible days, not just malformed syntax", () => {
+    expect(validIsoDate("2028-02-29")).toBe(true);
+    for (const value of ["2026-02-29", "2026-04-31", "2026-13-01", "", "2026-1-01"]) {
+      expect(validIsoDate(value)).toBe(false);
+    }
+  });
   it("reads the calendar day from the workspace clock", () => {
     expect(currentDay("2026-10-13T07:45:00-04:00")).toBe("2026-10-13");
     // A late-evening instant keeps its own local date rather than rolling to UTC.

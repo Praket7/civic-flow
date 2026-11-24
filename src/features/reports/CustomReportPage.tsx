@@ -14,7 +14,7 @@ import {
   Tabs,
 } from "../../components/ui";
 import type { Column } from "../../components/ui";
-import { currentDay, reportRange, type ReportPeriod } from "../../lib/workspace/dates";
+import { currentDay, reportRange, validIsoDate, type ReportPeriod } from "../../lib/workspace/dates";
 import { useWorkspace } from "../../lib/workspace/session";
 import { WorkAreaTabs } from "../../components/navigation/WorkAreaTabs";
 import { reportTabs } from "../../app/workAreas";
@@ -114,19 +114,18 @@ export function chartPoints(report: ReportDocument | null) {
   };
 }
 
-function validIsoDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const parsed = new Date(value + "T00:00:00Z");
-  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
-}
-
 export function CustomReportPage() {
   const { workspace, session, actions } = useWorkspace();
   const [params] = useSearchParams();
   const savedView = session.savedViews?.find((view) => view.id === params.get("view"));
   let savedFilters: Record<string, unknown> = {};
   try {
-    if (savedView) savedFilters = JSON.parse(savedView.filtersJson) as Record<string, unknown>;
+    if (savedView) {
+      const parsed: unknown = JSON.parse(savedView.filtersJson);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        savedFilters = parsed as Record<string, unknown>;
+      }
+    }
   } catch {
     // Invalid saved views must never prevent editing the default builder.
   }

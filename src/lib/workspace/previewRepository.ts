@@ -61,6 +61,7 @@ import type {
   WaitlistCandidate,
   VolunteerImportPreview,
   WaitlistEntry,
+  WeeklyAssignment,
   WorkspaceSettings,
 } from "../../types/domain";
 import * as previewOrganizations from "../organizations/preview";
@@ -697,6 +698,76 @@ function previewVolunteers(text: string): VolunteerImportPreview {
   );
 }
 
+/** Both roster entry points commit one validated snapshot, or no changes at all. */
+function applyPreviewAssignments(assignments: WeeklyAssignment[]): SessionSnapshot {
+  if (assignments.length === 0) {
+    throw new Error("Select at least one suggested assignment to apply");
+  }
+  let next = state;
+  const events: AuditEvent[] = [];
+  for (const assignment of assignments) {
+    validateJourneySeat(next, assignment.shiftId, assignment.candidateId, assignment.role);
+    if (
+      next.waitlist.some(
+        (row) =>
+          row.shiftId === assignment.shiftId &&
+          row.volunteerId === assignment.candidateId &&
+          row.status === "waiting",
+      )
+    ) {
+      next = {
+        ...next,
+        waitlist: next.waitlist.map((row) =>
+          row.shiftId === assignment.shiftId &&
+          row.volunteerId === assignment.candidateId &&
+          row.status === "waiting"
+            ? { ...row, status: "promoted" }
+            : row,
+        ),
+      };
+    }
+    next = {
+      ...next,
+      registrations: [
+        ...next.registrations.filter(
+          (row) =>
+            !(row.shiftId === assignment.shiftId && row.volunteerId === assignment.candidateId),
+        ),
+        {
+          shiftId: assignment.shiftId,
+          volunteerId: assignment.candidateId,
+          role: assignment.role,
+          status: "registered",
+        },
+      ],
+    };
+    events.push(
+      audit(
+        assignment.promoteWaitlist ? "waitlist.promote" : "autoroster.apply",
+        "shift",
+        assignment.shiftId,
+        `AutoRoster assigned ${volunteerName(assignment.candidateId)} as ${assignment.role}`,
+        "Applied from an approved AutoRoster plan",
+      ),
+    );
+  }
+  return persist({
+    ...next,
+    journeyNotifications: [
+      ...assignments.map((assignment) =>
+        journeyNotice(
+          assignment.candidateId,
+          assignment.shiftId,
+          "Shift assignment confirmed",
+          `You are registered as ${assignment.role}.`,
+        ),
+      ),
+      ...(next.journeyNotifications ?? []),
+    ],
+    audit: [...events, ...next.audit],
+  });
+}
+
 export const previewRepository: WorkspaceRepository = {
   source: "preview",
   async listOrganizations() {
@@ -1235,9 +1306,6 @@ export const previewRepository: WorkspaceRepository = {
     return previewEvaluation(shiftIds, options);
   },
   async applyRosterWeek(expectedRevision, expectedPolicyVersion, assignments) {
-    if (assignments.length === 0) {
-      throw new Error("Select at least one suggested assignment to apply");
-    }
     if (expectedRevision !== null && expectedRevision !== revision) {
       throw new Error(
         "PLAN_STALE: the roster changed after this plan was generated. Rebuild the plan so nobody is double-booked.",
@@ -1248,69 +1316,7 @@ export const previewRepository: WorkspaceRepository = {
         "POLICY_STALE: the matching policy changed after this plan was generated. Rebuild the plan before applying it.",
       );
     }
-    let next = state;
-    const events: AuditEvent[] = [];
-    for (const assignment of assignments) {
-      validateJourneySeat(next, assignment.shiftId, assignment.candidateId, assignment.role);
-      if (
-        next.waitlist.some(
-          (row) =>
-            row.shiftId === assignment.shiftId &&
-            row.volunteerId === assignment.candidateId &&
-            row.status === "waiting",
-        )
-      ) {
-        next = {
-          ...next,
-          waitlist: next.waitlist.map((row) =>
-            row.shiftId === assignment.shiftId &&
-            row.volunteerId === assignment.candidateId &&
-            row.status === "waiting"
-              ? { ...row, status: "promoted" }
-              : row,
-          ),
-        };
-      }
-      next = {
-        ...next,
-        registrations: [
-          ...next.registrations.filter(
-            (row) =>
-              !(row.shiftId === assignment.shiftId && row.volunteerId === assignment.candidateId),
-          ),
-          {
-            shiftId: assignment.shiftId,
-            volunteerId: assignment.candidateId,
-            role: assignment.role,
-            status: "registered",
-          },
-        ],
-      };
-      events.push(
-        audit(
-          assignment.promoteWaitlist ? "waitlist.promote" : "autoroster.apply",
-          "shift",
-          assignment.shiftId,
-          `AutoRoster assigned ${volunteerName(assignment.candidateId)} as ${assignment.role}`,
-          "Applied from an approved AutoRoster plan",
-        ),
-      );
-    }
-    return persist({
-      ...next,
-      journeyNotifications: [
-        ...assignments.map((assignment) =>
-          journeyNotice(
-            assignment.candidateId,
-            assignment.shiftId,
-            "Shift assignment confirmed",
-            `You are registered as ${assignment.role}.`,
-          ),
-        ),
-        ...(next.journeyNotifications ?? []),
-      ],
-      audit: [...events, ...next.audit],
-    });
+    return applyPreviewAssignments(assignments);
   },
   async getRosterPolicy(): Promise<RosterPolicyView> {
     return {
@@ -1329,71 +1335,7 @@ export const previewRepository: WorkspaceRepository = {
     return previewExplain(shiftIds, options, candidateId, slotId);
   },
   async applyRoster(shiftId, assignments: RosterApplyAssignment[]) {
-    if (assignments.length === 0) {
-      throw new Error("Select at least one suggested assignment to apply");
-    }
-    let next = state;
-    const events: AuditEvent[] = [];
-    for (const assignment of assignments) {
-      validateJourneySeat(next, shiftId, assignment.candidateId, assignment.role);
-      if (
-        next.waitlist.some(
-          (row) =>
-            row.shiftId === shiftId &&
-            row.volunteerId === assignment.candidateId &&
-            row.status === "waiting",
-        )
-      ) {
-        next = {
-          ...next,
-          waitlist: next.waitlist.map((row) =>
-            row.shiftId === shiftId &&
-            row.volunteerId === assignment.candidateId &&
-            row.status === "waiting"
-              ? { ...row, status: "promoted" }
-              : row,
-          ),
-        };
-      }
-      next = {
-        ...next,
-        registrations: [
-          ...next.registrations.filter(
-            (row) => !(row.shiftId === shiftId && row.volunteerId === assignment.candidateId),
-          ),
-          {
-            shiftId,
-            volunteerId: assignment.candidateId,
-            role: assignment.role,
-            status: "registered",
-          },
-        ],
-      };
-      events.push(
-        audit(
-          assignment.promoteWaitlist ? "waitlist.promote" : "autoroster.apply",
-          "shift",
-          shiftId,
-          `AutoRoster assigned ${volunteerName(assignment.candidateId)} as ${assignment.role}`,
-          "Applied from an approved AutoRoster plan",
-        ),
-      );
-    }
-    return persist({
-      ...next,
-      journeyNotifications: [
-        ...assignments.map((assignment) =>
-          journeyNotice(
-            assignment.candidateId,
-            shiftId,
-            "Shift assignment confirmed",
-            `You are registered as ${assignment.role}.`,
-          ),
-        ),
-        ...(next.journeyNotifications ?? []),
-      ],
-      audit: [...events, ...next.audit],
-    });
+    return applyPreviewAssignments(assignments.map((assignment) => ({ ...assignment, shiftId })));
   },
   async detectDisruptions(): Promise<DisruptionReport> {
     return previewDisruptions();
