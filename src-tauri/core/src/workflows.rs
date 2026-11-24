@@ -2100,7 +2100,12 @@ pub fn mark_no_show(
 }
 
 /// Insert a seat once and update both occupancy counters in the same transaction.
-fn reserve_seat(conn: &Connection, shift_id: &str, volunteer_id: &str, role: &str) -> Result<bool> {
+pub(crate) fn reserve_seat(
+    conn: &Connection,
+    shift_id: &str,
+    volunteer_id: &str,
+    role: &str,
+) -> Result<bool> {
     let created = conn.execute(
         "INSERT INTO registrations (shift_id, volunteer_id, role, created_at, status, updated_at)
          VALUES (?1, ?2, ?3, ?4, 'registered', ?4)

@@ -887,9 +887,7 @@ fn update_roster_policy(
     policy: RosterPolicy,
 ) -> Result<RosterPolicyView, AppError> {
     let (database, account) = state.coordinator(&token)?;
-    let organization_id = roster::workspace_organization_id(database.connection())
-        .map_err(AppError::from)?
-        .ok_or_else(|| AppError::from(CoreError::NotFound("the workspace organization".into())))?;
+    let organization_id = workspace_organization(&database)?;
     policy::save_policy(database.connection(), &account, &organization_id, &policy)
         .map_err(AppError::from)?;
     policy_view(&database)

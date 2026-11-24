@@ -12,7 +12,7 @@ use crate::matching::{
     day_key, plan, Candidate, Credential, RosterOptions, RosterPlan, Slot, TimeBlock,
 };
 use crate::models::WorkspaceSnapshot;
-use crate::workflows::{append_audit, snapshot, validate_registration};
+use crate::workflows::{append_audit, reserve_seat, snapshot, validate_registration};
 
 fn parse_date(raw: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(raw.get(..10).unwrap_or(raw), "%Y-%m-%d").ok()
@@ -514,7 +514,6 @@ pub fn apply_roster_week(
                     Some("REBUILD_PLAN".into()),
                 ));
             }
-            validate_registration(conn, shift_id, &assignment.candidate_id, &assignment.role)?;
             // A lock is a coordinator's decision, so a plan may not quietly move
             // the seat it protects. Filling an open seat is still allowed.
             let locked: Option<String> = conn
@@ -546,9 +545,14 @@ pub fn apply_roster_week(
         }
     }
 
-    let now = crate::clock::now(conn)?.to_rfc3339();
     let transaction = conn.unchecked_transaction()?;
     for assignment in assignments {
+        validate_registration(
+            &transaction,
+            &assignment.shift_id,
+            &assignment.candidate_id,
+            &assignment.role,
+        )?;
         let name = &names[&assignment.candidate_id];
         if assignment.promote_waitlist {
             transaction.execute(
@@ -557,29 +561,15 @@ pub fn apply_roster_week(
                 params![assignment.shift_id, assignment.candidate_id],
             )?;
         }
-        let created = transaction.execute(
-            "INSERT INTO registrations (shift_id, volunteer_id, role, created_at, status, updated_at)
-             VALUES (?1, ?2, ?3, ?4, 'registered', ?4)
-             ON CONFLICT(shift_id, volunteer_id) DO UPDATE SET
-               role = excluded.role, status = 'registered', updated_at = excluded.updated_at
-             WHERE registrations.status <> 'registered'",
-            params![
-                assignment.shift_id,
-                assignment.candidate_id,
-                assignment.role,
-                now
-            ],
-        )?;
-        if created > 0 {
-            transaction.execute(
-                "UPDATE shifts SET confirmed = confirmed + 1 WHERE id = ?1",
-                params![assignment.shift_id],
-            )?;
-            transaction.execute(
-                "UPDATE shift_roles SET filled = filled + 1
-                 WHERE shift_id = ?1 AND name = ?2 AND filled < required",
-                params![assignment.shift_id, assignment.role],
-            )?;
+        if !reserve_seat(
+            &transaction,
+            &assignment.shift_id,
+            &assignment.candidate_id,
+            &assignment.role,
+        )? {
+            return Err(CoreError::Validation(
+                "The proposed seat is already held".into(),
+            ));
         }
         append_audit(
             &transaction,

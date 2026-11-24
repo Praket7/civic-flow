@@ -477,3 +477,56 @@ fn waitlist_rejects_nonexistent_roles_and_existing_registrations() {
     }
     assert_eq!(snapshot(conn).unwrap().waitlist.len(), before);
 }
+
+#[test]
+fn an_overlapping_batch_rolls_back_every_assignment() {
+    let database = seeded();
+    let conn = database.connection();
+    let options = RosterOptions {
+        prefer_spanish: false,
+        block_conflicts: true,
+        cap_weekly: false,
+        include_waitlist: true,
+    };
+    let plan = plan_roster(conn, &["sh-sat-food".to_string()], &options).unwrap();
+    let candidate = plan.assignments.first().expect("an eligible candidate");
+    conn.execute(
+        "INSERT INTO shifts (id, opportunity_id, starts_at, ends_at, capacity, confirmed, status)
+         SELECT 'overlap-test', opportunity_id, starts_at, ends_at, 1, 0, 'scheduled'
+         FROM shifts WHERE id = ?1",
+        rusqlite::params![candidate.shift_id],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO shift_roles (shift_id, name, required, filled)
+         VALUES ('overlap-test', 'General support', 1, 0)",
+        [],
+    )
+    .unwrap();
+    let before = snapshot(conn).unwrap();
+    let error = apply_roster_week(
+        conn,
+        None,
+        None,
+        &[
+            WeeklyAssignment {
+                shift_id: candidate.shift_id.clone(),
+                candidate_id: candidate.candidate_id.clone(),
+                role: candidate.role.clone(),
+                promote_waitlist: false,
+            },
+            WeeklyAssignment {
+                shift_id: "overlap-test".into(),
+                candidate_id: candidate.candidate_id.clone(),
+                role: "General support".into(),
+                promote_waitlist: false,
+            },
+        ],
+    )
+    .unwrap_err();
+    assert_eq!(
+        civicflow_core::error::AppError::from(error).code,
+        "SHIFT_TIME_CONFLICT"
+    );
+    assert_eq!(snapshot(conn).unwrap(), before);
+}
