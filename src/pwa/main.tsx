@@ -81,9 +81,14 @@ if ("serviceWorker" in navigator && window.isSecureContext) {
       });
   });
 
+  // Initial installation claims this page too. Reload only when an existing
+  // controller is replaced, not when a first-time visitor is navigating.
+  let controller = navigator.serviceWorker.controller;
   let reloading = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (reloading) return;
+    const previous = controller;
+    controller = navigator.serviceWorker.controller;
+    if (!previous || !controller || previous === controller || reloading) return;
     reloading = true;
     window.location.reload();
   });
