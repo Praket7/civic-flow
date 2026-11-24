@@ -2649,7 +2649,7 @@ pub fn join_waitlist(
     } else {
         role.trim().to_string()
     };
-    let shift = validate_seat_request(conn, shift_id, volunteer_id, &role, true)?;
+    ensure_shift(conn, shift_id)?;
     // Joining twice keeps the place already held. Only a new waitlist entry
     // takes the back of the queue, so a refresh never demotes somebody.
     let waiting: Option<i64> = conn
@@ -2677,6 +2677,7 @@ pub fn join_waitlist(
             None,
         ));
     }
+    let shift = validate_seat_request(conn, shift_id, volunteer_id, &role, true)?;
     let transaction = conn.unchecked_transaction()?;
     let position: i64 = transaction.query_row(
         "SELECT COALESCE(MAX(position), 0) + 1 FROM waitlist_entries WHERE shift_id = ?1",
