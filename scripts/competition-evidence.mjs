@@ -61,7 +61,10 @@ export function verifyManifest(root, manifest) {
 function run() {
   const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
   const dir = path.join(root, "competition-evidence");
-  const sourceSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+  const sourceSha = execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: root,
+    encoding: "utf8",
+  }).trim();
   if (process.env.EXPECTED_SOURCE_SHA) {
     assert.equal(sourceSha, process.env.EXPECTED_SOURCE_SHA, "not the requested source candidate");
   }

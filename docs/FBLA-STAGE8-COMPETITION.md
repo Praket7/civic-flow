@@ -18,24 +18,24 @@ Stage 8 freezes a synthetic competition candidate, not a production release. The
 
 This maps criteria to independently verifiable product evidence, not a self-awarded score. Use the official rating sheet for exact language and scoring.
 
-| Criterion | Maximum | Evidence | Independent check |
-| --- | ---: | --- | --- |
-| Language selection | 5 | README architecture: TypeScript/React, Rust/Tauri, SQLite, Postgres | Explain language and runtime tradeoffs |
-| Naming, comments, formatting | 5 | Matching flow and report modules | Inspect source; lint, format, Clippy |
-| Modularity | 10 | Core matching, reports, sync, typed frontend boundaries | Trace one command from UI to persistence |
-| UX rationale, journeys, accessibility | 10 | Stage 5/6 docs; browser captures | Walk through both roles; keyboard and 200% zoom |
-| Intuitive instructions | 5 | Onboarding, help and validation | Fresh profile and unfamiliar user |
-| Navigation and intelligent feature | 5 | AutoRoster, contextual help | Compare eligible and blocked candidates |
-| Input validation | 5 | Opportunity validator, native policy tests | Try invalid capacity and invalid attendance code |
-| Prompt relevance | 10 | Opportunity, schedule, signup, staffing, attendance, approval | Connected browser and native journey |
-| Presentable reports | 10 | Known-answer ledger, CSV, actual PDF and filters | Match source rows and rendered export |
-| Data storage and scope | 5 | Encrypted SQLite, typed collections and transaction boundaries | Explain persisted vs ephemeral data |
-| Organization and clarity | 10 | Competitor-authored presentation | Independent timed rehearsal |
-| Delivery and confidence | 10 | Competitor practice | Observer feedback, not automated |
-| Questions | 10 | Competitor technical understanding | Unscripted architecture and algorithm questions |
-| Protocol | 10 | Current national event rules | Competitor verifies devices, timing, conduct |
+| Criterion                             | Maximum | Evidence                                                            | Independent check                                |
+| ------------------------------------- | ------: | ------------------------------------------------------------------- | ------------------------------------------------ |
+| Language selection                    |       5 | README architecture: TypeScript/React, Rust/Tauri, SQLite, Postgres | Explain language and runtime tradeoffs           |
+| Naming, comments, formatting          |       5 | Matching flow and report modules                                    | Inspect source; lint, format, Clippy             |
+| Modularity                            |      10 | Core matching, reports, sync, typed frontend boundaries             | Trace one command from UI to persistence         |
+| UX rationale, journeys, accessibility |      10 | Stage 5/6 docs; browser captures                                    | Walk through both roles; keyboard and 200% zoom  |
+| Intuitive instructions                |       5 | Onboarding, help and validation                                     | Fresh profile and unfamiliar user                |
+| Navigation and intelligent feature    |       5 | AutoRoster, contextual help                                         | Compare eligible and blocked candidates          |
+| Input validation                      |       5 | Opportunity validator, native policy tests                          | Try invalid capacity and invalid attendance code |
+| Prompt relevance                      |      10 | Opportunity, schedule, signup, staffing, attendance, approval       | Connected browser and native journey             |
+| Presentable reports                   |      10 | Known-answer ledger, CSV, actual PDF and filters                    | Match source rows and rendered export            |
+| Data storage and scope                |       5 | Encrypted SQLite, typed collections and transaction boundaries      | Explain persisted vs ephemeral data              |
+| Organization and clarity              |      10 | Competitor-authored presentation                                    | Independent timed rehearsal                      |
+| Delivery and confidence               |      10 | Competitor practice                                                 | Observer feedback, not automated                 |
+| Questions                             |      10 | Competitor technical understanding                                  | Unscripted architecture and algorithm questions  |
+| Protocol                              |      10 | Current national event rules                                        | Competitor verifies devices, timing, conduct     |
 
-Total maximum: 110 points. New York prejudging is separate; see [Stage 2 traceability](FBLA-STAGE2-RUBRIC-TRACEABILITY.md). Verify current state deadlines and required URL with the chapter adviser. Never claim a national placement or rubric score from CI.
+Total maximum: 110 points. New York prejudging is separate; see [Stage 2 traceability](FBLA-STAGE2-RUBRIC-TRACEABILITY.md). The [2027 New York SLC mailing](https://www.nysfbla.org/wp-content/uploads/2026/09/SLC-HS-Mailing-Email-Blast-2.pdf) lists January 15, 2027 at 11:59 p.m. for Coding & Programming materials in Blue Panda. Confirm the current state deadline and required URL with the chapter adviser. Never claim a national placement or rubric score from CI.
 
 ## Technical rehearsal worksheet (competitor prepares their own presentation)
 
@@ -55,3 +55,31 @@ Questions for self-study: Why Rust and SQLite? What are the min-cost-flow graph 
 - Human evidence: record anonymous participant code, device, task, time, outcome, errors, assistance, issues and retest. No invented participants or results. Complete blind timed rehearsals and clean-device verification.
 
 Stage 8 is not fully accepted until real-device, participant and competitor-led submission/presentation checks are recorded. Keep the PR candidate distinct from a published release.
+
+## Architecture study reference
+
+The following is an engineering map, not a ready-to-submit competition slide. Inspect the implementation and draw your own explanation.
+
+```mermaid
+flowchart TD
+    UI[React and TypeScript interface] --> Repo[Typed workspace repository]
+    Repo --> Native[Tauri IPC / Rust services]
+    Repo --> Demo[Browser sample repository]
+    Native --> Store[Encrypted SQLite]
+    Native --> Solver[Native min-cost flow planner]
+    Demo --> Browser[Browser-local synthetic fixture]
+    Demo --> Preview[Separate preview solver]
+    PWA[Hosted volunteer PWA] --> Auth[Supabase Auth]
+    PWA --> Commands[Organization-scoped commands and sync]
+    Commands --> DB[PostgreSQL with RLS]
+```
+
+Source anchors for independent code study:
+
+- `src-tauri/core/src/matching/flow.rs` and `src-tauri/core/src/matching/planner.rs`: graph flow and planner logic; `src-tauri/core/tests/roster_performance.rs`: controlled baseline and repeatability.
+- `src/features/coverage/planAudit.test.ts`: independent proposal audit; `src/lib/workspace/preview/rosterEngine.ts`: separate browser implementation.
+- `src-tauri/core/src/reports.rs` and `src/lib/workspace/preview/reports.test.ts`: source-to-output model and known-answer fixture.
+- `src-tauri/core/src/auth.rs`, `src-tauri/core/src/authorization.rs`, `src-tauri/core/src/sync/protocol.rs`: authentication, authorization and operation semantics.
+- `scripts/audit-judge-flow.mjs`: actual UI journey, CSV parity and rendered PDF capture.
+
+The internal installer workflow can produce unsigned macOS and Windows artifacts for authorized local evaluation only. Never bypass an OS trust warning, substitute a legacy installer for the frozen candidate or represent an unsigned build as a verified commercial release.

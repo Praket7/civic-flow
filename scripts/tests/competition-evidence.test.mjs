@@ -13,7 +13,9 @@ test("rendered PDF extraction must contain every source cell", () => {
   assert.doesNotThrow(() => verifyRenderedRows(rows, "Volunteer Approved minutes\nMaya\nChen 75"));
   assert.throws(() => verifyRenderedRows(rows, "Volunteer Approved minutes Maya Chen 70"));
   assert.throws(() => verifyRenderedRows(rows, " "));
-  assert.throws(() => verifyRenderedRows([rows[0], ["Maya Chen"]], "Volunteer Approved minutes Maya Chen 75"));
+  assert.throws(() =>
+    verifyRenderedRows([rows[0], ["Maya Chen"]], "Volunteer Approved minutes Maya Chen 75"),
+  );
 });
 
 test("manifest pins content, refuses duplicates and detects tampering", () => {
