@@ -1067,14 +1067,23 @@ pub fn mark_refused(conn: &Connection, id: i64, result: &Value, conflict: &Value
         .and_then(Value::as_str)
         .map(str::to_string)
         .unwrap_or_else(|| Uuid::new_v4().to_string());
-    let organization_id = conflict
-        .get("organizationId")
-        .and_then(Value::as_str)
-        .ok_or_else(|| CoreError::Data("conflict has no organization".into()))?;
-    let operation_id = conflict
-        .get("operationId")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
+    // Ownership comes from the queued operation, not the caller's conflict JSON.
+    let envelope: String = conn.query_row(
+        "SELECT envelope FROM sync_outbox WHERE id = ?1",
+        [id],
+        |row| row.get(0),
+    )?;
+    let queued: CommandEnvelope = serde_json::from_str(&envelope)?;
+    let organization_id = queued.organization_id.as_str();
+    let operation_id = queued.operation_id.as_str();
+    let replica_id = queued.replica_id.as_str();
+    if conflict.get("organizationId").and_then(Value::as_str) != Some(organization_id)
+        || conflict.get("operationId").and_then(Value::as_str) != Some(operation_id)
+    {
+        return Err(CoreError::Validation(
+            "Conflict does not match the queued operation.".into(),
+        ));
+    }
     let command = conflict
         .get("command")
         .and_then(Value::as_str)
@@ -1105,14 +1114,6 @@ pub fn mark_refused(conn: &Connection, id: i64, result: &Value, conflict: &Value
         .get("authoritative")
         .cloned()
         .unwrap_or(Value::Null);
-    let replica_id: Option<String> = conn
-        .query_row(
-            "SELECT replica_id FROM shared_workspaces WHERE organization_id = ?1",
-            params![organization_id],
-            |row| row.get(0),
-        )
-        .optional()?;
-
     let transaction = conn.unchecked_transaction()?;
     transaction.execute(
         "UPDATE sync_outbox
@@ -1162,7 +1163,7 @@ pub fn pending_count(conn: &Connection, user_id: &str, organization_id: &str) ->
 pub fn open_conflict_count(conn: &Connection, organization_id: &str) -> Result<i64> {
     Ok(conn.query_row(
         "SELECT count(*) FROM sync_conflicts
-         WHERE organization_id = ?1 AND status = 'open'",
+         WHERE organization_id = ?1 AND status = 'open' AND EXISTS (SELECT 1 FROM sync_outbox q JOIN shared_workspaces w ON w.organization_id = q.organization_id AND w.user_id = q.user_id WHERE q.organization_id = sync_conflicts.organization_id AND q.operation_id = sync_conflicts.operation_id)",
         params![organization_id],
         |row| row.get(0),
     )?)

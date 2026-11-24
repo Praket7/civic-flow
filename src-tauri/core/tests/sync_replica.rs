@@ -473,10 +473,13 @@ fn conflicts_can_be_listed_and_closed() {
         None,
     )
     .expect("enqueue");
+    let ready = replica::next_ready(conn, USER, ORG, 0)
+        .unwrap()
+        .expect("queued");
     let conflict = json!({
         "id": "30000000-0000-4000-8000-000000000001",
         "organizationId": ORG,
-        "operationId": "10000000-0000-4000-8000-000000000001",
+        "operationId": ready.operation_id,
         "command": "UPDATE_SHIFT",
         "entity": SHIFT,
         "code": "version_conflict",
@@ -486,6 +489,10 @@ fn conflicts_can_be_listed_and_closed() {
         "authoritative": { "capacity": 5 },
         "createdAt": "2026-11-01T09:05:00.000Z"
     });
+    let mut mismatched = conflict.clone();
+    mismatched["operationId"] = json!("another-operation");
+    assert!(replica::mark_refused(conn, id, &json!({ "status": "conflict" }), &mismatched).is_err());
+    assert_eq!(replica::pending_count(conn, USER, ORG).unwrap(), 1);
     replica::mark_refused(
         conn,
         id,
