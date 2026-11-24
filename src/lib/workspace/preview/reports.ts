@@ -9,6 +9,7 @@ import type {
   ReportDocument,
   ReportRequest,
   ReportSummaryItem,
+  RetentionCohort,
 } from "../../../types/domain";
 import { getHourRows } from "../selectors";
 import { validIsoDate } from "../dates";
@@ -51,6 +52,41 @@ function requireDate(value: string): void {
 function duration(minutes: number): string {
   const safe = Math.max(0, Math.round(minutes));
   return Math.floor(safe / 60) + "h " + String(safe % 60).padStart(2, "0") + "m";
+}
+
+/** Distinct service days, with a complete 30-day observation window. */
+export function previewRetention(workspace: DemoWorkspace, state: SessionSnapshot): RetentionCohort[] {
+  const today = new Date(workspace.now.slice(0, 10) + "T00:00:00Z");
+  const cutoff = today.getTime() - 30 * 86_400_000;
+  const dates = new Map<string, Set<string>>();
+  for (const row of getHourRows(state, workspace)) {
+    if (row.status === "rejected" || !validIsoDate(row.date)) continue;
+    const days = dates.get(row.volunteer.id) ?? new Set<string>();
+    days.add(row.date);
+    dates.set(row.volunteer.id, days);
+  }
+  const histories = [...dates.values()].map((days) => [...days].sort());
+  return Array.from({ length: 6 }, (_, index) => {
+    const month = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 5 + index, 1));
+    const key = month.toISOString().slice(0, 7);
+    let eligible = 0;
+    let returned = 0;
+    for (const days of histories) {
+      const first = days.find((date) => date.startsWith(key));
+      if (!first) continue;
+      const start = new Date(first + "T00:00:00Z").getTime();
+      if (start > cutoff) continue;
+      eligible++;
+      const end = new Date(start + 30 * 86_400_000).toISOString().slice(0, 10);
+      if (days.some((date) => date > first && date <= end)) returned++;
+    }
+    return {
+      label: month.toLocaleString("en-US", { month: "short", timeZone: "UTC" }),
+      eligible,
+      returned,
+      rate: eligible ? Math.round((returned / eligible) * 100) : 0,
+    };
+  });
 }
 
 /**
@@ -171,14 +207,15 @@ export function buildPreviewReport(
     ];
   } else if (template === "retention") {
     headers = ["Cohort", "Eligible", "Returned in 30 days", "Rate"];
-    rows = (state.retention ?? []).map((row) => [
+    const cohorts = previewRetention(workspace, state);
+    rows = cohorts.map((row) => [
       row.label,
       String(row.eligible),
       String(row.returned),
       row.rate + "%",
     ]);
-    const eligible = (state.retention ?? []).reduce((sum, row) => sum + row.eligible, 0);
-    const returned = (state.retention ?? []).reduce((sum, row) => sum + row.returned, 0);
+    const eligible = cohorts.reduce((sum, row) => sum + row.eligible, 0);
+    const returned = cohorts.reduce((sum, row) => sum + row.returned, 0);
     summary = [
       { label: "Cohort eligible", value: String(eligible) },
       { label: "Returned", value: String(returned) },

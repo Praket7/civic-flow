@@ -32,7 +32,6 @@ import type {
   NotificationItem,
   Opportunity,
   PriorityLevel,
-  RetentionCohort,
   CredentialReadiness,
   EngagementMetrics,
   Milestone,
@@ -66,7 +65,7 @@ import type {
 } from "../../types/domain";
 import * as previewOrganizations from "../organizations/preview";
 import { buildMissionControl } from "./compute";
-import { buildPreviewReport } from "./preview/reports";
+import { buildPreviewReport, previewRetention } from "./preview/reports";
 import { renderPrintableReport } from "./preview/reportHtml";
 import { IMPORT_COLUMNS, previewVolunteerCsv } from "./preview/volunteerImport";
 import { createPreviewRosterStorage } from "./preview/rosterStorage";
@@ -292,21 +291,6 @@ function defaultImpactMetrics(): ImpactMetric[] {
   return workspace.impactRecords.map((record) => ({ ...record }));
 }
 
-function defaultRetention(): RetentionCohort[] {
-  const dates = [...workspace.hourEntries, ...workspace.mayaEntries].map((entry) => entry.date);
-  const byMonth = new Map<string, number>();
-  for (const date of dates) byMonth.set(date.slice(0, 7), (byMonth.get(date.slice(0, 7)) ?? 0) + 1);
-  return [...byMonth.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-6)
-    .map(([month, eligible]) => ({
-      label: new Date(`${month}-01T12:00:00`).toLocaleString("en-US", { month: "short" }),
-      eligible,
-      returned: Math.round(eligible * 0.62),
-      rate: 62,
-    }));
-}
-
 function defaultAttendance(): SessionSnapshot["attendance"] {
   const arrivedAt = new Date(new Date(workspace.now).getTime() - 18 * 60_000).toISOString();
   const rows = workspace.registrations
@@ -341,7 +325,7 @@ const { readImportedRoster, writeImportedRoster, workspaceRoster } = createPrevi
 );
 
 export function createDefaultSnapshot(): SessionSnapshot {
-  return {
+  const snapshot: SessionSnapshot = {
     savedOpportunityIds: [...seed.savedOpportunityIds],
     attendance: defaultAttendance(),
     hoursDecisions: {},
@@ -364,10 +348,16 @@ export function createDefaultSnapshot(): SessionSnapshot {
     verifications: defaultVerifications(),
     impactMetrics: defaultImpactMetrics(),
     savedViews: defaultSavedViews(),
-    retention: defaultRetention(),
+    retention: [],
     checkinCode: null,
     roster: workspaceRoster(),
   };
+  return withRetention(snapshot);
+}
+
+/** Recompute derived retention rather than persisting a stale synthetic rate. */
+function withRetention(snapshot: SessionSnapshot): SessionSnapshot {
+  return { ...snapshot, retention: previewRetention(journeyWorkspace(snapshot), snapshot) };
 }
 
 function readIds(): string[] {
@@ -396,7 +386,7 @@ function loadSnapshot(): SessionSnapshot {
     const raw = localStorage.getItem(scoped(STORAGE_KEY));
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as Partial<SessionSnapshot>;
-    return {
+    return withRetention({
       ...fallback,
       ...parsed,
       applications: Array.isArray(parsed.applications)
@@ -406,7 +396,7 @@ function loadSnapshot(): SessionSnapshot {
       audit: Array.isArray(parsed.audit) ? parsed.audit : fallback.audit,
       settings: { ...fallback.settings, ...(parsed.settings ?? {}) },
       volunteerProfile: { ...fallback.volunteerProfile, ...(parsed.volunteerProfile ?? {}) },
-    };
+    });
   } catch {
     return fallback;
   }
@@ -423,6 +413,7 @@ const { clone, isRecord, validSnapshot, makeBackup, writeBackups, ensureBackups,
   );
 
 function persist(next: SessionSnapshot): SessionSnapshot {
+  next = withRetention(next);
   state = next;
   bumpRevision();
   try {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPreviewReport } from "./reports";
+import { buildPreviewReport, previewRetention } from "./reports";
 import type { DemoWorkspace, ReportRequest, SessionSnapshot } from "../../../types/domain";
 
 const workspace = {
@@ -328,5 +328,31 @@ describe("Stage 4 known-answer reporting ledger", () => {
       "b-pending",
       "d-verified",
     ]);
+  });
+});
+
+describe("computed retention", () => {
+  it("counts distinct observed service days, not duplicate claims or a fixed rate", () => {
+    const sample = {
+      now: "2026-11-23T12:00:00-05:00",
+      currentVolunteerId: "none",
+      organization: { name: "Sample" },
+      volunteers: [{ id: "a", name: "Alice" }, { id: "b", name: "Bob" }],
+      opportunities: [{ id: "p", title: "Pantry", cause: "food" }],
+      shifts: [],
+      mayaEntries: [],
+      hourEntries: [
+        { id: "1", volunteerId: "a", opportunityId: "p", date: "2026-10-01", minutes: 30, status: "verified" },
+        { id: "2", volunteerId: "a", opportunityId: "p", date: "2026-10-01", minutes: 60, status: "pending" },
+        { id: "3", volunteerId: "a", opportunityId: "p", date: "2026-10-31", minutes: 30, status: "verified" },
+        { id: "4", volunteerId: "b", opportunityId: "p", date: "2026-10-01", minutes: 30, status: "verified" },
+        { id: "5", volunteerId: "b", opportunityId: "p", date: "2026-10-05", minutes: 30, status: "rejected" },
+        { id: "6", volunteerId: "b", opportunityId: "p", date: "2026-11-01", minutes: 30, status: "verified" },
+      ],
+    } as unknown as DemoWorkspace;
+    const cohorts = previewRetention(sample, state);
+    expect(cohorts).toHaveLength(6);
+    expect(cohorts.find((row) => row.label === "Oct")).toEqual({ label: "Oct", eligible: 2, returned: 1, rate: 50 });
+    expect(cohorts.find((row) => row.label === "Nov")?.eligible).toBe(0);
   });
 });
