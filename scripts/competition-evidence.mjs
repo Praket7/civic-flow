@@ -53,7 +53,7 @@ export function buildManifest(root, names, identity) {
 
 export function verifyManifest(root, manifest) {
   assert.equal(manifest.schemaVersion, 1);
-  const { schemaVersion: _schemaVersion, artifacts, ...identity } = manifest;
+  const { artifacts, ...identity } = manifest;
   assert.ok(Object.keys(artifacts).length > 0, "empty manifest");
   assert.deepEqual(buildManifest(root, Object.keys(artifacts), identity), manifest);
 }
