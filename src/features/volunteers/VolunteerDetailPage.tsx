@@ -78,6 +78,48 @@ function displayHours(minutes: number): string {
   return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
 }
 
+function AvailabilityGrid({
+  availability,
+  compact = false,
+}: {
+  availability: NonNullable<ReturnType<typeof volunteerById>>["availability"];
+  compact?: boolean;
+}) {
+  return (
+    <div className={styles.availabilityGrid}>
+      <div />
+      {DAYS.map((day) => (
+        <span key={day} className={styles.dayLabel}>
+          {compact ? day.charAt(0) : day}
+        </span>
+      ))}
+      {PERIODS.map((period) => (
+        <div className={styles.availabilityRow} key={period}>
+          <span className={styles.periodLabel}>
+            {period.charAt(0).toUpperCase() + period.slice(1)}
+          </span>
+          {DAYS.map((day) => {
+            const available = availability.some(
+              (slot) => slot.day === day.toLowerCase() && slot.period === period,
+            );
+            return (
+              <span
+                key={`${day}-${period}`}
+                className={`${styles.availabilityCell} ${available ? styles.availabilityOn : ""}`}
+              >
+                {available ? <Check size={12} aria-hidden="true" /> : null}
+                <span className="visually-hidden">
+                  {day} {period}: {available ? "available" : "not available"}
+                </span>
+              </span>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function VolunteerDetailPage() {
   const { id } = useParams();
   const { workspace, session, actions } = useWorkspace();
@@ -433,37 +475,7 @@ export function VolunteerDetailPage() {
                 </button>
               }
             />
-            <div className={styles.availabilityGrid}>
-              <div />
-              {DAYS.map((day) => (
-                <span key={day} className={styles.dayLabel}>
-                  {day.charAt(0)}
-                </span>
-              ))}
-              {PERIODS.map((period) => (
-                <div className={styles.availabilityRow} key={period}>
-                  <span className={styles.periodLabel}>
-                    {period.charAt(0).toUpperCase() + period.slice(1)}
-                  </span>
-                  {DAYS.map((day) => {
-                    const available = volunteer.availability.some(
-                      (slot) => slot.day === day.toLowerCase() && slot.period === period,
-                    );
-                    return (
-                      <span
-                        key={`${day}-${period}`}
-                        className={`${styles.availabilityCell} ${available ? styles.availabilityOn : ""}`}
-                      >
-                        {available ? <Check size={12} aria-hidden="true" /> : null}
-                        <span className="visually-hidden">
-                          {day} {period}: {available ? "available" : "not available"}
-                        </span>
-                      </span>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
+            <AvailabilityGrid availability={volunteer.availability} compact />
             <p className={styles.availabilityNote}>
               Availability is set by the volunteer and should be confirmed before a last-minute
               assignment.
@@ -697,37 +709,7 @@ export function VolunteerDetailPage() {
                 </Button>
               }
             />
-            <div className={styles.availabilityGrid}>
-              <div />
-              {DAYS.map((day) => (
-                <span key={day} className={styles.dayLabel}>
-                  {day}
-                </span>
-              ))}
-              {PERIODS.map((period) => (
-                <div className={styles.availabilityRow} key={period}>
-                  <span className={styles.periodLabel}>
-                    {period.charAt(0).toUpperCase() + period.slice(1)}
-                  </span>
-                  {DAYS.map((day) => {
-                    const available = volunteer.availability.some(
-                      (slot) => slot.day === day.toLowerCase() && slot.period === period,
-                    );
-                    return (
-                      <span
-                        key={`${day}-${period}`}
-                        className={`${styles.availabilityCell} ${available ? styles.availabilityOn : ""}`}
-                      >
-                        {available ? <Check size={12} aria-hidden="true" /> : null}
-                        <span className="visually-hidden">
-                          {day} {period}: {available ? "available" : "not available"}
-                        </span>
-                      </span>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
+            <AvailabilityGrid availability={volunteer.availability} />
           </Card>
         </div>
       ) : null}
