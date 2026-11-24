@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
 import type { Account, AuthSession } from "../../types/domain";
 import { isSetupPending, markSetupPending, setupRoute } from "../onboarding/store";
@@ -159,21 +167,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const adoptHostedIdentity = useCallback(async (identity: HostedIdentity, remember: boolean) => {
-    const session = await repository.signInWithHosted(identity);
-    clearPendingHostedIdentity();
-    return adoptSession(session, remember);
-  }, [adoptSession]);
+  const adoptHostedIdentity = useCallback(
+    async (identity: HostedIdentity, remember: boolean) => {
+      const session = await repository.signInWithHosted(identity);
+      clearPendingHostedIdentity();
+      return adoptSession(session, remember);
+    },
+    [adoptSession],
+  );
 
-  const localSignIn = useCallback(async (email: string, password: string, remember: boolean) => {
-    const session = await repository.signIn(email, password, remember);
-    return adoptSession(session, remember);
-  }, [adoptSession]);
+  const localSignIn = useCallback(
+    async (email: string, password: string, remember: boolean) => {
+      const session = await repository.signIn(email, password, remember);
+      return adoptSession(session, remember);
+    },
+    [adoptSession],
+  );
 
-  const openDemo = useCallback(async (remember: boolean, role?: "coordinator" | "volunteer") => {
-    const session = await repository.openDemoWorkspace(role);
-    return adoptSession(session, remember);
-  }, [adoptSession]);
+  const openDemo = useCallback(
+    async (remember: boolean, role?: "coordinator" | "volunteer") => {
+      const session = await repository.openDemoWorkspace(role);
+      return adoptSession(session, remember);
+    },
+    [adoptSession],
+  );
 
   const signIn = useCallback(
     async (email: string, password: string, remember: boolean) => {

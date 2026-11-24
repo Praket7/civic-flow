@@ -109,7 +109,10 @@ export function useReplicaSource<T>(
 
   return {
     sync,
-    data: loadedScope === `${sync.userId}:${sync.organizationId}:${sync.membershipEpoch}` ? data : empty,
+    data:
+      loadedScope === `${sync.userId}:${sync.organizationId}:${sync.membershipEpoch}`
+        ? data
+        : empty,
     loading,
     error,
     reload,
