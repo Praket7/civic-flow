@@ -257,7 +257,9 @@ pub fn instance_window(
     let starts = naive
         .and_local_timezone(zone)
         .single()
-        .ok_or_else(|| CoreError::Validation("That local start time is ambiguous or does not exist".into()))?;
+        .ok_or_else(|| {
+            CoreError::Validation("That local start time is ambiguous or does not exist".into())
+        })?;
     let ends = starts.clone() + Duration::minutes(rule.duration_minutes);
     Ok((starts.fixed_offset(), ends.fixed_offset()))
 }
@@ -365,39 +367,12 @@ pub fn create_series(
         )?;
     }
 
-    let mut shifts: Vec<SeriesShift> = Vec::new();
-    for date in &dates {
-        let (starts_at, ends_at) = instance_window(*date, rule, zone)?;
-        let id = format!("sh-series-{}", uuid::Uuid::new_v4());
-        transaction.execute(
-            "INSERT INTO shifts
-             (id, opportunity_id, starts_at, ends_at, capacity, confirmed, waitlisted, status,
-              series_id, occurrence_date)
-             VALUES (?1, ?2, ?3, ?4, ?5, 0, 0, 'scheduled', ?6, ?7)",
-            params![
-                id,
-                opportunity_id,
-                starts_at.to_rfc3339(),
-                ends_at.to_rfc3339(),
-                needed,
-                series_id,
-                date.to_string()
-            ],
-        )?;
-        for role in roles {
-            transaction.execute(
-                "INSERT INTO shift_roles (shift_id, name, required, filled)
-                 VALUES (?1, ?2, ?3, 0)",
-                params![id, role.name.trim(), role.required],
-            )?;
-        }
-        shifts.push(SeriesShift {
-            id,
-            occurrence_date: date.to_string(),
-            starts_at: starts_at.to_rfc3339(),
-            ends_at: ends_at.to_rfc3339(),
-        });
-    }
+    let shifts = dates
+        .into_iter()
+        .map(|date| {
+            insert_instance(&transaction, &series_id, opportunity_id, date, rule, zone, roles)
+        })
+        .collect::<Result<Vec<_>>>()?;
 
     append_actor_audit(
         &transaction,
@@ -425,6 +400,46 @@ pub fn create_series(
     })
 }
 
+fn insert_instance(
+    conn: &Connection,
+    series_id: &str,
+    opportunity_id: &str,
+    date: NaiveDate,
+    rule: &RecurrenceRule,
+    zone: Tz,
+    roles: &[SeriesRole],
+) -> Result<SeriesShift> {
+    let (starts_at, ends_at) = instance_window(date, rule, zone)?;
+    let shift = SeriesShift {
+        id: format!("sh-series-{}", uuid::Uuid::new_v4()),
+        occurrence_date: date.to_string(),
+        starts_at: starts_at.to_rfc3339(),
+        ends_at: ends_at.to_rfc3339(),
+    };
+    conn.execute(
+        "INSERT INTO shifts
+         (id, opportunity_id, starts_at, ends_at, capacity, confirmed, waitlisted, status,
+          series_id, occurrence_date)
+         VALUES (?1, ?2, ?3, ?4, ?5, 0, 0, 'scheduled', ?6, ?7)",
+        params![
+            shift.id,
+            opportunity_id,
+            shift.starts_at,
+            shift.ends_at,
+            roles.iter().map(|role| role.required).sum::<i64>(),
+            series_id,
+            shift.occurrence_date
+        ],
+    )?;
+    for role in roles {
+        conn.execute(
+            "INSERT INTO shift_roles (shift_id, name, required, filled) VALUES (?1, ?2, ?3, 0)",
+            params![shift.id, role.name.trim(), role.required],
+        )?;
+    }
+    Ok(shift)
+}
+
 /// Adds the occurrences the rule asks for that the series has not produced yet.
 /// Idempotent: running it twice writes nothing the second time.
 pub fn generate_instances(
@@ -446,42 +461,19 @@ pub fn generate_instances(
     };
 
     let transaction = conn.unchecked_transaction()?;
-    let mut added: Vec<SeriesShift> = Vec::new();
-    for date in &dates {
-        let key = date.to_string();
-        if existing.contains(&key) {
-            continue;
-        }
-        let (starts_at, ends_at) = instance_window(*date, &rule, zone)?;
-        let id = format!("sh-series-{}", uuid::Uuid::new_v4());
-        transaction.execute(
-            "INSERT INTO shifts
-             (id, opportunity_id, starts_at, ends_at, capacity, confirmed, waitlisted, status,
-              series_id, occurrence_date)
-             VALUES (?1, ?2, ?3, ?4, ?5, 0, 0, 'scheduled', ?6, ?7)",
-            params![
-                id,
-                record.opportunity_id,
-                starts_at.to_rfc3339(),
-                ends_at.to_rfc3339(),
-                record.roles.iter().map(|role| role.required).sum::<i64>(),
+    let mut added = Vec::new();
+    for date in dates {
+        if !existing.contains(&date.to_string()) {
+            added.push(insert_instance(
+                &transaction,
                 series_id,
-                key
-            ],
-        )?;
-        for role in &record.roles {
-            transaction.execute(
-                "INSERT INTO shift_roles (shift_id, name, required, filled)
-                 VALUES (?1, ?2, ?3, 0)",
-                params![id, role.name, role.required],
-            )?;
+                &record.opportunity_id,
+                date,
+                &rule,
+                zone,
+                &record.roles,
+            )?);
         }
-        added.push(SeriesShift {
-            id,
-            occurrence_date: key,
-            starts_at: starts_at.to_rfc3339(),
-            ends_at: ends_at.to_rfc3339(),
-        });
     }
     if !added.is_empty() {
         append_actor_audit(
