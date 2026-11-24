@@ -1984,11 +1984,11 @@ const { readRosterPolicy, writeRosterPolicy, validateRosterPolicy } =
   createPreviewRosterPolicyStore(scoped, PREVIEW_PRIORITY_LEVELS);
 
 function previewDayKey(startsAt: string): string {
-  return ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][new Date(startsAt).getDay()];
+  return ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][new Date(startsAt.slice(0, 10) + "T00:00:00Z").getUTCDay()];
 }
 
 function previewPeriod(startsAt: string): string {
-  const hour = new Date(startsAt).getHours();
+  const hour = Number(startsAt.slice(11, 13));
   if (hour < 12) return "morning";
   if (hour < 17) return "afternoon";
   return "evening";

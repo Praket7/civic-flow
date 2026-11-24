@@ -15,13 +15,13 @@ import type {
   SessionSnapshot,
   Volunteer,
 } from "../../../types/domain";
-export function roleRequirement(role: string): { skill: string; credential: string | null } {
+export function roleRequirement(role: string): { skill: string; credential: string | null; minimumAge?: number } {
   const lower = role.toLowerCase();
   if (lower.includes("spanish")) return { skill: "Spanish", credential: null };
   if (lower.includes("driver") || lower.includes("delivery")) {
-    return { skill: "Driver", credential: "Safe driver clearance" };
+    return { skill: "Driver", credential: "Safe driver clearance", minimumAge: 18 };
   }
-  if (lower.includes("tutor")) return { skill: "Tutoring", credential: "Tutor certification" };
+  if (lower.includes("tutor")) return { skill: "Tutoring", credential: "Tutor certification", minimumAge: 16 };
   if (lower.includes("food") || lower.includes("pantry") || lower.includes("sort")) {
     return { skill: "Food handling", credential: "Food safety handler" };
   }
@@ -53,16 +53,19 @@ export function createPreviewRosterEngine(context: {
     dayKey: string;
     requiredSkill: string;
     requiredCredential: string | null;
+    minimumAge?: number;
   }
 
   interface PreviewBlock {
     start: number;
     end: number;
+    shiftId: string;
+    day: string;
   }
 
   interface PreviewLoad {
     blocks: Map<string, PreviewBlock[]>;
-    dayCount: Map<string, number>;
+    weekMinutes: Map<string, number>;
     weekCount: Map<string, number>;
   }
 
@@ -112,6 +115,7 @@ export function createPreviewRosterEngine(context: {
             dayKey: previewDayKey(shift.startsAt),
             requiredSkill: requirement.skill,
             requiredCredential: requirement.credential,
+            minimumAge: requirement.minimumAge,
           });
         }
       }
@@ -120,7 +124,7 @@ export function createPreviewRosterEngine(context: {
   }
 
   function emptyLoad(): PreviewLoad {
-    return { blocks: new Map(), dayCount: new Map(), weekCount: new Map() };
+    return { blocks: new Map(), weekMinutes: new Map(), weekCount: new Map() };
   }
 
   function cloneLoad(load: PreviewLoad): PreviewLoad {
@@ -128,10 +132,10 @@ export function createPreviewRosterEngine(context: {
       blocks: new Map(
         [...load.blocks].map(([volunteerId, blocks]) => [
           volunteerId,
-          blocks.map((block) => ({ ...block })),
+          [...blocks],
         ]),
       ),
-      dayCount: new Map(load.dayCount),
+      weekMinutes: new Map(load.weekMinutes),
       weekCount: new Map(load.weekCount),
     };
   }
@@ -151,12 +155,14 @@ export function createPreviewRosterEngine(context: {
       if (!shift) continue;
       const start = new Date(shift.startsAt).getTime();
       const blocks = load.blocks.get(registration.volunteerId) ?? [];
-      blocks.push({ start, end: new Date(shift.endsAt).getTime() });
+      const end = Date.parse(shift.endsAt);
+      blocks.push({ start, end, shiftId: shift.id, day: shift.startsAt.slice(0, 10) });
       load.blocks.set(registration.volunteerId, blocks);
       if (start < now || start > horizon) continue;
-      const day = previewDayKey(shift.startsAt);
-      const dayKey = `${registration.volunteerId}:${day}`;
-      load.dayCount.set(dayKey, (load.dayCount.get(dayKey) ?? 0) + 1);
+      load.weekMinutes.set(
+        registration.volunteerId,
+        (load.weekMinutes.get(registration.volunteerId) ?? 0) + Math.max(0, (end - start) / 60000),
+      );
       load.weekCount.set(
         registration.volunteerId,
         (load.weekCount.get(registration.volunteerId) ?? 0) + 1,
@@ -166,7 +172,7 @@ export function createPreviewRosterEngine(context: {
   }
 
   function previewAvailability(volunteer: Volunteer, seat: PreviewSeat): boolean {
-    if (volunteer.availability.length === 0) return true;
+    if (volunteer.availability.length === 0) return false;
     const period = previewPeriod(seat.startsAt);
     return volunteer.availability.some(
       (slot) => slot.day === seat.dayKey && slot.period === period,
@@ -181,12 +187,8 @@ export function createPreviewRosterEngine(context: {
     load: PreviewLoad,
   ): ConstraintCheck[] {
     const checks: ConstraintCheck[] = [];
-    const registered = state.registrations.some(
-      (row) =>
-        row.shiftId === seat.shiftId &&
-        row.volunteerId === volunteer.id &&
-        row.status === "registered",
-    );
+    const blocks = load.blocks.get(volunteer.id) ?? [];
+    const registered = blocks.some((block) => block.shiftId === seat.shiftId);
     checks.push({
       name: "Already on this shift",
       passed: !registered,
@@ -196,7 +198,7 @@ export function createPreviewRosterEngine(context: {
     });
     if (seat.requiredSkill) {
       const skillMatch = volunteer.skills.some((skill) =>
-        skill.toLowerCase().includes(seat.requiredSkill.toLowerCase()),
+        skill.toLowerCase() === seat.requiredSkill.toLowerCase(),
       );
       checks.push({
         name: "Required skill",
@@ -219,12 +221,26 @@ export function createPreviewRosterEngine(context: {
       const expired = !current && held.length > 0;
       checks.push({
         name: "Required credential",
-        passed: current,
+        passed: current || (!held.length && policy.unknownCredentialBehavior === "allow"),
         detail: current
           ? `${seat.requiredCredential} current`
           : expired
             ? `${seat.requiredCredential} expired`
-            : `No ${seat.requiredCredential} on record`,
+            : `No ${seat.requiredCredential} on record${policy.unknownCredentialBehavior === "allow" ? "; the policy allows this" : ""}`,
+      });
+    }
+
+    if (seat.minimumAge !== undefined) {
+      const birthday = volunteer.birthdate;
+      const on = seat.startsAt.slice(0, 10);
+      const age = birthday
+        ? Number(on.slice(0, 4)) - Number(birthday.slice(0, 4)) -
+          Number(on.slice(5) < birthday.slice(5, 10))
+        : null;
+      checks.push({
+        name: "Minimum age",
+        passed: age === null ? policy.unknownAgeBehavior === "allow" : age >= seat.minimumAge,
+        detail: age === null ? "No birthdate on record" : `${age} on the shift date`,
       });
     }
 
@@ -237,10 +253,11 @@ export function createPreviewRosterEngine(context: {
         : `Not available ${seat.dayKey.toUpperCase()} ${previewPeriod(seat.startsAt)}`,
     });
 
+    const start = Date.parse(seat.startsAt);
+    const end = Date.parse(seat.endsAt);
+    const minutes = Math.max(0, (end - start) / 60000);
     if (options.blockConflicts) {
-      const start = new Date(seat.startsAt).getTime();
-      const end = new Date(seat.endsAt).getTime();
-      const clash = (load.blocks.get(volunteer.id) ?? []).some(
+      const clash = blocks.some(
         (block) => block.start < end && block.end > start,
       );
       checks.push({
@@ -250,24 +267,33 @@ export function createPreviewRosterEngine(context: {
       });
     }
 
-    const dayTaken = (load.dayCount.get(`${volunteer.id}:${seat.dayKey}`) ?? 0) + 1;
-    if (policy.maxShiftsPerDay !== null) {
+    if (options.blockConflicts && policy.minimumGapMinutes > 0) {
+      const tooClose = blocks.some(
+        (block) =>
+          (block.end <= start && start - block.end < policy.minimumGapMinutes * 60000) ||
+          (block.start >= end && block.start - end < policy.minimumGapMinutes * 60000),
+      );
       checks.push({
-        name: "Daily shift limit",
-        passed: dayTaken <= policy.maxShiftsPerDay,
-        detail: `${dayTaken} of ${policy.maxShiftsPerDay} that day`,
+        name: "Rest between shifts",
+        passed: !tooClose,
+        detail: `At least ${policy.minimumGapMinutes} minutes either side`,
       });
     }
-
-    const weekTaken = (load.weekCount.get(volunteer.id) ?? 0) + 1;
-    const weekLimit = policy.maxShiftsPerWeek ?? (options.capWeekly ? 2 : null);
-    if (weekLimit !== null) {
-      checks.push({
-        name: "Weekly shift limit",
-        passed: weekTaken <= weekLimit,
-        detail: `${weekTaken} of ${weekLimit} this week`,
-      });
-    }
+    const sameDay = blocks.filter((block) => block.day === seat.startsAt.slice(0, 10));
+    const limit = (name: string, used: number, cap: number | null) => {
+      if (cap !== null) checks.push({ name, passed: used <= cap, detail: `${used} of ${cap}` });
+    };
+    limit("Daily shift limit", sameDay.length + 1, policy.maxShiftsPerDay);
+    limit(
+      "Daily minute limit",
+      sameDay.reduce((total, block) => total + (block.end - block.start) / 60000, minutes),
+      policy.maxMinutesPerDay,
+    );
+    const weekLimit = options.capWeekly
+      ? Math.min(policy.maxShiftsPerWeek ?? 2, 2)
+      : policy.maxShiftsPerWeek;
+    limit("Weekly shift limit", (load.weekCount.get(volunteer.id) ?? 0) + 1, weekLimit);
+    limit("Weekly minute limit", (load.weekMinutes.get(volunteer.id) ?? 0) + minutes, policy.maxMinutesPerWeek);
     return checks;
   }
 
@@ -285,7 +311,7 @@ export function createPreviewRosterEngine(context: {
     const skillMatches =
       !seat.requiredSkill ||
       volunteer.skills.some((skill) =>
-        skill.toLowerCase().includes(seat.requiredSkill.toLowerCase()),
+        skill.toLowerCase() === seat.requiredSkill.toLowerCase(),
       );
     // A role with no requirement fits anyone eligible, slightly less precisely
     // than a matched requirement, which is how the solver scores it too.
@@ -380,6 +406,15 @@ export function createPreviewRosterEngine(context: {
     );
   }
 
+  function candidates(options: RosterOptions) {
+    return workspace.volunteers.filter(
+      (volunteer) => volunteer.status === "active" &&
+        (options.includeWaitlist || !state.waitlist.some(
+          (row) => row.volunteerId === volunteer.id && row.status === "waiting",
+        )),
+    );
+  }
+
   function previewPlanShape(
     shiftIds: string[],
     options: RosterOptions,
@@ -387,7 +422,7 @@ export function createPreviewRosterEngine(context: {
     forced?: { candidateId: string; slotId: string },
   ): PreviewPlanShape {
     const seats = previewSeats(shiftIds);
-    const pool = workspace.volunteers.filter((volunteer) => volunteer.status === "active");
+    const pool = candidates(options);
     const load = previewBaseLoad();
     const choices: PreviewChoice[] = [];
     const unfilled: { seat: PreviewSeat; reason: string }[] = [];
@@ -405,9 +440,9 @@ export function createPreviewRosterEngine(context: {
         const checks = previewChecks(volunteer, seat, options, policy, load);
         if (checks.some((check) => !check.passed)) continue;
         const { components, total } = previewScore(volunteer, seat, options, policy, load);
-        const requested = options.includeWaitlist && requestedReview(volunteer.id, seat);
+        const requested = policy.waitlistPreference && options.includeWaitlist && requestedReview(volunteer.id, seat);
         const bestRequested =
-          best && options.includeWaitlist && requestedReview(best.volunteer.id, seat);
+          best && policy.waitlistPreference && options.includeWaitlist && requestedReview(best.volunteer.id, seat);
         if (
           !best ||
           (requested && !bestRequested) ||
@@ -431,12 +466,15 @@ export function createPreviewRosterEngine(context: {
       const blocks = load.blocks.get(best.volunteer.id) ?? [];
       blocks.push({
         start: new Date(seat.startsAt).getTime(),
-        end: new Date(seat.endsAt).getTime(),
+        end: Date.parse(seat.endsAt),
+        shiftId: seat.shiftId,
+        day: seat.startsAt.slice(0, 10),
       });
       load.blocks.set(best.volunteer.id, blocks);
-      load.dayCount.set(
-        `${best.volunteer.id}:${seat.dayKey}`,
-        (load.dayCount.get(`${best.volunteer.id}:${seat.dayKey}`) ?? 0) + 1,
+      load.weekMinutes.set(
+        best.volunteer.id,
+        (load.weekMinutes.get(best.volunteer.id) ?? 0) +
+          Math.max(0, (Date.parse(seat.endsAt) - Date.parse(seat.startsAt)) / 60000),
       );
       load.weekCount.set(best.volunteer.id, (load.weekCount.get(best.volunteer.id) ?? 0) + 1);
     }
@@ -581,7 +619,7 @@ export function createPreviewRosterEngine(context: {
         .filter((row) => row.shiftId === choice.seat.shiftId)
         .filter((row) =>
           choice.volunteer.skills.some((skill) =>
-            skill.toLowerCase().includes(row.requiredSkill.toLowerCase()),
+            !row.requiredSkill || skill.toLowerCase() === row.requiredSkill.toLowerCase(),
           ),
         )
         .map((row) => row.role),
@@ -606,9 +644,7 @@ export function createPreviewRosterEngine(context: {
       })),
       totalScore: assignments.reduce((total, assignment) => total + assignment.score, 0),
       slotsConsidered: seats.length,
-      candidatesConsidered: workspace.volunteers.filter(
-        (volunteer) => volunteer.status === "active",
-      ).length,
+      candidatesConsidered: candidates(options).length,
       deterministicSeed: 20260415,
       policyVersion: policy.version,
       generatedAt: workspace.now,
@@ -637,8 +673,7 @@ export function createPreviewRosterEngine(context: {
     const seats = previewSeats(shiftIds);
     const baseLoad = previewBaseLoad();
 
-    const candidates: CandidateEvaluation[] = workspace.volunteers
-      .filter((volunteer) => volunteer.status === "active")
+    const evaluations: CandidateEvaluation[] = candidates(options)
       .map((volunteer) => {
         const slots: EvaluatedSlot[] = seats.map((seat) => {
           const explanation = previewExplanation(volunteer, seat, options, policy, baseLoad, false);
@@ -687,7 +722,7 @@ export function createPreviewRosterEngine(context: {
             : "unknown",
           conflict: conflict ?? null,
           weeklyShifts: baseLoad.weekCount.get(volunteer.id) ?? 0,
-          weeklyMinutes: 0,
+          weeklyMinutes: baseLoad.weekMinutes.get(volunteer.id) ?? 0,
           waitlistedShiftIds: state.waitlist
             .filter((row) => row.volunteerId === volunteer.id && row.status === "waiting")
             .map((row) => row.shiftId),
@@ -700,7 +735,7 @@ export function createPreviewRosterEngine(context: {
       policyVersion: policy.version,
       revision,
       plan,
-      candidates,
+      candidates: evaluations,
     };
   }
 
@@ -713,30 +748,20 @@ export function createPreviewRosterEngine(context: {
     const policy = readRosterPolicy();
     const seat = previewSeats(shiftIds).find((row) => row.slotId === slotId);
     if (!seat) throw new Error("That seat is not open on this shift.");
-    const volunteer = workspace.volunteers.find((row) => row.id === candidateId);
+    const volunteer = candidates(options).find((row) => row.id === candidateId);
     if (!volunteer) throw new Error("That volunteer is not on file.");
 
     const base = previewPlanShape(shiftIds, options, policy);
     const held = base.choices.find((choice) => choice.seat.slotId === slotId);
     const selected = held?.volunteer.id === candidateId;
-    const explanation =
-      selected && held
-        ? previewExplanation(
-            volunteer,
-            seat,
-            options,
-            policy,
-            base.beforeSeat.get(slotId) ?? emptyLoad(),
-            true,
-          )
-        : previewExplanation(
-            volunteer,
-            seat,
-            options,
-            policy,
-            base.beforeSeat.get(slotId) ?? emptyLoad(),
-            false,
-          );
+    const explanation = previewExplanation(
+      volunteer,
+      seat,
+      options,
+      policy,
+      base.beforeSeat.get(slotId) ?? emptyLoad(),
+      Boolean(selected),
+    );
 
     const comparison =
       !selected && explanation.eligible

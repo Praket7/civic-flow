@@ -254,12 +254,9 @@ pub fn instance_window(
 ) -> Result<(DateTime<FixedOffset>, DateTime<FixedOffset>)> {
     let time = local_time(&rule.starts_local_time)?;
     let naive = date.and_time(time);
-    let starts = naive
-        .and_local_timezone(zone)
-        .single()
-        .ok_or_else(|| {
-            CoreError::Validation("That local start time is ambiguous or does not exist".into())
-        })?;
+    let starts = naive.and_local_timezone(zone).single().ok_or_else(|| {
+        CoreError::Validation("That local start time is ambiguous or does not exist".into())
+    })?;
     let ends = starts.clone() + Duration::minutes(rule.duration_minutes);
     Ok((starts.fixed_offset(), ends.fixed_offset()))
 }
@@ -370,7 +367,15 @@ pub fn create_series(
     let shifts = dates
         .into_iter()
         .map(|date| {
-            insert_instance(&transaction, &series_id, opportunity_id, date, rule, zone, roles)
+            insert_instance(
+                &transaction,
+                &series_id,
+                opportunity_id,
+                date,
+                rule,
+                zone,
+                roles,
+            )
         })
         .collect::<Result<Vec<_>>>()?;
 
