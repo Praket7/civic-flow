@@ -2,7 +2,7 @@ name: FBLA evaluation installers (unsigned, internal QA only)
 
 on:
   push:
-    branches: ["feat/fbla-stage1-*"]
+    branches: ["feat/fbla-stage1-*", "stage8-competition-freeze"]
   workflow_dispatch:
 
 # This workflow never tags, drafts, or publishes a GitHub release.
@@ -47,6 +47,11 @@ jobs:
             src-tauri/core -> target
             src-tauri -> target
       - run: pnpm install --frozen-lockfile
+      - name: Validate four release manifests
+        shell: bash
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          node scripts/check-release-version.mjs "v$version"
       - run: pnpm check:demo
       - run: pnpm test:hosted
       - run: pnpm build:web

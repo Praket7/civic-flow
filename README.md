@@ -181,3 +181,5 @@ browser storage. The desktop release remains the complete offline app.
 
 See [FBLA Stage 1 release and judging requirements](docs/FBLA-STAGE1-JUDGING.md) before
 publishing an installer or sharing a program URL for state prejudging.
+
+**Stage 8 competition verification:** See [the evidence and acceptance guide](docs/FBLA-STAGE8-COMPETITION.md) for exact-source reproducibility, real PDF export evidence, the national rating-sheet map and remaining human/device checks. An engineering merge is not production approval.

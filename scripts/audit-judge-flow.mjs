@@ -19,6 +19,8 @@ const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const port = Number(process.env.JUDGE_PREVIEW_PORT || 5265);
 const cdpPort = Number(process.env.JUDGE_CDP_PORT || 9356);
 const base = `http://127.0.0.1:${port}`;
+const competitionEvidence = process.env.CIVICFLOW_COMPETITION_EVIDENCE === "1";
+const competitionDir = path.join(root, "competition-evidence");
 const chromeBin = [
   process.env.CHROME,
   "/usr/bin/google-chrome",
@@ -87,6 +89,14 @@ try {
       "--disable-popup-blocking",
       "--no-first-run",
       "--no-default-browser-check",
+      // The competition run permits the loopback server only, not a live cloud.
+      ...(competitionEvidence
+        ? [
+            "--proxy-server=http://127.0.0.1:1",
+            "--proxy-bypass-list=127.0.0.1;localhost",
+            "--disable-quic",
+          ]
+        : []),
       ...(process.env.CI ? ["--no-sandbox"] : []),
       "--window-size=1280,850",
       `--remote-debugging-port=${cdpPort}`,
@@ -118,11 +128,11 @@ try {
     if (payload.error) handlers.reject(new Error(JSON.stringify(payload.error)));
     else handlers.resolve(payload.result);
   });
-  function send(method, params = {}) {
+  function send(method, params = {}, sessionId) {
     return new Promise((resolve, reject) => {
       const id = ++serial;
       pending.set(id, { resolve, reject });
-      socket.send(JSON.stringify({ id, method, params }));
+      socket.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
     });
   }
   async function evaluate(expression) {
@@ -573,6 +583,46 @@ try {
     "printable report rows",
   );
   assert.deepEqual(printRows, reportRows, "Printable report must match every visible source row");
+  if (competitionEvidence) {
+    // Render the actual Export PDF popup, not the parent report page or an
+    // independently reconstructed document. The popup has its own CDP target.
+    await mkdir(competitionDir, { recursive: true });
+    const popup = await until(async () => {
+      const { targetInfos } = await send("Target.getTargets");
+      return targetInfos.find((info) => info.type === "page" && info.openerId === target.id);
+    }, "print popup target");
+    const { sessionId } = await send("Target.attachToTarget", {
+      targetId: popup.targetId,
+      flatten: true,
+    });
+    try {
+      const ready = await send(
+        "Runtime.evaluate",
+        {
+          expression: "document.fonts.ready.then(() => Boolean(document.querySelector('table')))",
+          awaitPromise: true,
+          returnByValue: true,
+        },
+        sessionId,
+      );
+      assert.equal(ready.result?.value, true, "the exported document is ready");
+      const { data } = await send(
+        "Page.printToPDF",
+        { printBackground: true, preferCSSPageSize: true },
+        sessionId,
+      );
+      const pdf = Buffer.from(data, "base64");
+      assert.ok(pdf.length > 1000 && pdf.subarray(0, 5).toString() === "%PDF-");
+      await writeFile(path.join(competitionDir, "report.pdf"), pdf);
+      await writeFile(path.join(competitionDir, "report.csv"), csv);
+      await writeFile(
+        path.join(competitionDir, "report-source-rows.json"),
+        JSON.stringify(reportRows, null, 2) + "\n",
+      );
+    } finally {
+      await send("Target.detachFromTarget", { sessionId });
+    }
+  }
   await evaluate("window.__reportPrint.close()");
   console.log("Stage 4: real CSV payload and printable export match the visible table.");
 
