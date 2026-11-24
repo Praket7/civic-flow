@@ -144,33 +144,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const adoptSession = useCallback((session: Awaited<ReturnType<typeof repository.signIn>>, remember: boolean) => {
+  const adoptHostedIdentity = useCallback(async (identity: HostedIdentity, remember: boolean) => {
+    const session = await repository.signInWithHosted(identity);
     setExpired(false);
     setRepositoryToken(session.token);
     if (remember) rememberToken(session.token);
     else rememberToken(null);
     setToken(session.token);
     setUser(session.user);
-  }, []);
-
-  const adoptHostedIdentity = useCallback(async (identity: HostedIdentity, remember: boolean) => {
-    const session = await repository.signInWithHosted(identity);
-    adoptSession(session, remember);
     clearPendingHostedIdentity();
     return session;
-  }, [adoptSession]);
+  }, []);
 
   const localSignIn = useCallback(async (email: string, password: string, remember: boolean) => {
     const session = await repository.signIn(email, password, remember);
-    adoptSession(session, remember);
+    setExpired(false);
+    setRepositoryToken(session.token);
+    if (remember) rememberToken(session.token);
+    else rememberToken(null);
+    setToken(session.token);
+    setUser(session.user);
     return session;
-  }, [adoptSession]);
+  }, []);
 
   const openDemo = useCallback(async (remember: boolean, role?: "coordinator" | "volunteer") => {
     const session = await repository.openDemoWorkspace(role);
-    adoptSession(session, remember);
+    setExpired(false);
+    setRepositoryToken(session.token);
+    if (remember) rememberToken(session.token);
+    else rememberToken(null);
+    setToken(session.token);
+    setUser(session.user);
     return session;
-  }, [adoptSession]);
+  }, []);
 
   const signIn = useCallback(
     async (email: string, password: string, remember: boolean) => {
@@ -276,10 +282,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = useCallback(
     async (name: string, email: string, password: string, remember: boolean) => {
       const session = await repository.createAccount(name, email, password);
-      adoptSession(session, remember);
+      setExpired(false);
+      setRepositoryToken(session.token);
+      if (remember) rememberToken(session.token);
+      else rememberToken(null);
+      setToken(session.token);
+      setUser(session.user);
       return session;
     },
-    [adoptSession],
+    [],
   );
 
   const signOut = useCallback(async () => {
