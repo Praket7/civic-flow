@@ -369,3 +369,19 @@ fn deleting_a_series_refuses_while_volunteers_are_on_its_shifts() {
         .expect("remaining shifts");
     assert_eq!(left, 0);
 }
+
+#[test]
+fn recurring_wall_times_follow_daylight_saving_and_refuse_ambiguous_times() {
+    use chrono::NaiveDate;
+    let zone = chrono_tz::America::New_York;
+    let date = |value: &str| NaiveDate::parse_from_str(value, "%Y-%m-%d").unwrap();
+    let mut rule = weekly(vec![0], "2026-03-01", 3);
+    let (winter, _) = recurrence::instance_window(date("2026-03-01"), &rule, zone).unwrap();
+    let (summer, _) = recurrence::instance_window(date("2026-03-08"), &rule, zone).unwrap();
+    assert_eq!(winter.to_rfc3339(), "2026-03-01T09:00:00-05:00");
+    assert_eq!(summer.to_rfc3339(), "2026-03-08T09:00:00-04:00");
+    rule.starts_local_time = "02:30".into();
+    assert!(recurrence::instance_window(date("2026-03-08"), &rule, zone).is_err());
+    rule.starts_local_time = "01:30".into();
+    assert!(recurrence::instance_window(date("2026-11-01"), &rule, zone).is_err());
+}

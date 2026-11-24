@@ -156,7 +156,7 @@ Applications* (1993), Chapter 9.
 | `y18n` | 4.0.3 | ISC | no |
 | `yargs` | 15.4.1 | MIT | no |
 | `yargs-parser` | 18.1.3 | ISC | no |
-### Rust (560 crates)
+### Rust (563 crates)
 
 | Package | Version | License | Direct |
 | --- | --- | --- | --- |
@@ -215,6 +215,7 @@ Applications* (1993), Chapter 9.
 | `chacha20` | 0.9.1 | Apache-2.0 OR MIT | no |
 | `chacha20poly1305` | 0.10.1 | Apache-2.0 OR MIT | no |
 | `chrono` | 0.4.45 | MIT OR Apache-2.0 | no |
+| `chrono-tz` | 0.10.4 | MIT OR Apache-2.0 | no |
 | `cipher` | 0.4.4 | MIT OR Apache-2.0 | no |
 | `cmake` | 0.1.58 | MIT OR Apache-2.0 | no |
 | `combine` | 4.6.9 | MIT | no |
@@ -446,6 +447,7 @@ Applications* (1993), Chapter 9.
 | `parking_lot_core` | 0.9.12 | MIT OR Apache-2.0 | no |
 | `password-hash` | 0.5.0 | MIT OR Apache-2.0 | no |
 | `percent-encoding` | 2.3.2 | MIT OR Apache-2.0 | no |
+| `phf` | 0.12.1 | MIT | no |
 | `phf` | 0.13.1 | MIT | no |
 | `phf` | 0.14.0 | MIT | no |
 | `phf_codegen` | 0.13.1 | MIT | no |
@@ -454,6 +456,7 @@ Applications* (1993), Chapter 9.
 | `phf_generator` | 0.14.0 | MIT | no |
 | `phf_macros` | 0.13.1 | MIT | no |
 | `phf_macros` | 0.14.0 | MIT | no |
+| `phf_shared` | 0.12.1 | MIT | no |
 | `phf_shared` | 0.13.1 | MIT | no |
 | `phf_shared` | 0.14.0 | MIT | no |
 | `pin-project-lite` | 0.2.18 | Apache-2.0 OR MIT | no |

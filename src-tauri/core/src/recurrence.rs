@@ -13,7 +13,8 @@
 
 use std::collections::HashSet;
 
-use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDate, NaiveTime};
+use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDate, NaiveTime, TimeZone};
+use chrono_tz::Tz;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
@@ -245,20 +246,26 @@ pub fn occurrences(rule: &RecurrenceRule) -> Result<Vec<NaiveDate>> {
     }
 }
 
-/// Builds the timestamp an occurrence starts at, using the workspace clock's own
-/// offset so a generated shift looks exactly like a seeded one.
+/// Resolve each wall-clock occurrence in its own timezone, including DST.
 pub fn instance_window(
     date: NaiveDate,
     rule: &RecurrenceRule,
-    offset: FixedOffset,
+    zone: impl TimeZone,
 ) -> Result<(DateTime<FixedOffset>, DateTime<FixedOffset>)> {
     let time = local_time(&rule.starts_local_time)?;
     let naive = date.and_time(time);
     let starts = naive
-        .and_local_timezone(offset)
+        .and_local_timezone(zone)
         .single()
-        .ok_or_else(|| CoreError::Validation("That start time is not usable".into()))?;
-    Ok((starts, starts + Duration::minutes(rule.duration_minutes)))
+        .ok_or_else(|| CoreError::Validation("That local start time is ambiguous or does not exist".into()))?;
+    let ends = starts.clone() + Duration::minutes(rule.duration_minutes);
+    Ok((starts.fixed_offset(), ends.fixed_offset()))
+}
+
+fn parse_zone(value: &str) -> Result<Tz> {
+    value
+        .parse()
+        .map_err(|_| CoreError::Validation("Choose a valid organization timezone".into()))
 }
 
 fn parse_date(value: &str, label: &str) -> Result<NaiveDate> {
@@ -321,7 +328,12 @@ pub fn create_series(
     }
 
     let dates = occurrences(rule)?;
-    let offset = *now.offset();
+    let timezone: String = conn.query_row(
+        "SELECT timezone FROM organizations WHERE id = ?1",
+        params![organization_id],
+        |row| row.get(0),
+    )?;
+    let zone = parse_zone(&timezone)?;
     let series_id = format!("series-{}", uuid::Uuid::new_v4());
     let transaction = conn.unchecked_transaction()?;
     transaction.execute(
@@ -334,11 +346,7 @@ pub fn create_series(
             series_id,
             organization_id,
             opportunity_id,
-            conn.query_row(
-                "SELECT timezone FROM organizations WHERE id = ?1",
-                params![organization_id],
-                |row| row.get::<_, String>(0)
-            )?,
+            timezone,
             rule.kind.as_str(),
             rule.interval_weeks,
             serde_json::to_string(&rule.weekdays)?,
@@ -359,7 +367,7 @@ pub fn create_series(
 
     let mut shifts: Vec<SeriesShift> = Vec::new();
     for date in &dates {
-        let (starts_at, ends_at) = instance_window(*date, rule, offset)?;
+        let (starts_at, ends_at) = instance_window(*date, rule, zone)?;
         let id = format!("sh-series-{}", uuid::Uuid::new_v4());
         transaction.execute(
             "INSERT INTO shifts
@@ -428,8 +436,7 @@ pub fn generate_instances(
         load_series(conn, series_id)?.ok_or_else(|| CoreError::NotFound("that series".into()))?;
     let rule = rule_of(&record);
     let dates = occurrences(&rule)?;
-    let now = now(conn)?;
-    let offset = *now.offset();
+    let zone = parse_zone(&record.timezone)?;
     let existing: HashSet<String> = {
         let mut statement = conn.prepare(
             "SELECT occurrence_date FROM shifts WHERE series_id = ?1 AND occurrence_date IS NOT NULL",
@@ -445,7 +452,7 @@ pub fn generate_instances(
         if existing.contains(&key) {
             continue;
         }
-        let (starts_at, ends_at) = instance_window(*date, &rule, offset)?;
+        let (starts_at, ends_at) = instance_window(*date, &rule, zone)?;
         let id = format!("sh-series-{}", uuid::Uuid::new_v4());
         transaction.execute(
             "INSERT INTO shifts
@@ -529,7 +536,7 @@ pub fn retime(
         ));
     }
     let now = now(conn)?;
-    let offset = *now.offset();
+    let zone = parse_zone(&record.timezone)?;
 
     let transaction = conn.unchecked_transaction()?;
     let mut statement = transaction.prepare(
@@ -546,11 +553,11 @@ pub fn retime(
 
     let mut changed = 0i64;
     for (id, occurrence_date) in rows {
-        if occurrence_date < now.date_naive().to_string() {
+        if occurrence_date < now.with_timezone(&zone).date_naive().to_string() {
             continue;
         }
         let date = parse_date(&occurrence_date, "occurrence date")?;
-        let (starts_at, ends_at) = instance_window(date, &rule, offset)?;
+        let (starts_at, ends_at) = instance_window(date, &rule, zone)?;
         transaction.execute(
             "UPDATE shifts SET starts_at = ?1, ends_at = ?2 WHERE id = ?3",
             params![starts_at.to_rfc3339(), ends_at.to_rfc3339(), id],
