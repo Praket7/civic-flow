@@ -211,14 +211,14 @@ fn native_dates_reject_noncanonical_and_unicode_without_panicking() {
 fn credential_inventory_does_not_cross_multiply_skills() {
     let database = seeded();
     let report = generate(database.connection(), &request("skills")).expect("inventory");
-    let credential_count: usize = database
+    let credential_count: i64 = database
         .connection()
         .query_row("SELECT count(*) FROM volunteer_credentials", [], |row| {
             row.get(0)
         })
         .expect("credential count");
     assert_eq!(
-        report.rows.iter().filter(|row| row[1] == "—").count(),
+        report.rows.iter().filter(|row| row[1] == "—").count() as i64,
         credential_count
     );
     assert!(report.rows.iter().all(|row| row[1] == "—" || row[2] == "—"));
