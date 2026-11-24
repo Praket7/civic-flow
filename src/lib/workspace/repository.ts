@@ -248,8 +248,8 @@ export function setRepositoryToken(token: string | null): void {
   activeToken = token;
 }
 
-function withToken(args: Record<string, unknown> = {}): Record<string, unknown> {
-  return { ...args, token: activeToken ?? "" };
+function invokeAuthed<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
+  return invoke<T>(command, { ...args, token: activeToken ?? "" });
 }
 
 const desktopRepository: WorkspaceRepository = {
@@ -277,146 +277,126 @@ const desktopRepository: WorkspaceRepository = {
   resetPassword: async (token, userId, newPassword) => {
     await invoke<null>("reset_password", { token, userId, newPassword });
   },
-  listOrganizations: () => invoke<OrganizationAccess[]>("list_my_organizations", withToken()),
+  listOrganizations: () => invokeAuthed<OrganizationAccess[]>("list_my_organizations"),
   listPublicOrganizations: () => invoke<OrganizationProfile[]>("list_public_organizations"),
   selectOrganization: async (organizationId) => {
     if (!organizationId) return;
-    await invoke<OrganizationAccess>("select_organization", withToken({ organizationId }));
+    await invokeAuthed<OrganizationAccess>("select_organization", { organizationId });
   },
   createOrganization: (input) =>
-    invoke<OrganizationAccess>("create_organization", withToken({ input })),
+    invokeAuthed<OrganizationAccess>("create_organization", { input }),
   updateOrganization: (organizationId, patch) =>
-    invoke<OrganizationProfile>("update_organization", withToken({ organizationId, patch })),
+    invokeAuthed<OrganizationProfile>("update_organization", { organizationId, patch }),
   listOrganizationMembers: (organizationId) =>
-    invoke<OrganizationMember[]>("list_organization_members", withToken({ organizationId })),
+    invokeAuthed<OrganizationMember[]>("list_organization_members", { organizationId }),
   listOrganizationInvites: (organizationId) =>
-    invoke<PendingInvite[]>("list_organization_invites", withToken({ organizationId })),
+    invokeAuthed<PendingInvite[]>("list_organization_invites", { organizationId }),
   createOrganizationInvite: (organizationId, role, email) =>
-    invoke<IssuedInvite>("create_organization_invite", withToken({ organizationId, role, email })),
+    invokeAuthed<IssuedInvite>("create_organization_invite", { organizationId, role, email }),
   revokeOrganizationInvite: async (organizationId, inviteId) => {
-    await invoke<null>("revoke_organization_invite", withToken({ organizationId, inviteId }));
+    await invokeAuthed<null>("revoke_organization_invite", { organizationId, inviteId });
   },
   redeemOrganizationInvite: (code) =>
-    invoke<OrganizationAccess>("redeem_organization_invite", withToken({ code })),
+    invokeAuthed<OrganizationAccess>("redeem_organization_invite", { code }),
   joinPublicOrganization: (organizationId) =>
-    invoke<OrganizationAccess>("join_public_organization", withToken({ organizationId })),
+    invokeAuthed<OrganizationAccess>("join_public_organization", { organizationId }),
   setOrganizationMemberRole: (organizationId, userId, role) =>
-    invoke<OrganizationMember[]>(
-      "set_organization_member_role",
-      withToken({ organizationId, userId, role }),
+    invokeAuthed<OrganizationMember[]>("set_organization_member_role", { organizationId, userId, role },
     ),
   setOrganizationMemberStatus: (organizationId, userId, status) =>
-    invoke<OrganizationMember[]>(
-      "set_organization_member_status",
-      withToken({ organizationId, userId, status }),
+    invokeAuthed<OrganizationMember[]>("set_organization_member_status", { organizationId, userId, status },
     ),
   transferOrganizationOwnership: (organizationId, userId) =>
-    invoke<OrganizationMember[]>(
-      "transfer_organization_ownership",
-      withToken({ organizationId, userId }),
+    invokeAuthed<OrganizationMember[]>("transfer_organization_ownership", { organizationId, userId },
     ),
-  getSnapshot: () => invoke<SessionSnapshot>("get_workspace_snapshot", withToken()),
+  getSnapshot: () => invokeAuthed<SessionSnapshot>("get_workspace_snapshot"),
   setSaved: (opportunityId, saved) =>
-    invoke<SessionSnapshot>("set_saved_opportunity", withToken({ opportunityId, saved })),
+    invokeAuthed<SessionSnapshot>("set_saved_opportunity", { opportunityId, saved }),
   setApplicationStage: (applicationId, stage) =>
-    invoke<SessionSnapshot>("set_application_stage", withToken({ applicationId, stage })),
+    invokeAuthed<SessionSnapshot>("set_application_stage", { applicationId, stage }),
   checkIn: (shiftId, volunteerId, code) =>
-    invoke<SessionSnapshot>("check_in_volunteer", withToken({ shiftId, volunteerId, code })),
+    invokeAuthed<SessionSnapshot>("check_in_volunteer", { shiftId, volunteerId, code }),
   manualCheckIn: (shiftId, volunteerId, reason) =>
-    invoke<SessionSnapshot>("manual_check_in", withToken({ shiftId, volunteerId, reason })),
+    invokeAuthed<SessionSnapshot>("manual_check_in", { shiftId, volunteerId, reason }),
   checkOut: (shiftId, volunteerId) =>
-    invoke<SessionSnapshot>("check_out_volunteer", withToken({ shiftId, volunteerId })),
+    invokeAuthed<SessionSnapshot>("check_out_volunteer", { shiftId, volunteerId }),
   markNoShow: (shiftId, volunteerId) =>
-    invoke<SessionSnapshot>("mark_volunteer_no_show", withToken({ shiftId, volunteerId })),
+    invokeAuthed<SessionSnapshot>("mark_volunteer_no_show", { shiftId, volunteerId }),
   cancelRegistration: (shiftId, volunteerId, reason) =>
-    invoke<SessionSnapshot>(
-      "cancel_registration",
-      withToken({
+    invokeAuthed<SessionSnapshot>("cancel_registration", {
         shiftId,
         volunteerId,
         reason: reason ?? null,
-      }),
+      },
     ),
   joinWaitlist: (shiftId, volunteerId, role) =>
-    invoke<SessionSnapshot>("join_waitlist", withToken({ shiftId, volunteerId, role })),
-  getCheckinCode: (shiftId) => invoke<CheckinCode>("get_checkin_code", withToken({ shiftId })),
-  checkinWindow: (shiftId) => invoke<CheckinWindow>("checkin_window", withToken({ shiftId })),
-  installationAccess: () => invoke<InstallationAccess>("installation_access", withToken()),
+    invokeAuthed<SessionSnapshot>("join_waitlist", { shiftId, volunteerId, role }),
+  getCheckinCode: (shiftId) => invokeAuthed<CheckinCode>("get_checkin_code", { shiftId }),
+  checkinWindow: (shiftId) => invokeAuthed<CheckinWindow>("checkin_window", { shiftId }),
+  installationAccess: () => invokeAuthed<InstallationAccess>("installation_access"),
   autoRoster: (shiftIds, options) =>
-    invoke<RosterPlan>("auto_roster", withToken({ shiftIds, options })),
+    invokeAuthed<RosterPlan>("auto_roster", { shiftIds, options }),
   evaluateRoster: (shiftIds, options) =>
-    invoke<RosterEvaluation>("evaluate_roster_candidates", withToken({ shiftIds, options })),
+    invokeAuthed<RosterEvaluation>("evaluate_roster_candidates", { shiftIds, options }),
   applyRosterWeek: (expectedRevision, expectedPolicyVersion, assignments) =>
-    invoke<SessionSnapshot>(
-      "apply_roster_week",
-      withToken({ expectedRevision, expectedPolicyVersion, assignments }),
+    invokeAuthed<SessionSnapshot>("apply_roster_week", { expectedRevision, expectedPolicyVersion, assignments },
     ),
-  getRosterPolicy: () => invoke<RosterPolicyView>("get_roster_policy", withToken()),
+  getRosterPolicy: () => invokeAuthed<RosterPolicyView>("get_roster_policy"),
   updateRosterPolicy: (policy) =>
-    invoke<RosterPolicyView>("update_roster_policy", withToken({ policy })),
+    invokeAuthed<RosterPolicyView>("update_roster_policy", { policy }),
   explainRosterChoice: (shiftIds, options, candidateId, slotId) =>
-    invoke<CandidateAnswer>(
-      "explain_roster_choice",
-      withToken({ shiftIds, options, candidateId, slotId }),
+    invokeAuthed<CandidateAnswer>("explain_roster_choice", { shiftIds, options, candidateId, slotId },
     ),
   applyRoster: (shiftId, assignments) =>
-    invoke<SessionSnapshot>("apply_roster_plan", withToken({ shiftId, assignments })),
-  detectDisruptions: () => invoke<DisruptionReport>("detect_disruptions", withToken()),
+    invokeAuthed<SessionSnapshot>("apply_roster_plan", { shiftId, assignments }),
+  detectDisruptions: () => invokeAuthed<DisruptionReport>("detect_disruptions"),
   planRecovery: (shiftIds, options) =>
-    invoke<RecoveryPlan>("plan_recovery", withToken({ shiftIds, options })),
+    invokeAuthed<RecoveryPlan>("plan_recovery", { shiftIds, options }),
   applyRecovery: (shiftId, changes) =>
-    invoke<SessionSnapshot>("apply_recovery", withToken({ shiftId, changes })),
+    invokeAuthed<SessionSnapshot>("apply_recovery", { shiftId, changes }),
   setAssignmentLock: (shiftId, volunteerId, locked) =>
-    invoke<SessionSnapshot>("set_assignment_lock", withToken({ shiftId, volunteerId, locked })),
+    invokeAuthed<SessionSnapshot>("set_assignment_lock", { shiftId, volunteerId, locked }),
   createShiftSeries: (opportunityId, rule, roles) =>
-    invoke<SeriesResult>("create_shift_series", withToken({ opportunityId, rule, roles })),
+    invokeAuthed<SeriesResult>("create_shift_series", { opportunityId, rule, roles }),
   listShiftSeries: (opportunityId) =>
-    invoke<ShiftSeriesRecord[]>(
-      "list_shift_series",
-      withToken({ opportunityId: opportunityId ?? null }),
+    invokeAuthed<ShiftSeriesRecord[]>("list_shift_series", { opportunityId: opportunityId ?? null },
     ),
   generateSeriesInstances: (seriesId) =>
-    invoke<SeriesResult>("generate_series_instances", withToken({ seriesId })),
+    invokeAuthed<SeriesResult>("generate_series_instances", { seriesId }),
   retimeShiftSeries: (seriesId, startsLocalTime, durationMinutes, scope) =>
-    invoke<SessionSnapshot>(
-      "retime_shift_series",
-      withToken({ seriesId, startsLocalTime, durationMinutes, scope }),
+    invokeAuthed<SessionSnapshot>("retime_shift_series", { seriesId, startsLocalTime, durationMinutes, scope },
     ),
   deleteShiftSeries: (seriesId) =>
-    invoke<SessionSnapshot>("delete_shift_series", withToken({ seriesId })),
+    invokeAuthed<SessionSnapshot>("delete_shift_series", { seriesId }),
   recommendReplacement: (shiftId, role) =>
-    invoke<ReplacementRecommendation>("recommend_replacement", withToken({ shiftId, role })),
-  listNotificationRules: () => invoke<NotificationRule[]>("list_notification_rules", withToken()),
+    invokeAuthed<ReplacementRecommendation>("recommend_replacement", { shiftId, role }),
+  listNotificationRules: () => invokeAuthed<NotificationRule[]>("list_notification_rules"),
   updateNotificationRule: (ruleId, patch) =>
-    invoke<NotificationRule[]>("update_notification_rule", withToken({ ruleId, patch })),
-  queueDueReminders: () => invoke<number>("queue_due_reminders", withToken()),
-  retentionSignals: () => invoke<RetentionSignal[]>("retention_signals", withToken()),
+    invokeAuthed<NotificationRule[]>("update_notification_rule", { ruleId, patch }),
+  queueDueReminders: () => invokeAuthed<number>("queue_due_reminders"),
+  retentionSignals: () => invokeAuthed<RetentionSignal[]>("retention_signals"),
   volunteerInsight: (volunteerId) =>
-    invoke<VolunteerInsight>("volunteer_insight", withToken({ volunteerId })),
-  engagementMetrics: () => invoke<EngagementMetrics>("engagement_metrics", withToken()),
-  credentialReadiness: () => invoke<CredentialReadiness>("credential_readiness", withToken()),
+    invokeAuthed<VolunteerInsight>("volunteer_insight", { volunteerId }),
+  engagementMetrics: () => invokeAuthed<EngagementMetrics>("engagement_metrics"),
+  credentialReadiness: () => invokeAuthed<CredentialReadiness>("credential_readiness"),
   promoteWaitlist: (shiftId, volunteerId) =>
-    invoke<SessionSnapshot>("promote_waitlist", withToken({ shiftId, volunteerId })),
+    invokeAuthed<SessionSnapshot>("promote_waitlist", { shiftId, volunteerId }),
   reviewHours: (entryId, decision) =>
-    invoke<SessionSnapshot>(
-      "review_hours",
-      withToken({
+    invokeAuthed<SessionSnapshot>("review_hours", {
         entryId,
         status: decision.status,
         approvedMinutes: decision.approvedMinutes,
         reason: decision.reason,
-      }),
+      },
     ),
   updateSettings: (patch) =>
-    invoke<SessionSnapshot>("update_workspace_settings", withToken({ patch })),
+    invokeAuthed<SessionSnapshot>("update_workspace_settings", { patch }),
   createOpportunity: (input) =>
-    invoke<CreateOpportunityResult>("create_opportunity", withToken({ input })),
+    invokeAuthed<CreateOpportunityResult>("create_opportunity", { input }),
   registerForShift: (shiftId, volunteerId, role) =>
-    invoke<SessionSnapshot>("register_for_shift", withToken({ shiftId, volunteerId, role })),
+    invokeAuthed<SessionSnapshot>("register_for_shift", { shiftId, volunteerId, role }),
   saveVolunteerProfile: (patch) =>
-    invoke<SessionSnapshot>(
-      "save_volunteer_profile",
-      withToken({
+    invokeAuthed<SessionSnapshot>("save_volunteer_profile", {
         skills: patch.skills ?? [],
         availability: patch.availability ?? [],
         completedOnboarding: patch.completedOnboarding ?? true,
@@ -424,12 +404,12 @@ const desktopRepository: WorkspaceRepository = {
         interests: patch.interests ?? "",
         causes: patch.causes ?? [],
         photo: patch.photo ?? "",
-      }),
+      },
     ),
-  resetDemo: () => invoke<SessionSnapshot>("reset_demo", withToken()),
-  listBackups: () => invoke<BackupSnapshot[]>("list_backups", withToken()),
-  createBackup: (note) => invoke<BackupSnapshot[]>("create_backup", withToken({ note })),
-  restoreBackup: (id) => invoke<BackupRestoreResult>("restore_backup", withToken({ id })),
+  resetDemo: () => invokeAuthed<SessionSnapshot>("reset_demo"),
+  listBackups: () => invokeAuthed<BackupSnapshot[]>("list_backups"),
+  createBackup: (note) => invokeAuthed<BackupSnapshot[]>("create_backup", { note }),
+  restoreBackup: (id) => invokeAuthed<BackupRestoreResult>("restore_backup", { id }),
   exportEncryptedBackup: async (passphrase) => {
     const path = await save({
       title: "Save an encrypted backup",
@@ -437,9 +417,7 @@ const desktopRepository: WorkspaceRepository = {
       filters: [{ name: "CivicFlow archive", extensions: ["civicflow"] }],
     });
     if (!path) return null;
-    return invoke<EncryptedBackupReceipt>(
-      "export_encrypted_backup",
-      withToken({ path, passphrase }),
+    return invokeAuthed<EncryptedBackupReceipt>("export_encrypted_backup", { path, passphrase },
     );
   },
   importEncryptedBackup: async (passphrase) => {
@@ -450,21 +428,19 @@ const desktopRepository: WorkspaceRepository = {
       filters: [{ name: "CivicFlow archive", extensions: ["civicflow"] }],
     });
     if (!chosen || typeof chosen !== "string") return null;
-    return invoke<BackupRestoreResult>(
-      "import_encrypted_backup",
-      withToken({ path: chosen, passphrase }),
+    return invokeAuthed<BackupRestoreResult>("import_encrypted_backup", { path: chosen, passphrase },
     );
   },
-  getMissionControl: () => invoke<MissionControlSummary>("get_mission_control", withToken()),
-  getNotifications: () => invoke<NotificationItem[]>("list_notifications", withToken()),
+  getMissionControl: () => invokeAuthed<MissionControlSummary>("get_mission_control"),
+  getNotifications: () => invokeAuthed<NotificationItem[]>("list_notifications"),
   markNotificationRead: async (id: string) => {
-    await invoke<boolean>("mark_notification_read", withToken({ id }));
+    await invokeAuthed<boolean>("mark_notification_read", { id });
   },
   saveReportView: (name, scope, filtersJson) =>
-    invoke<SessionSnapshot>("save_report_view", withToken({ name, scope, filtersJson })),
-  generateReport: (request) => invoke<ReportDocument>("generate_report", withToken({ request })),
+    invokeAuthed<SessionSnapshot>("save_report_view", { name, scope, filtersJson }),
+  generateReport: (request) => invokeAuthed<ReportDocument>("generate_report", { request }),
   exportReport: async (request, format) => {
-    const document = await invoke<ReportDocument>("generate_report", withToken({ request }));
+    const document = await invokeAuthed<ReportDocument>("generate_report", { request });
     const extension = format === "pdf" ? "pdf" : "csv";
     const slug = document.template.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
     const path = await save({
@@ -478,12 +454,12 @@ const desktopRepository: WorkspaceRepository = {
       ],
     });
     if (!path) return null;
-    return invoke<ExportReceipt>("export_report", withToken({ request, format, path }));
+    return invokeAuthed<ExportReceipt>("export_report", { request, format, path });
   },
   previewVolunteerImport: (text) =>
-    invoke<VolunteerImportPreview>("preview_volunteer_import", withToken({ text })),
+    invokeAuthed<VolunteerImportPreview>("preview_volunteer_import", { text }),
   applyVolunteerImport: (text) =>
-    invoke<VolunteerImportSummary>("apply_volunteer_import", withToken({ text })),
+    invokeAuthed<VolunteerImportSummary>("apply_volunteer_import", { text }),
   exportVolunteerRoster: async () => {
     const path = await save({
       title: "Export the volunteer roster",
@@ -491,7 +467,7 @@ const desktopRepository: WorkspaceRepository = {
       filters: [{ name: "CSV roster", extensions: ["csv"] }],
     });
     if (!path) return null;
-    return invoke<ExportReceipt>("export_volunteer_roster", withToken({ path }));
+    return invokeAuthed<ExportReceipt>("export_volunteer_roster", { path });
   },
 };
 

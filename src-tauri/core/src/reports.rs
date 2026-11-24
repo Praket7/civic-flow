@@ -570,13 +570,25 @@ fn skills(conn: &Connection) -> Result<ReportTable> {
         } else if status == "expiring" || status == "expired" {
             expiring += 1;
         }
-        output.push(vec![row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, status]);
+        output.push(vec![
+            row.get(0)?,
+            row.get(1)?,
+            row.get(2)?,
+            row.get(3)?,
+            status,
+        ]);
     }
     let credential_count = output.len() - skill_count;
     Ok((
-        ["Volunteer", "Skill", "Credential", "Valid through", "Status"]
-            .map(str::to_string)
-            .to_vec(),
+        [
+            "Volunteer",
+            "Skill",
+            "Credential",
+            "Valid through",
+            "Status",
+        ]
+        .map(str::to_string)
+        .to_vec(),
         output,
         vec![
             ReportSummaryItem {
@@ -693,7 +705,9 @@ pub(crate) fn csv_cell(value: &str) -> String {
             .trim_start_matches(|ch: char| ch.is_whitespace() || ch == '\u{feff}')
             .chars()
             .next()
-            .is_some_and(|first| matches!(first, '=' | '+' | '-' | '@' | '＝' | '＋' | '－' | '＠'));
+            .is_some_and(|first| {
+                matches!(first, '=' | '+' | '-' | '@' | '＝' | '＋' | '－' | '＠')
+            });
     let guarded = if formula {
         format!("'{value}")
     } else {
@@ -738,7 +752,10 @@ pub fn to_pdf(document: &ReportDocument) -> Vec<u8> {
     let leading = 12.0;
     let mut header = String::from("BT\n/F1 18 Tf\n");
     let mut y = page_height - margin;
-    for line in wrap_pdf_cell(&document.organization, ((page_width - 2.0 * margin) / 18.0) as usize) {
+    for line in wrap_pdf_cell(
+        &document.organization,
+        ((page_width - 2.0 * margin) / 18.0) as usize,
+    ) {
         pdf_line(&mut header, &line, margin, y);
         y -= 22.0;
     }
@@ -756,7 +773,10 @@ pub fn to_pdf(document: &ReportDocument) -> Vec<u8> {
     y -= 5.0;
     header.push_str("/F1 9 Tf\n");
     for item in &document.summary {
-        for line in wrap_pdf_cell(&format!("{}: {}", item.label, item.value), ((page_width - 2.0 * margin) / 9.0) as usize) {
+        for line in wrap_pdf_cell(
+            &format!("{}: {}", item.label, item.value),
+            ((page_width - 2.0 * margin) / 9.0) as usize,
+        ) {
             pdf_line(&mut header, &line, margin, y);
             y -= 13.0;
         }
@@ -807,7 +827,12 @@ pub fn to_pdf(document: &ReportDocument) -> Vec<u8> {
     let page_count = contents.len();
     for (index, stream) in contents.iter_mut().enumerate() {
         stream.push_str("ET\nBT /F1 8 Tf\n");
-        pdf_line(stream, &format!("Page {} of {page_count}", index + 1), margin, 24.0);
+        pdf_line(
+            stream,
+            &format!("Page {} of {page_count}", index + 1),
+            margin,
+            24.0,
+        );
         stream.push_str("ET");
     }
 
@@ -821,7 +846,9 @@ pub fn to_pdf(document: &ReportDocument) -> Vec<u8> {
     objects.push(format!(
         "<< /Type /Pages /Kids [{kids}] /Count {page_count} >>"
     ));
-    objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".into());
+    objects.push(
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".into(),
+    );
     for (index, content) in contents.iter().enumerate() {
         let content_id = 4 + index * 2;
         objects.push(format!(
@@ -862,7 +889,10 @@ fn wrap_pdf_cell(value: &str, limit: usize) -> Vec<String> {
             if chars.is_empty() {
                 return vec![String::new()];
             }
-            chars.chunks(limit.max(1)).map(|part| part.iter().collect()).collect()
+            chars
+                .chunks(limit.max(1))
+                .map(|part| part.iter().collect())
+                .collect()
         })
         .collect()
 }
@@ -879,7 +909,9 @@ fn pdf_text(value: &str) -> String {
                 escaped.push('\\');
                 escaped.push(character);
             }
-            character if character.is_ascii_graphic() || character == ' ' => escaped.push(character),
+            character if character.is_ascii_graphic() || character == ' ' => {
+                escaped.push(character)
+            }
             character if character.is_control() => escaped.push(' '),
             character => {
                 let byte = match character {
