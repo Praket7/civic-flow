@@ -49,12 +49,7 @@ impl RunState {
     }
 }
 
-fn rank(
-    candidate: &Candidate,
-    slot: &Slot,
-    policy: &RosterPolicy,
-    options: &RosterOptions,
-) -> i32 {
+fn rank(candidate: &Candidate, slot: &Slot, policy: &RosterPolicy, options: &RosterOptions) -> i32 {
     let score = score_candidate(candidate, slot, policy, options).0.total;
     let waiting = options.include_waitlist
         && policy.waitlist_preference
@@ -126,7 +121,10 @@ fn plan_inner(
     let mut fixed_candidates = HashSet::new();
 
     for (candidate_id, slot_id) in forced {
-        let Some(person) = ordered_candidates.iter().position(|c| &c.id == candidate_id) else {
+        let Some(person) = ordered_candidates
+            .iter()
+            .position(|c| &c.id == candidate_id)
+        else {
             continue;
         };
         let Some(index) = ordered_slots.iter().position(|s| &s.id == slot_id) else {
@@ -225,7 +223,10 @@ fn plan_inner(
                     && runs[*person].eligible(candidate, slot, policy, options)
             })
             .max_by_key(|(person, candidate)| {
-                (rank(candidate, slot, policy, options), std::cmp::Reverse(*person))
+                (
+                    rank(candidate, slot, policy, options),
+                    std::cmp::Reverse(*person),
+                )
             });
         if let Some((person, candidate)) = best {
             assignments.push(runs[person].assign(candidate, slot, policy, options, &ordered_slots));

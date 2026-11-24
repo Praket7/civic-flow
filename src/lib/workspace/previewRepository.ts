@@ -1984,7 +1984,9 @@ const { readRosterPolicy, writeRosterPolicy, validateRosterPolicy } =
   createPreviewRosterPolicyStore(scoped, PREVIEW_PRIORITY_LEVELS);
 
 function previewDayKey(startsAt: string): string {
-  return ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][new Date(startsAt.slice(0, 10) + "T00:00:00Z").getUTCDay()];
+  return ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][
+    new Date(startsAt.slice(0, 10) + "T00:00:00Z").getUTCDay()
+  ];
 }
 
 function previewPeriod(startsAt: string): string {

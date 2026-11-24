@@ -15,13 +15,18 @@ import type {
   SessionSnapshot,
   Volunteer,
 } from "../../../types/domain";
-export function roleRequirement(role: string): { skill: string; credential: string | null; minimumAge?: number } {
+export function roleRequirement(role: string): {
+  skill: string;
+  credential: string | null;
+  minimumAge?: number;
+} {
   const lower = role.toLowerCase();
   if (lower.includes("spanish")) return { skill: "Spanish", credential: null };
   if (lower.includes("driver") || lower.includes("delivery")) {
     return { skill: "Driver", credential: "Safe driver clearance", minimumAge: 18 };
   }
-  if (lower.includes("tutor")) return { skill: "Tutoring", credential: "Tutor certification", minimumAge: 16 };
+  if (lower.includes("tutor"))
+    return { skill: "Tutoring", credential: "Tutor certification", minimumAge: 16 };
   if (lower.includes("food") || lower.includes("pantry") || lower.includes("sort")) {
     return { skill: "Food handling", credential: "Food safety handler" };
   }
@@ -129,12 +134,7 @@ export function createPreviewRosterEngine(context: {
 
   function cloneLoad(load: PreviewLoad): PreviewLoad {
     return {
-      blocks: new Map(
-        [...load.blocks].map(([volunteerId, blocks]) => [
-          volunteerId,
-          [...blocks],
-        ]),
-      ),
+      blocks: new Map([...load.blocks].map(([volunteerId, blocks]) => [volunteerId, [...blocks]])),
       weekMinutes: new Map(load.weekMinutes),
       weekCount: new Map(load.weekCount),
     };
@@ -197,8 +197,8 @@ export function createPreviewRosterEngine(context: {
         : "Not registered yet",
     });
     if (seat.requiredSkill) {
-      const skillMatch = volunteer.skills.some((skill) =>
-        skill.toLowerCase() === seat.requiredSkill.toLowerCase(),
+      const skillMatch = volunteer.skills.some(
+        (skill) => skill.toLowerCase() === seat.requiredSkill.toLowerCase(),
       );
       checks.push({
         name: "Required skill",
@@ -234,7 +234,8 @@ export function createPreviewRosterEngine(context: {
       const birthday = volunteer.birthdate;
       const on = seat.startsAt.slice(0, 10);
       const age = birthday
-        ? Number(on.slice(0, 4)) - Number(birthday.slice(0, 4)) -
+        ? Number(on.slice(0, 4)) -
+          Number(birthday.slice(0, 4)) -
           Number(on.slice(5) < birthday.slice(5, 10))
         : null;
       checks.push({
@@ -257,9 +258,7 @@ export function createPreviewRosterEngine(context: {
     const end = Date.parse(seat.endsAt);
     const minutes = Math.max(0, (end - start) / 60000);
     if (options.blockConflicts) {
-      const clash = blocks.some(
-        (block) => block.start < end && block.end > start,
-      );
+      const clash = blocks.some((block) => block.start < end && block.end > start);
       checks.push({
         name: "No overlapping shift",
         passed: !clash,
@@ -293,7 +292,11 @@ export function createPreviewRosterEngine(context: {
       ? Math.min(policy.maxShiftsPerWeek ?? 2, 2)
       : policy.maxShiftsPerWeek;
     limit("Weekly shift limit", (load.weekCount.get(volunteer.id) ?? 0) + 1, weekLimit);
-    limit("Weekly minute limit", (load.weekMinutes.get(volunteer.id) ?? 0) + minutes, policy.maxMinutesPerWeek);
+    limit(
+      "Weekly minute limit",
+      (load.weekMinutes.get(volunteer.id) ?? 0) + minutes,
+      policy.maxMinutesPerWeek,
+    );
     return checks;
   }
 
@@ -310,9 +313,7 @@ export function createPreviewRosterEngine(context: {
   ): { components: ScoreComponent[]; total: number } {
     const skillMatches =
       !seat.requiredSkill ||
-      volunteer.skills.some((skill) =>
-        skill.toLowerCase() === seat.requiredSkill.toLowerCase(),
-      );
+      volunteer.skills.some((skill) => skill.toLowerCase() === seat.requiredSkill.toLowerCase());
     // A role with no requirement fits anyone eligible, slightly less precisely
     // than a matched requirement, which is how the solver scores it too.
     const skill = seat.requiredSkill
@@ -408,10 +409,12 @@ export function createPreviewRosterEngine(context: {
 
   function candidates(options: RosterOptions) {
     return workspace.volunteers.filter(
-      (volunteer) => volunteer.status === "active" &&
-        (options.includeWaitlist || !state.waitlist.some(
-          (row) => row.volunteerId === volunteer.id && row.status === "waiting",
-        )),
+      (volunteer) =>
+        volunteer.status === "active" &&
+        (options.includeWaitlist ||
+          !state.waitlist.some(
+            (row) => row.volunteerId === volunteer.id && row.status === "waiting",
+          )),
     );
   }
 
@@ -440,9 +443,15 @@ export function createPreviewRosterEngine(context: {
         const checks = previewChecks(volunteer, seat, options, policy, load);
         if (checks.some((check) => !check.passed)) continue;
         const { components, total } = previewScore(volunteer, seat, options, policy, load);
-        const requested = policy.waitlistPreference && options.includeWaitlist && requestedReview(volunteer.id, seat);
+        const requested =
+          policy.waitlistPreference &&
+          options.includeWaitlist &&
+          requestedReview(volunteer.id, seat);
         const bestRequested =
-          best && policy.waitlistPreference && options.includeWaitlist && requestedReview(best.volunteer.id, seat);
+          best &&
+          policy.waitlistPreference &&
+          options.includeWaitlist &&
+          requestedReview(best.volunteer.id, seat);
         if (
           !best ||
           (requested && !bestRequested) ||
@@ -618,8 +627,9 @@ export function createPreviewRosterEngine(context: {
       eligibleRoles: seats
         .filter((row) => row.shiftId === choice.seat.shiftId)
         .filter((row) =>
-          choice.volunteer.skills.some((skill) =>
-            !row.requiredSkill || skill.toLowerCase() === row.requiredSkill.toLowerCase(),
+          choice.volunteer.skills.some(
+            (skill) =>
+              !row.requiredSkill || skill.toLowerCase() === row.requiredSkill.toLowerCase(),
           ),
         )
         .map((row) => row.role),
@@ -673,62 +683,61 @@ export function createPreviewRosterEngine(context: {
     const seats = previewSeats(shiftIds);
     const baseLoad = previewBaseLoad();
 
-    const evaluations: CandidateEvaluation[] = candidates(options)
-      .map((volunteer) => {
-        const slots: EvaluatedSlot[] = seats.map((seat) => {
-          const explanation = previewExplanation(volunteer, seat, options, policy, baseLoad, false);
-          return {
-            slotId: seat.slotId,
-            shiftId: seat.shiftId,
-            shiftTitle: seat.shiftTitle,
-            role: seat.role,
-            startsAt: seat.startsAt,
-            endsAt: seat.endsAt,
-            eligible: explanation.eligible,
-            selected: plan.assignments.some(
-              (assignment) =>
-                assignment.candidateId === volunteer.id &&
-                assignment.explanation.slotId === seat.slotId,
-            ),
-            score: explanation.totalScore,
-            checks: explanation.checks,
-            components: explanation.components,
-            selectionReason: explanation.selectionReason,
-          };
-        });
-        const eligibleRoles = [
-          ...new Set(slots.filter((slot) => slot.eligible).map((slot) => slot.role)),
-        ].sort();
-        const bestScore = slots
-          .filter((slot) => slot.eligible)
-          .map((slot) => slot.score ?? 0)
-          .reduce<number | null>(
-            (best, score) => (best === null || score > best ? score : best),
-            null,
-          );
-        const conflict = slots
-          .flatMap((slot) => slot.checks)
-          .find((check) => check.name === "No overlapping shift" && !check.passed)?.detail;
-        const eligibleIndex = slots.findIndex((slot) => slot.eligible);
-        const availabilitySeat = eligibleIndex >= 0 ? seats[eligibleIndex] : seats[0];
+    const evaluations: CandidateEvaluation[] = candidates(options).map((volunteer) => {
+      const slots: EvaluatedSlot[] = seats.map((seat) => {
+        const explanation = previewExplanation(volunteer, seat, options, policy, baseLoad, false);
         return {
-          candidateId: volunteer.id,
-          candidateName: volunteer.name,
-          candidateInitials: volunteer.initials,
-          eligibleRoles,
-          bestScore,
-          availability: availabilitySeat
-            ? previewAvailabilityState(volunteer, availabilitySeat)
-            : "unknown",
-          conflict: conflict ?? null,
-          weeklyShifts: baseLoad.weekCount.get(volunteer.id) ?? 0,
-          weeklyMinutes: baseLoad.weekMinutes.get(volunteer.id) ?? 0,
-          waitlistedShiftIds: state.waitlist
-            .filter((row) => row.volunteerId === volunteer.id && row.status === "waiting")
-            .map((row) => row.shiftId),
-          slots,
+          slotId: seat.slotId,
+          shiftId: seat.shiftId,
+          shiftTitle: seat.shiftTitle,
+          role: seat.role,
+          startsAt: seat.startsAt,
+          endsAt: seat.endsAt,
+          eligible: explanation.eligible,
+          selected: plan.assignments.some(
+            (assignment) =>
+              assignment.candidateId === volunteer.id &&
+              assignment.explanation.slotId === seat.slotId,
+          ),
+          score: explanation.totalScore,
+          checks: explanation.checks,
+          components: explanation.components,
+          selectionReason: explanation.selectionReason,
         };
       });
+      const eligibleRoles = [
+        ...new Set(slots.filter((slot) => slot.eligible).map((slot) => slot.role)),
+      ].sort();
+      const bestScore = slots
+        .filter((slot) => slot.eligible)
+        .map((slot) => slot.score ?? 0)
+        .reduce<number | null>(
+          (best, score) => (best === null || score > best ? score : best),
+          null,
+        );
+      const conflict = slots
+        .flatMap((slot) => slot.checks)
+        .find((check) => check.name === "No overlapping shift" && !check.passed)?.detail;
+      const eligibleIndex = slots.findIndex((slot) => slot.eligible);
+      const availabilitySeat = eligibleIndex >= 0 ? seats[eligibleIndex] : seats[0];
+      return {
+        candidateId: volunteer.id,
+        candidateName: volunteer.name,
+        candidateInitials: volunteer.initials,
+        eligibleRoles,
+        bestScore,
+        availability: availabilitySeat
+          ? previewAvailabilityState(volunteer, availabilitySeat)
+          : "unknown",
+        conflict: conflict ?? null,
+        weeklyShifts: baseLoad.weekCount.get(volunteer.id) ?? 0,
+        weeklyMinutes: baseLoad.weekMinutes.get(volunteer.id) ?? 0,
+        waitlistedShiftIds: state.waitlist
+          .filter((row) => row.volunteerId === volunteer.id && row.status === "waiting")
+          .map((row) => row.shiftId),
+        slots,
+      };
+    });
 
     return {
       generatedAt: workspace.now,
