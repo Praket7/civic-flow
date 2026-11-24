@@ -260,10 +260,16 @@ fn only_display_settings(patch: &SettingsPatch) -> bool {
         && patch.email_digest.is_none()
 }
 
-/// Only web addresses belong in the browser; a newline would let the shell read
-/// the rest of the line as a second command.
+/// Only a parsed HTTPS URL may be handed to the operating system.
 fn is_openable_sign_in_url(url: &str) -> bool {
-    url.starts_with("https://") && !url.contains(['\n', '\r', '"', '\''])
+    !url.chars().any(|ch| ch.is_control() || ch.is_whitespace())
+        && !url.contains(['"', '\''])
+        && reqwest::Url::parse(url).is_ok_and(|parsed| {
+            parsed.scheme() == "https"
+                && parsed.has_host()
+                && parsed.username().is_empty()
+                && parsed.password().is_none()
+        })
 }
 
 /// Provider consent pages need the system browser; answers come back on
@@ -297,9 +303,12 @@ fn open_in_browser(url: &str) -> std::io::Result<()> {
     };
     #[cfg(target_os = "windows")]
     let mut command = {
-        // The empty string is start's window title, not part of the address.
-        let mut command = std::process::Command::new("cmd");
-        command.args(["/C", "start", "", url]);
+        // Keep the URL out of the shell command text, including OAuth query
+        // separators. The fixed script reads it as data from the environment.
+        let mut command = std::process::Command::new("powershell.exe");
+        command
+            .args(["-NoProfile", "-NonInteractive", "-Command", "Start-Process -FilePath $env:CIVICFLOW_OPEN_URL"])
+            .env("CIVICFLOW_OPEN_URL", url);
         command
     };
     #[cfg(all(unix, not(target_os = "macos")))]
@@ -663,6 +672,9 @@ mod tests {
         ));
         assert!(!is_openable_sign_in_url("http://localhost:5199/sign-in"));
         assert!(!is_openable_sign_in_url("file:///etc/passwd"));
+        assert!(!is_openable_sign_in_url("https://"));
+        assert!(!is_openable_sign_in_url("https://user:password@example.org/"));
+        assert!(!is_openable_sign_in_url("https://example.org/\tpath"));
         assert!(!is_openable_sign_in_url(
             "https://example.org/\nopen -a Calculator"
         ));

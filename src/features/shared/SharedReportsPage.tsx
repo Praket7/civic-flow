@@ -17,6 +17,7 @@ import {
   buildSharedReport,
   presetRange,
   reportToCsv,
+  validReportRange,
   type ReportPreset,
   type ReportRange,
 } from "../../lib/sync/sharedReports";
@@ -50,6 +51,7 @@ export function SharedReportsPage() {
   const [range, setRange] = useState<ReportRange>(() => presetRange("ytd"));
   const [opportunityId, setOpportunityId] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const invalidRange = !validReportRange(range);
 
   const opportunities = useMemo(
     () =>
@@ -92,6 +94,7 @@ export function SharedReportsPage() {
   }
 
   function exportCsv() {
+    if (invalidRange || !report.hasData) return;
     downloadFile(
       `civicflow-impact-${report.from}-to-${report.to}.csv`,
       `\uFEFF${reportToCsv(report)}`,
@@ -109,7 +112,7 @@ export function SharedReportsPage() {
    * dialog closes.
    */
   function printPacket() {
-    if (!report.hasData) return;
+    if (invalidRange || !report.hasData) return;
     const previous = document.title;
     document.title = `${organizationName} impact report ${report.from} to ${report.to}`;
     const restore = () => {
@@ -142,7 +145,7 @@ export function SharedReportsPage() {
               <Button
                 variant="secondary"
                 icon={<Download aria-hidden size={14} />}
-                disabled={!report.hasData || !isTauri()}
+                disabled={invalidRange || !report.hasData || !isTauri()}
                 onClick={exportCsv}
               >
                 Export CSV
@@ -150,7 +153,7 @@ export function SharedReportsPage() {
               <Button
                 variant="secondary"
                 icon={<Eye aria-hidden size={14} />}
-                disabled={!report.hasData || !isTauri()}
+                disabled={invalidRange || !report.hasData || !isTauri()}
                 onClick={() => setPreviewOpen(true)}
               >
                 Preview
@@ -158,7 +161,7 @@ export function SharedReportsPage() {
               <Button
                 variant="primary"
                 icon={<Printer aria-hidden size={14} />}
-                disabled={!report.hasData || !isTauri()}
+                disabled={invalidRange || !report.hasData || !isTauri()}
                 onClick={() => setPreviewOpen(true)}
               >
                 Print / save PDF
@@ -231,6 +234,11 @@ export function SharedReportsPage() {
                   ))}
                 </SelectField>
               </div>
+              {invalidRange && (
+                <p className={styles.reportNote} role="alert">
+                  Choose real dates with a start date on or before the end date.
+                </p>
+              )}
               <p className={styles.reportNote}>
                 {prettyDate(report.from)} to {prettyDate(report.to)} · generated{" "}
                 {prettyDate(report.generatedAt)}

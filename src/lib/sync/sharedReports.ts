@@ -135,8 +135,12 @@ function inRange(date: string, range: ReportRange): boolean {
   return date !== "" && date >= range.from && date <= range.to;
 }
 
+export function validReportRange(range: ReportRange): boolean {
+  return validIsoDate(range.from) && validIsoDate(range.to) && range.from <= range.to;
+}
+
 export function monthKeys(range: ReportRange): string[] {
-  if (!validIsoDate(range.from) || !validIsoDate(range.to) || range.from > range.to) return [];
+  if (!validReportRange(range)) return [];
   const start = new Date(`${range.from}T12:00:00`);
   const end = new Date(`${range.to}T12:00:00`);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return [];
@@ -209,6 +213,8 @@ export function buildSharedReport(
 ): SharedReport {
   const today = localDateKey(options.now ?? new Date());
   const opportunityId = options.opportunityId ?? "";
+  const validRange = validReportRange(range);
+  const withinPeriod = (date: string) => validRange && inRange(date, range);
   const opportunities = new Map(data.opportunities.map((row) => [row.id, row]));
   const volunteers = new Map(data.volunteers.map((row) => [row.id, row]));
   const credentialTypes = new Map(data.credentialTypes.map((row) => [row.id, row]));
@@ -216,7 +222,7 @@ export function buildSharedReport(
   const scopedShifts = data.shifts.filter(
     (row) =>
       (opportunityId === "" || text(row, "opportunity_id") === opportunityId) &&
-      inRange(shiftDate(row), range),
+      withinPeriod(shiftDate(row)),
   );
   const shiftIds = new Set(scopedShifts.map((row) => row.id));
   const completedShiftRows = scopedShifts.filter((row) => text(row, "status") === "completed");
@@ -232,7 +238,7 @@ export function buildSharedReport(
 
   const hours = data.hourEntries.filter(
     (row) =>
-      inRange(datePart(row.date), range) &&
+      withinPeriod(datePart(row.date)) &&
       (opportunityId === "" || text(row, "opportunity_id") === opportunityId),
   );
 
@@ -334,7 +340,7 @@ export function buildSharedReport(
     if (!current || date < current) firstVerified.set(volunteerId, date);
   }
   for (const date of firstVerified.values()) {
-    if (inRange(date, range)) totals.newVolunteers += 1;
+    if (withinPeriod(date)) totals.newVolunteers += 1;
   }
 
   for (const row of data.registrations) {

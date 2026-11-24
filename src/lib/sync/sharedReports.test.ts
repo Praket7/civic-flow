@@ -256,6 +256,19 @@ describe("shared impact report", () => {
     expect(report.programs[0].title).toBe('Pantry, "East"');
   });
 
+  it("does not export service data for incomplete, impossible or reversed dates", () => {
+    for (const range of [
+      { from: "", to: "2026-03-31" },
+      { from: "2026-02-30", to: "2026-03-31" },
+      { from: "2026-04-01", to: "2026-03-31" },
+    ]) {
+      const report = buildSharedReport(data(), range, { now: NOW });
+      expect(report.totals.verifiedMinutes).toBe(0);
+      expect(report.months).toEqual([]);
+      expect(report.hasData).toBe(false);
+    }
+  });
+
   it("is empty rather than wrong when the range has no hours", () => {
     const report = buildSharedReport(
       data(),
