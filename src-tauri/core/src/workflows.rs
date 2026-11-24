@@ -782,7 +782,15 @@ fn load_roster(conn: &Connection) -> Result<Vec<crate::models::RosterVolunteer>>
 /// report views) are removed, and every volunteer-owned row is limited to the
 /// signed-in person. A coordinator gets the unredacted snapshot.
 pub fn snapshot_for(conn: &Connection, volunteer_id: Option<&str>) -> Result<WorkspaceSnapshot> {
-    let mut snapshot = snapshot(conn)?;
+    redact_snapshot(conn, snapshot(conn)?, volunteer_id)
+}
+
+/// Reuse an already-loaded mutation result instead of re-reading the entire workspace.
+pub fn redact_snapshot(
+    conn: &Connection,
+    mut snapshot: WorkspaceSnapshot,
+    volunteer_id: Option<&str>,
+) -> Result<WorkspaceSnapshot> {
     let Some(volunteer_id) = volunteer_id else {
         return Ok(snapshot);
     };

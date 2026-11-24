@@ -405,3 +405,25 @@ fn installation_backups_are_the_stewards_alone() {
         .expect_err("a volunteer never manages installation backups");
     assert_eq!(rule_code(refused), "FORBIDDEN");
 }
+
+#[test]
+fn mutation_snapshot_redaction_matches_a_fresh_scoped_read() {
+    let database = seeded();
+    let conn = database.connection();
+    let full = snapshot(conn).unwrap();
+    let volunteer_id = full.roster.first().unwrap().id.clone();
+    let redacted = civicflow_core::workflows::redact_snapshot(
+        conn,
+        full,
+        Some(&volunteer_id),
+    )
+    .unwrap();
+    assert_eq!(
+        redacted,
+        civicflow_core::workflows::snapshot_for(conn, Some(&volunteer_id)).unwrap()
+    );
+    assert_eq!(redacted.roster.len(), 1);
+    assert_eq!(redacted.roster[0].id, volunteer_id);
+    assert!(redacted.audit.is_empty());
+    assert!(redacted.applications.is_empty());
+}
