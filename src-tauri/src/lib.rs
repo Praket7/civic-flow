@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use civicflow_core::archive;
 use civicflow_core::auth::{Account, AuthSession};
@@ -39,6 +39,39 @@ use tauri_plugin_deep_link::DeepLinkExt;
 struct AppState {
     database: Mutex<Database>,
     backup_dir: PathBuf,
+}
+
+// Keep the lock and authorization in the same scope for every IPC command.
+// The guard remains alive until the operation finishes; no role or scope is
+// cached between invocations.
+impl AppState {
+    fn lock(&self) -> Result<MutexGuard<'_, Database>, AppError> {
+        self.database.lock().map_err(|_| lock_error())
+    }
+
+    fn coordinator(&self, token: &str) -> Result<(MutexGuard<'_, Database>, Account), AppError> {
+        let database = self.lock()?;
+        let account = require_coordinator(&database, token)?;
+        Ok((database, account))
+    }
+
+    fn member(&self, token: &str) -> Result<(MutexGuard<'_, Database>, Account), AppError> {
+        let database = self.lock()?;
+        let account = require_account(&database, token)?;
+        Ok((database, account))
+    }
+
+    fn user(&self, token: &str) -> Result<(MutexGuard<'_, Database>, Account), AppError> {
+        let database = self.lock()?;
+        let account = auth::require_user(database.connection(), token)?;
+        Ok((database, account))
+    }
+
+    fn steward(&self, token: &str) -> Result<(MutexGuard<'_, Database>, Account), AppError> {
+        let database = self.lock()?;
+        let account = require_installation_steward(&database, token)?;
+        Ok((database, account))
+    }
 }
 
 fn lock_error() -> AppError {
@@ -286,7 +319,7 @@ fn sign_in(
     password: String,
     remember: bool,
 ) -> Result<AuthSession, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     auth::sign_in(database.connection(), &email, &password, remember).map_err(AppError::from)
 }
 
@@ -392,7 +425,7 @@ async fn sign_in_with_hosted(
         .map_err(|_| hosted_auth_error())?;
     let (name, email) = verified_hosted_identity(&verified)?;
 
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     auth::sign_in_with_hosted(database.connection(), &name, &email).map_err(AppError::from)
 }
 
@@ -403,7 +436,7 @@ fn create_account(
     email: String,
     password: String,
 ) -> Result<AuthSession, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     auth::create_account(database.connection(), &name, &email, &password).map_err(AppError::from)
 }
 
@@ -412,8 +445,7 @@ fn list_my_organizations(
     state: State<'_, AppState>,
     token: String,
 ) -> Result<Vec<OrganizationAccess>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = auth::require_user(database.connection(), &token)?;
+    let (database, account) = state.user(&token)?;
     organizations::organizations_for_account(database.connection(), &account.id)
         .map_err(AppError::from)
 }
@@ -422,7 +454,7 @@ fn list_my_organizations(
 fn list_public_organizations(
     state: State<'_, AppState>,
 ) -> Result<Vec<OrganizationRecord>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     organizations::list_organizations(database.connection()).map_err(AppError::from)
 }
 
@@ -432,8 +464,7 @@ fn create_organization(
     token: String,
     input: NewOrganization,
 ) -> Result<OrganizationAccess, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = auth::require_user(database.connection(), &token)?;
+    let (database, account) = state.user(&token)?;
     let organization = organizations::create_organization(database.connection(), &account, &input)
         .map_err(AppError::from)?;
     // The creator is the owner of what they just made, so it becomes their
@@ -450,8 +481,7 @@ fn update_organization(
     organization_id: String,
     patch: OrganizationDetailsPatch,
 ) -> Result<OrganizationRecord, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = auth::require_user(database.connection(), &token)?;
+    let (database, account) = state.user(&token)?;
     organizations::update_organization(database.connection(), &account, &organization_id, &patch)
         .map_err(AppError::from)
 }
@@ -462,8 +492,7 @@ fn select_organization(
     token: String,
     organization_id: String,
 ) -> Result<OrganizationAccess, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = auth::require_user(database.connection(), &token)?;
+    let (database, account) = state.user(&token)?;
     let access =
         organizations::organization_access(database.connection(), &organization_id, &account.id)
             .map_err(AppError::from)?;
@@ -477,8 +506,7 @@ fn list_organization_members(
     token: String,
     organization_id: String,
 ) -> Result<Vec<OrganizationMember>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = auth::require_user(database.connection(), &token)?;
+    let (database, account) = state.user(&token)?;
     organizations::list_members(database.connection(), &account, &organization_id)
         .map_err(AppError::from)
 }
@@ -489,8 +517,7 @@ fn list_organization_invites(
     token: String,
     organization_id: String,
 ) -> Result<Vec<PendingInvite>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = auth::require_user(database.connection(), &token)?;
+    let (database, account) = state.user(&token)?;
     organizations::list_invites(database.connection(), &account, &organization_id)
         .map_err(AppError::from)
 }
@@ -503,8 +530,7 @@ fn create_organization_invite(
     role: String,
     email: String,
 ) -> Result<IssuedInvite, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = auth::require_user(database.connection(), &token)?;
+    let (database, account) = state.user(&token)?;
     organizations::create_invite(
         database.connection(),
         &account,
@@ -522,8 +548,7 @@ fn revoke_organization_invite(
     organization_id: String,
     invite_id: String,
 ) -> Result<(), AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = auth::require_user(database.connection(), &token)?;
+    let (database, account) = state.user(&token)?;
     organizations::revoke_invite(
         database.connection(),
         &account,
@@ -539,8 +564,7 @@ fn redeem_organization_invite(
     token: String,
     code: String,
 ) -> Result<OrganizationAccess, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = auth::require_user(database.connection(), &token)?;
+    let (database, account) = state.user(&token)?;
     let membership = organizations::redeem_invite(database.connection(), &account.id, &code)
         .map_err(AppError::from)?;
     remember_active_organization(&database, &account.id, &membership.organization_id)?;
@@ -558,8 +582,7 @@ fn join_public_organization(
     token: String,
     organization_id: String,
 ) -> Result<OrganizationAccess, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = auth::require_user(database.connection(), &token)?;
+    let (database, account) = state.user(&token)?;
     let membership =
         organizations::join_as_volunteer(database.connection(), &account.id, &organization_id)
             .map_err(AppError::from)?;
@@ -581,8 +604,7 @@ fn set_organization_member_role(
     user_id: String,
     role: String,
 ) -> Result<Vec<OrganizationMember>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = auth::require_user(database.connection(), &token)?;
+    let (database, account) = state.user(&token)?;
     organizations::set_membership_role(
         database.connection(),
         &account,
@@ -603,8 +625,7 @@ fn set_organization_member_status(
     user_id: String,
     status: String,
 ) -> Result<Vec<OrganizationMember>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = auth::require_user(database.connection(), &token)?;
+    let (database, account) = state.user(&token)?;
     organizations::set_membership_status(
         database.connection(),
         &account,
@@ -624,8 +645,7 @@ fn transfer_organization_ownership(
     organization_id: String,
     user_id: String,
 ) -> Result<Vec<OrganizationMember>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = auth::require_user(database.connection(), &token)?;
+    let (database, account) = state.user(&token)?;
     organizations::transfer_ownership(database.connection(), &account, &organization_id, &user_id)
         .map_err(AppError::from)?;
     organizations::list_members(database.connection(), &account, &organization_id)
@@ -652,19 +672,19 @@ mod tests {
 
 #[tauri::command]
 fn remember_hosted_handoff(state: State<'_, AppState>, kind: String) -> Result<(), AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     auth::remember_hosted_handoff(database.connection(), &kind).map_err(AppError::from)
 }
 
 #[tauri::command]
 fn hosted_handoff_pending(state: State<'_, AppState>, kind: String) -> Result<bool, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     auth::hosted_handoff_pending(database.connection(), &kind).map_err(AppError::from)
 }
 
 #[tauri::command]
 fn clear_hosted_handoff(state: State<'_, AppState>) -> Result<(), AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     auth::clear_hosted_handoff(database.connection()).map_err(AppError::from)
 }
 
@@ -672,13 +692,13 @@ fn clear_hosted_handoff(state: State<'_, AppState>) -> Result<(), AppError> {
 /// it spends it, so the same link cannot sign the window in twice.
 #[tauri::command]
 fn take_hosted_link(state: State<'_, AppState>) -> Result<Option<String>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     auth::take_hosted_link(database.connection()).map_err(AppError::from)
 }
 
 #[tauri::command]
 fn sign_out(state: State<'_, AppState>, token: String) -> Result<bool, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     let account = auth::current_user(database.connection(), &token).map_err(AppError::from)?;
     let Some(account) = account else {
         return Ok(false);
@@ -688,13 +708,13 @@ fn sign_out(state: State<'_, AppState>, token: String) -> Result<bool, AppError>
 
 #[tauri::command]
 fn current_user(state: State<'_, AppState>, token: String) -> Result<Option<Account>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     auth::current_user(database.connection(), &token).map_err(AppError::from)
 }
 
 #[tauri::command]
 fn list_accounts(state: State<'_, AppState>, token: String) -> Result<Vec<Account>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     auth::list_accounts(database.connection(), &token).map_err(AppError::from)
 }
 
@@ -705,7 +725,7 @@ fn reset_password(
     user_id: String,
     new_password: String,
 ) -> Result<(), AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     auth::reset_password(database.connection(), &token, &user_id, &new_password)
         .map_err(AppError::from)
 }
@@ -715,8 +735,7 @@ fn get_mission_control(
     state: State<'_, AppState>,
     token: String,
 ) -> Result<MissionControlSummary, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     services::get_mission_control(database.connection(), &account.role).map_err(AppError::from)
 }
 
@@ -725,8 +744,7 @@ fn list_notifications(
     state: State<'_, AppState>,
     token: String,
 ) -> Result<Vec<NotificationItem>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_account(&database, &token)?;
+    let (database, account) = state.member(&token)?;
     let (audience, volunteer_id) = volunteer_audience(&account);
     services::list_notifications(database.connection(), audience, volunteer_id)
         .map_err(AppError::from)
@@ -738,8 +756,7 @@ fn mark_notification_read(
     token: String,
     id: String,
 ) -> Result<bool, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_account(&database, &token)?;
+    let (database, account) = state.member(&token)?;
     let (audience, volunteer_id) = volunteer_audience(&account);
     services::mark_notification_read(
         database.connection(),
@@ -757,8 +774,7 @@ fn get_workspace_snapshot(
     state: State<'_, AppState>,
     token: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_account(&database, &token)?;
+    let (database, account) = state.member(&token)?;
     snapshot_for(&database, &account)
 }
 
@@ -769,8 +785,7 @@ fn auto_roster(
     shift_ids: Vec<String>,
     options: RosterOptions,
 ) -> Result<RosterPlan, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_coordinator(&database, &token)?;
+    let (database, _) = state.coordinator(&token)?;
     roster::plan_roster(database.connection(), &shift_ids, &options).map_err(AppError::from)
 }
 
@@ -783,8 +798,7 @@ fn evaluate_roster_candidates(
     shift_ids: Vec<String>,
     options: RosterOptions,
 ) -> Result<civicflow_core::matching::RosterEvaluation, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_coordinator(&database, &token)?;
+    let (database, _) = state.coordinator(&token)?;
     roster::evaluate_roster_candidates(database.connection(), &shift_ids, &options)
         .map_err(AppError::from)
 }
@@ -826,8 +840,7 @@ fn get_roster_policy(
     state: State<'_, AppState>,
     token: String,
 ) -> Result<RosterPolicyView, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_coordinator(&database, &token)?;
+    let (database, _) = state.coordinator(&token)?;
     policy_view(&database)
 }
 
@@ -837,8 +850,7 @@ fn update_roster_policy(
     token: String,
     policy: RosterPolicy,
 ) -> Result<RosterPolicyView, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     let organization_id = roster::workspace_organization_id(database.connection())
         .map_err(AppError::from)?
         .ok_or_else(|| AppError::from(CoreError::NotFound("the workspace organization".into())))?;
@@ -856,8 +868,7 @@ fn explain_roster_choice(
     candidate_id: String,
     slot_id: String,
 ) -> Result<CandidateAnswer, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_coordinator(&database, &token)?;
+    let (database, _) = state.coordinator(&token)?;
     roster::explain_candidate(
         database.connection(),
         &shift_ids,
@@ -875,8 +886,7 @@ fn apply_roster_plan(
     shift_id: String,
     assignments: Vec<roster::RosterApplyAssignment>,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     roster::apply_roster_plan(database.connection(), &shift_id, &assignments)
         .map_err(AppError::from)?;
     snapshot_for(&database, &account)
@@ -892,8 +902,7 @@ fn apply_roster_week(
     expected_policy_version: Option<i64>,
     assignments: Vec<roster::WeeklyAssignment>,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     roster::apply_roster_week(
         database.connection(),
         expected_revision,
@@ -909,8 +918,7 @@ fn detect_disruptions(
     state: State<'_, AppState>,
     token: String,
 ) -> Result<DisruptionReport, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_coordinator(&database, &token)?;
+    let (database, _) = state.coordinator(&token)?;
     recovery::detect(database.connection()).map_err(AppError::from)
 }
 
@@ -921,8 +929,7 @@ fn plan_recovery(
     shift_ids: Vec<String>,
     options: RosterOptions,
 ) -> Result<RecoveryPlan, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_coordinator(&database, &token)?;
+    let (database, _) = state.coordinator(&token)?;
     recovery::plan(database.connection(), &shift_ids, &options).map_err(AppError::from)
 }
 
@@ -933,8 +940,7 @@ fn apply_recovery(
     shift_id: String,
     changes: Vec<RecoveryChangeRequest>,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     recovery::apply(database.connection(), &account, &shift_id, &changes).map_err(AppError::from)
 }
 
@@ -946,8 +952,7 @@ fn set_assignment_lock(
     volunteer_id: String,
     locked: bool,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     recovery::set_lock(
         database.connection(),
         &account,
@@ -966,8 +971,7 @@ fn create_shift_series(
     rule: RecurrenceRule,
     roles: Vec<recurrence::SeriesRole>,
 ) -> Result<SeriesResult, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     recurrence::create_series(
         database.connection(),
         &account,
@@ -984,8 +988,7 @@ fn list_shift_series(
     token: String,
     opportunity_id: Option<String>,
 ) -> Result<Vec<ShiftSeriesRecord>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_coordinator(&database, &token)?;
+    let (database, _) = state.coordinator(&token)?;
     recurrence::list_series(database.connection(), opportunity_id.as_deref())
         .map_err(AppError::from)
 }
@@ -996,8 +999,7 @@ fn generate_series_instances(
     token: String,
     series_id: String,
 ) -> Result<SeriesResult, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     recurrence::generate_instances(database.connection(), &account, &series_id)
         .map_err(AppError::from)
 }
@@ -1011,8 +1013,7 @@ fn retime_shift_series(
     duration_minutes: i64,
     scope: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     recurrence::retime(
         database.connection(),
         &account,
@@ -1030,8 +1031,7 @@ fn delete_shift_series(
     token: String,
     series_id: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     recurrence::delete_series(database.connection(), &account, &series_id).map_err(AppError::from)
 }
 
@@ -1042,8 +1042,7 @@ fn recommend_replacement(
     shift_id: String,
     role: String,
 ) -> Result<civicflow_core::waitlist::ReplacementRecommendation, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_coordinator(&database, &token)?;
+    let (database, _) = state.coordinator(&token)?;
     civicflow_core::waitlist::rank(database.connection(), &shift_id, &role).map_err(AppError::from)
 }
 
@@ -1052,8 +1051,7 @@ fn list_notification_rules(
     state: State<'_, AppState>,
     token: String,
 ) -> Result<Vec<NotificationRule>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_coordinator(&database, &token)?;
+    let (database, _) = state.coordinator(&token)?;
     notifications::list_rules(database.connection()).map_err(AppError::from)
 }
 
@@ -1064,16 +1062,14 @@ fn update_notification_rule(
     rule_id: String,
     patch: RulePatch,
 ) -> Result<Vec<NotificationRule>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     notifications::update_rule(database.connection(), &account, &rule_id, &patch)
         .map_err(AppError::from)
 }
 
 #[tauri::command]
 fn queue_due_reminders(state: State<'_, AppState>, token: String) -> Result<usize, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     let run = notifications::generate_due(database.connection(), Some(&account))
         .map_err(AppError::from)?;
     Ok(run.created.len())
@@ -1084,8 +1080,7 @@ fn retention_signals(
     state: State<'_, AppState>,
     token: String,
 ) -> Result<Vec<RetentionSignal>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_coordinator(&database, &token)?;
+    let (database, _) = state.coordinator(&token)?;
     insights::retention_signals(database.connection()).map_err(AppError::from)
 }
 
@@ -1095,8 +1090,7 @@ fn volunteer_insight(
     token: String,
     volunteer_id: String,
 ) -> Result<VolunteerInsight, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_account(&database, &token)?;
+    let (database, account) = state.member(&token)?;
     require_self_or_coordinator(&account, &volunteer_id)?;
     insights::volunteer_insight(database.connection(), &volunteer_id).map_err(AppError::from)
 }
@@ -1106,8 +1100,7 @@ fn engagement_metrics(
     state: State<'_, AppState>,
     token: String,
 ) -> Result<EngagementMetrics, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_coordinator(&database, &token)?;
+    let (database, _) = state.coordinator(&token)?;
     insights::engagement_metrics(database.connection()).map_err(AppError::from)
 }
 
@@ -1116,8 +1109,7 @@ fn credential_readiness(
     state: State<'_, AppState>,
     token: String,
 ) -> Result<CredentialReadiness, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_coordinator(&database, &token)?;
+    let (database, _) = state.coordinator(&token)?;
     insights::credential_readiness(database.connection()).map_err(AppError::from)
 }
 
@@ -1129,8 +1121,7 @@ fn save_report_view(
     scope: String,
     filters_json: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     workflows::save_report_view(database.connection(), &name, &scope, &filters_json)
         .map_err(AppError::from)?;
     snapshot_for(&database, &account)
@@ -1143,8 +1134,7 @@ fn set_saved_opportunity(
     opportunity_id: String,
     saved: bool,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_account(&database, &token)?;
+    let (database, account) = state.member(&token)?;
     workflows::set_saved_opportunity(database.connection(), &opportunity_id, saved)
         .map_err(AppError::from)?;
     snapshot_for(&database, &account)
@@ -1157,8 +1147,7 @@ fn set_application_stage(
     application_id: String,
     stage: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     workflows::set_application_stage(database.connection(), &application_id, &stage)
         .map_err(AppError::from)?;
     snapshot_for(&database, &account)
@@ -1170,8 +1159,7 @@ fn checkin_window(
     token: String,
     shift_id: String,
 ) -> Result<CheckinWindow, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_account(&database, &token)?;
+    let (database, _) = state.member(&token)?;
     workflows::checkin_window(database.connection(), &shift_id).map_err(AppError::from)
 }
 
@@ -1181,8 +1169,7 @@ fn get_checkin_code(
     token: String,
     shift_id: String,
 ) -> Result<CheckinCode, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_account(&database, &token)?;
+    let (database, account) = state.member(&token)?;
     // A coordinator reads the printed code that is the door gate. A volunteer
     // gets only the opaque token for the code already on the board, so the
     // six-digit secret never reaches a volunteer's session.
@@ -1213,8 +1200,7 @@ fn check_in_volunteer(
     volunteer_id: String,
     code: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_account(&database, &token)?;
+    let (database, account) = state.member(&token)?;
     require_self_or_coordinator(&account, &volunteer_id)?;
     if code.trim().is_empty() {
         return Err(AppError::from(CoreError::rule(
@@ -1239,8 +1225,7 @@ fn manual_check_in(
     volunteer_id: String,
     reason: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     workflows::manual_check_in(database.connection(), &shift_id, &volunteer_id, &reason)
         .map_err(AppError::from)?;
     snapshot_for(&database, &account)
@@ -1253,8 +1238,7 @@ fn check_out_volunteer(
     shift_id: String,
     volunteer_id: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_account(&database, &token)?;
+    let (database, account) = state.member(&token)?;
     require_self_or_coordinator(&account, &volunteer_id)?;
     workflows::check_out(database.connection(), &shift_id, &volunteer_id)
         .map_err(AppError::from)?;
@@ -1268,8 +1252,7 @@ fn mark_volunteer_no_show(
     shift_id: String,
     volunteer_id: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     workflows::mark_no_show(database.connection(), &shift_id, &volunteer_id)
         .map_err(AppError::from)?;
     snapshot_for(&database, &account)
@@ -1283,8 +1266,7 @@ fn cancel_registration(
     volunteer_id: String,
     reason: Option<String>,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_account(&database, &token)?;
+    let (database, account) = state.member(&token)?;
     require_self_or_coordinator(&account, &volunteer_id)?;
     workflows::cancel_registration(
         database.connection(),
@@ -1304,8 +1286,7 @@ fn join_waitlist(
     volunteer_id: String,
     role: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_account(&database, &token)?;
+    let (database, account) = state.member(&token)?;
     require_self_or_coordinator(&account, &volunteer_id)?;
     workflows::join_waitlist(database.connection(), &shift_id, &volunteer_id, &role)
         .map_err(AppError::from)?;
@@ -1319,8 +1300,7 @@ fn promote_waitlist(
     shift_id: String,
     volunteer_id: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     workflows::promote_waitlist(database.connection(), &shift_id, &volunteer_id)
         .map_err(AppError::from)?;
     snapshot_for(&database, &account)
@@ -1335,8 +1315,7 @@ fn review_hours(
     approved_minutes: Option<i64>,
     reason: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     workflows::review_hours(
         database.connection(),
         &entry_id,
@@ -1354,8 +1333,7 @@ fn update_workspace_settings(
     token: String,
     patch: SettingsPatch,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_account(&database, &token)?;
+    let (database, account) = state.member(&token)?;
     if account.role != "coordinator" && !only_display_settings(&patch) {
         return Err(AppError::from(CoreError::rule(
             "FORBIDDEN",
@@ -1374,8 +1352,7 @@ fn create_opportunity(
     token: String,
     input: NewOpportunityInput,
 ) -> Result<CreateOpportunityResult, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_coordinator(&database, &token)?;
+    let (database, _) = state.coordinator(&token)?;
     workflows::create_opportunity(database.connection(), input).map_err(AppError::from)
 }
 
@@ -1387,8 +1364,7 @@ fn register_for_shift(
     volunteer_id: String,
     role: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_account(&database, &token)?;
+    let (database, account) = state.member(&token)?;
     require_self_or_coordinator(&account, &volunteer_id)?;
     workflows::register_for_shift(database.connection(), &shift_id, &volunteer_id, &role)
         .map_err(AppError::from)?;
@@ -1411,8 +1387,7 @@ fn save_volunteer_profile(
     causes: Option<Vec<String>>,
     photo: Option<String>,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_account(&database, &token)?;
+    let (database, account) = state.member(&token)?;
     if account.role != "volunteer" {
         return Err(AppError::from(CoreError::rule(
             "FORBIDDEN",
@@ -1440,7 +1415,7 @@ fn save_volunteer_profile(
 /// The only path that seeds fixture records. The session is short-lived.
 #[tauri::command]
 fn open_demo_workspace(state: State<'_, AppState>) -> Result<AuthSession, AppError> {
-    let mut database = state.database.lock().map_err(|_| lock_error())?;
+    let mut database = state.lock()?;
     database.seed_demo().map_err(AppError::from)?;
     auth::sign_in(
         database.connection(),
@@ -1453,7 +1428,7 @@ fn open_demo_workspace(state: State<'_, AppState>) -> Result<AuthSession, AppErr
 
 #[tauri::command]
 fn reset_demo(state: State<'_, AppState>, token: String) -> Result<WorkspaceSnapshot, AppError> {
-    let mut database = state.database.lock().map_err(|_| lock_error())?;
+    let mut database = state.lock()?;
     let account = require_coordinator(&database, &token)?;
     database.reset_demo().map_err(AppError::from)?;
     snapshot_for(&database, &account)
@@ -1474,8 +1449,7 @@ fn generate_report(
     token: String,
     request: ReportRequest,
 ) -> Result<ReportDocument, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_coordinator(&database, &token)?;
+    let (database, _) = state.coordinator(&token)?;
     reports::generate(database.connection(), &request).map_err(AppError::from)
 }
 
@@ -1510,8 +1484,7 @@ fn export_report(
             )));
         }
     }
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_coordinator(&database, &token)?;
+    let (database, _) = state.coordinator(&token)?;
     let document = reports::generate(database.connection(), &request).map_err(AppError::from)?;
     reports::export(&document, format, &target).map_err(AppError::from)?;
     let bytes = std::fs::metadata(&target)
@@ -1531,8 +1504,7 @@ fn preview_volunteer_import(
     token: String,
     text: String,
 ) -> Result<ImportPreview, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_coordinator(&database, &token)?;
+    let (database, _) = state.coordinator(&token)?;
     let organization_id = workspace_organization(&database)?;
     imports::preview(database.connection(), &organization_id, &text).map_err(AppError::from)
 }
@@ -1543,8 +1515,7 @@ fn apply_volunteer_import(
     token: String,
     text: String,
 ) -> Result<ImportSummary, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_coordinator(&database, &token)?;
+    let (database, account) = state.coordinator(&token)?;
     let organization_id = workspace_organization(&database)?;
     imports::apply(database.connection(), &account, &organization_id, &text).map_err(AppError::from)
 }
@@ -1573,8 +1544,7 @@ fn export_volunteer_roster(
             )));
         }
     }
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_coordinator(&database, &token)?;
+    let (database, _) = state.coordinator(&token)?;
     let organization_id = workspace_organization(&database)?;
     let document =
         imports::export_roster(database.connection(), &organization_id).map_err(AppError::from)?;
@@ -1602,8 +1572,7 @@ fn installation_access(
     state: State<'_, AppState>,
     token: String,
 ) -> Result<InstallationAccess, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    let account = require_account(&database, &token)?;
+    let (database, account) = state.member(&token)?;
     Ok(InstallationAccess {
         steward: organizations::is_workspace_steward(database.connection(), &account.id)
             .map_err(AppError::from)?,
@@ -1615,8 +1584,7 @@ fn list_backups(
     state: State<'_, AppState>,
     token: String,
 ) -> Result<Vec<BackupSnapshot>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_installation_steward(&database, &token)?;
+    let (database, _) = state.steward(&token)?;
     backups::list(&state.backup_dir).map_err(AppError::from)
 }
 
@@ -1626,8 +1594,7 @@ fn create_backup(
     token: String,
     note: Option<String>,
 ) -> Result<Vec<BackupSnapshot>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_installation_steward(&database, &token)?;
+    let (database, _) = state.steward(&token)?;
     backups::create(
         database.connection(),
         &state.backup_dir,
@@ -1644,7 +1611,7 @@ fn restore_backup(
     token: String,
     id: String,
 ) -> Result<BackupRestoreResult, AppError> {
-    let mut database = state.database.lock().map_err(|_| lock_error())?;
+    let mut database = state.lock()?;
     require_installation_steward(&database, &token)?;
     backups::restore(database.connection_mut(), &state.backup_dir, &id).map_err(AppError::from)
 }
@@ -1658,8 +1625,7 @@ fn export_encrypted_backup(
     path: String,
     passphrase: String,
 ) -> Result<archive::ExportReceipt, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
-    require_installation_steward(&database, &token)?;
+    let (database, _) = state.steward(&token)?;
     archive::export(
         database.connection(),
         Path::new(&path),
@@ -1678,7 +1644,7 @@ fn import_encrypted_backup(
     path: String,
     passphrase: String,
 ) -> Result<BackupRestoreResult, AppError> {
-    let mut database = state.database.lock().map_err(|_| lock_error())?;
+    let mut database = state.lock()?;
     require_installation_steward(&database, &token)?;
     archive::import(
         database.connection_mut(),
@@ -1700,7 +1666,7 @@ fn shared_evaluate_roster(
     shift_ids: Vec<String>,
     options: RosterOptions,
 ) -> Result<civicflow_core::matching::RosterEvaluation, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     shared_roster::evaluate_roster(
         database.connection(),
         &organization_id,
@@ -1719,7 +1685,7 @@ fn shared_explain_roster(
     candidate_id: String,
     slot_id: String,
 ) -> Result<CandidateAnswer, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     shared_roster::explain_candidate(
         database.connection(),
         &organization_id,
@@ -1738,7 +1704,7 @@ fn sync_configure(
     user_id: String,
     membership_epoch: i64,
 ) -> Result<SyncStatus, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::configure(
         database.connection(),
         &organization_id,
@@ -1756,7 +1722,7 @@ fn sync_apply_bootstrap(
     membership_epoch: i64,
     payload: Value,
 ) -> Result<SyncStatus, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::apply_bootstrap(
         database.connection(),
         &organization_id,
@@ -1772,13 +1738,13 @@ fn sync_status(
     state: State<'_, AppState>,
     organization_id: String,
 ) -> Result<SyncStatus, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::status(database.connection(), &organization_id).map_err(AppError::from)
 }
 
 #[tauri::command]
 fn sync_list_workspaces(state: State<'_, AppState>) -> Result<Vec<String>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::list_workspaces(database.connection()).map_err(AppError::from)
 }
 
@@ -1789,7 +1755,7 @@ fn sync_entities(
     entity: String,
     limit: Option<i64>,
 ) -> Result<Vec<Value>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::read_entities(database.connection(), &organization_id, &entity, limit)
         .map_err(AppError::from)
 }
@@ -1799,7 +1765,7 @@ fn sync_report_entities(
     state: State<'_, AppState>,
     organization_id: String,
 ) -> Result<Value, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::read_report_entities(database.connection(), &organization_id)
         .map_err(AppError::from)
 }
@@ -1811,7 +1777,7 @@ fn sync_apply_changes(
     changes: Vec<Change>,
     cursor: i64,
 ) -> Result<SyncStatus, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     let revision = sync_replica::read_revision(database.connection(), &organization_id)?;
     sync_replica::apply_changes(
         database.connection(),
@@ -1825,7 +1791,7 @@ fn sync_apply_changes(
 
 #[tauri::command]
 fn sync_read_cursor(state: State<'_, AppState>, organization_id: String) -> Result<i64, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::read_cursor(database.connection(), &organization_id).map_err(AppError::from)
 }
 
@@ -1834,7 +1800,7 @@ fn sync_read_revision(
     state: State<'_, AppState>,
     organization_id: String,
 ) -> Result<i64, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::read_revision(database.connection(), &organization_id).map_err(AppError::from)
 }
 
@@ -1844,7 +1810,7 @@ fn sync_write_revision(
     organization_id: String,
     revision: i64,
 ) -> Result<SyncStatus, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::write_revision(database.connection(), &organization_id, revision)
         .map_err(AppError::from)
 }
@@ -1858,7 +1824,7 @@ fn sync_enqueue_command(
     entity_versions: BTreeMap<String, i64>,
     base_revision: Option<i64>,
 ) -> Result<i64, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::enqueue_command(
         database.connection(),
         &organization_id,
@@ -1875,7 +1841,7 @@ fn sync_list_conflicts(
     state: State<'_, AppState>,
     organization_id: String,
 ) -> Result<Vec<Value>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::list_conflicts(database.connection(), &organization_id).map_err(AppError::from)
 }
 
@@ -1886,7 +1852,7 @@ fn sync_resolve_conflict(
     conflict_id: String,
     resolution: String,
 ) -> Result<(), AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::resolve_conflict(
         database.connection(),
         &organization_id,
@@ -1902,7 +1868,7 @@ fn sync_recover_stale_sending(
     cutoff: i64,
     now: i64,
 ) -> Result<usize, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::recover_stale_sending(database.connection(), cutoff, now).map_err(AppError::from)
 }
 
@@ -1913,20 +1879,20 @@ fn sync_next_ready(
     organization_id: String,
     now: i64,
 ) -> Result<Option<OutboxItem>, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::next_ready(database.connection(), &user_id, &organization_id, now)
         .map_err(AppError::from)
 }
 
 #[tauri::command]
 fn sync_mark_sending(state: State<'_, AppState>, id: i64, now: i64) -> Result<(), AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::mark_sending(database.connection(), id, now).map_err(AppError::from)
 }
 
 #[tauri::command]
 fn sync_mark_sent(state: State<'_, AppState>, id: i64, result: Value) -> Result<(), AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::mark_sent(database.connection(), id, &result).map_err(AppError::from)
 }
 
@@ -1937,7 +1903,7 @@ fn sync_mark_retry(
     error: String,
     next_attempt_at: i64,
 ) -> Result<(), AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::mark_retry(database.connection(), id, &error, next_attempt_at)
         .map_err(AppError::from)
 }
@@ -1949,7 +1915,7 @@ fn sync_mark_refused(
     result: Value,
     conflict: Value,
 ) -> Result<(), AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::mark_refused(database.connection(), id, &result, &conflict)
         .map_err(AppError::from)
 }
@@ -1960,7 +1926,7 @@ fn sync_pending_count(
     user_id: String,
     organization_id: String,
 ) -> Result<i64, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::pending_count(database.connection(), &user_id, &organization_id)
         .map_err(AppError::from)
 }
@@ -1970,7 +1936,7 @@ fn sync_open_conflict_count(
     state: State<'_, AppState>,
     organization_id: String,
 ) -> Result<i64, AppError> {
-    let database = state.database.lock().map_err(|_| lock_error())?;
+    let database = state.lock()?;
     sync_replica::open_conflict_count(database.connection(), &organization_id)
         .map_err(AppError::from)
 }
