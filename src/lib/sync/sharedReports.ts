@@ -1,4 +1,5 @@
 import { csvRow } from "../csv";
+import { validIsoDate } from "../workspace/dates";
 import { number, text, type SharedRow } from "./sharedRows";
 
 /**
@@ -134,7 +135,12 @@ function inRange(date: string, range: ReportRange): boolean {
   return date !== "" && date >= range.from && date <= range.to;
 }
 
+export function validReportRange(range: ReportRange): boolean {
+  return validIsoDate(range.from) && validIsoDate(range.to) && range.from <= range.to;
+}
+
 export function monthKeys(range: ReportRange): string[] {
+  if (!validReportRange(range)) return [];
   const start = new Date(`${range.from}T12:00:00`);
   const end = new Date(`${range.to}T12:00:00`);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return [];
@@ -207,6 +213,8 @@ export function buildSharedReport(
 ): SharedReport {
   const today = localDateKey(options.now ?? new Date());
   const opportunityId = options.opportunityId ?? "";
+  const validRange = validReportRange(range);
+  const withinPeriod = (date: string) => validRange && inRange(date, range);
   const opportunities = new Map(data.opportunities.map((row) => [row.id, row]));
   const volunteers = new Map(data.volunteers.map((row) => [row.id, row]));
   const credentialTypes = new Map(data.credentialTypes.map((row) => [row.id, row]));
@@ -214,7 +222,7 @@ export function buildSharedReport(
   const scopedShifts = data.shifts.filter(
     (row) =>
       (opportunityId === "" || text(row, "opportunity_id") === opportunityId) &&
-      inRange(shiftDate(row), range),
+      withinPeriod(shiftDate(row)),
   );
   const shiftIds = new Set(scopedShifts.map((row) => row.id));
   const completedShiftRows = scopedShifts.filter((row) => text(row, "status") === "completed");
@@ -230,7 +238,7 @@ export function buildSharedReport(
 
   const hours = data.hourEntries.filter(
     (row) =>
-      inRange(datePart(row.date), range) &&
+      withinPeriod(datePart(row.date)) &&
       (opportunityId === "" || text(row, "opportunity_id") === opportunityId),
   );
 
@@ -269,68 +277,54 @@ export function buildSharedReport(
 
   for (const row of hours) {
     const status = text(row, "status");
-    const minutes = number(row, "approved_minutes") || number(row, "minutes");
+    const requested = Math.max(0, number(row, "minutes"));
+    if (status === "rejected") {
+      totals.rejectedMinutes += requested;
+      continue;
+    }
+    if (status !== "verified" && status !== "pending") continue;
+    // Zero is a real correction; only a missing approved amount falls back to the legacy value.
+    const verified = status === "verified";
+    const minutes =
+      verified && row.approved_minutes != null
+        ? Math.max(0, number(row, "approved_minutes"))
+        : requested;
+    const field = verified ? "verifiedMinutes" : "pendingMinutes";
     const volunteerId = text(row, "volunteer_id");
     const programId = text(row, "opportunity_id");
     const month = datePart(row.date).slice(0, 7);
+    totals[field] += minutes;
 
-    if (status === "verified") {
-      totals.verifiedMinutes += minutes;
-      if (volunteerId) verifiedVolunteers.add(volunteerId);
-      const tally = perVolunteer.get(volunteerId) ?? {
-        verifiedMinutes: 0,
-        pendingMinutes: 0,
-        shifts: new Set<string>(),
-        lastServed: "",
-      };
-      tally.verifiedMinutes += minutes;
+    const tally = perVolunteer.get(volunteerId) ?? {
+      verifiedMinutes: 0,
+      pendingMinutes: 0,
+      shifts: new Set<string>(),
+      lastServed: "",
+    };
+    const program = perProgram.get(programId) ?? {
+      verifiedMinutes: 0,
+      pendingMinutes: 0,
+      volunteers: new Set<string>(),
+      shiftsCompleted: 0,
+      attended: 0,
+    };
+    const monthTally = perMonth.get(month) ?? { verifiedMinutes: 0, pendingMinutes: 0 };
+    tally[field] += minutes;
+    program[field] += minutes;
+    monthTally[field] += minutes;
+    if (verified) {
+      if (volunteerId) {
+        verifiedVolunteers.add(volunteerId);
+        program.volunteers.add(volunteerId);
+      }
       const shiftId = text(row, "source_shift_id");
       if (shiftId) tally.shifts.add(shiftId);
       const served = datePart(row.date);
       if (served > tally.lastServed) tally.lastServed = served;
-      if (volunteerId) perVolunteer.set(volunteerId, tally);
-
-      const program = perProgram.get(programId) ?? {
-        verifiedMinutes: 0,
-        pendingMinutes: 0,
-        volunteers: new Set<string>(),
-        shiftsCompleted: 0,
-        attended: 0,
-      };
-      program.verifiedMinutes += minutes;
-      if (volunteerId) program.volunteers.add(volunteerId);
-      perProgram.set(programId, program);
-
-      const monthTally = perMonth.get(month) ?? { verifiedMinutes: 0, pendingMinutes: 0 };
-      monthTally.verifiedMinutes += minutes;
-      perMonth.set(month, monthTally);
-    } else if (status === "pending") {
-      totals.pendingMinutes += minutes;
-      const tally = perVolunteer.get(volunteerId) ?? {
-        verifiedMinutes: 0,
-        pendingMinutes: 0,
-        shifts: new Set<string>(),
-        lastServed: "",
-      };
-      tally.pendingMinutes += minutes;
-      if (volunteerId) perVolunteer.set(volunteerId, tally);
-
-      const program = perProgram.get(programId) ?? {
-        verifiedMinutes: 0,
-        pendingMinutes: 0,
-        volunteers: new Set<string>(),
-        shiftsCompleted: 0,
-        attended: 0,
-      };
-      program.pendingMinutes += minutes;
-      perProgram.set(programId, program);
-
-      const monthTally = perMonth.get(month) ?? { verifiedMinutes: 0, pendingMinutes: 0 };
-      monthTally.pendingMinutes += minutes;
-      perMonth.set(month, monthTally);
-    } else if (status === "rejected") {
-      totals.rejectedMinutes += minutes;
     }
+    if (volunteerId) perVolunteer.set(volunteerId, tally);
+    perProgram.set(programId, program);
+    perMonth.set(month, monthTally);
   }
 
   // A "new" volunteer is one whose first verified hour, anywhere in the
@@ -346,7 +340,7 @@ export function buildSharedReport(
     if (!current || date < current) firstVerified.set(volunteerId, date);
   }
   for (const date of firstVerified.values()) {
-    if (inRange(date, range)) totals.newVolunteers += 1;
+    if (withinPeriod(date)) totals.newVolunteers += 1;
   }
 
   for (const row of data.registrations) {
@@ -402,7 +396,8 @@ export function buildSharedReport(
     )
     .sort((a, b) => b.verifiedMinutes - a.verifiedMinutes || a.title.localeCompare(b.title));
 
-  const months = monthKeys(range).map((key) => ({
+  // Bound empty chart buckets, but never omit a month containing service records.
+  const months = [...new Set([...monthKeys(range), ...perMonth.keys()])].sort().map((key) => ({
     key,
     verifiedMinutes: perMonth.get(key)?.verifiedMinutes ?? 0,
     pendingMinutes: perMonth.get(key)?.pendingMinutes ?? 0,
@@ -468,6 +463,9 @@ export function buildSharedReport(
     hasData:
       totals.verifiedMinutes > 0 ||
       totals.pendingMinutes > 0 ||
+      totals.rejectedMinutes > 0 ||
+      totals.attended > 0 ||
+      totals.noShows > 0 ||
       totals.registrations > 0 ||
       totals.shiftsCompleted > 0,
   };

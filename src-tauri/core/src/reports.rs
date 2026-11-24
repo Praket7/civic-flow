@@ -113,18 +113,19 @@ fn demo_date(conn: &Connection) -> Result<String> {
 }
 
 fn range(request: &ReportRequest, conn: &Connection) -> Result<(String, String)> {
+    let validate = |value: &str| {
+        chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d")
+            .ok()
+            .filter(|date| date.format("%Y-%m-%d").to_string() == value)
+            .ok_or_else(|| CoreError::Validation("Report dates must use YYYY-MM-DD.".into()))
+    };
     let end = request.date_end.clone().unwrap_or(demo_date(conn)?);
+    let end_date = validate(&end)?;
     let start = request
         .date_start
         .clone()
-        .unwrap_or_else(|| format!("{}-01-01", &end[..4.min(end.len())]));
-    for value in [&start, &end] {
-        if chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").is_err() {
-            return Err(CoreError::Validation(
-                "Report dates must use YYYY-MM-DD.".into(),
-            ));
-        }
-    }
+        .unwrap_or_else(|| format!("{}-01-01", end_date.format("%Y")));
+    validate(&start)?;
     if start > end {
         return Err(CoreError::Validation(
             "The report start date must be before its end date.".into(),
@@ -179,6 +180,8 @@ fn normalize_fields(request: &ReportRequest) -> Vec<String> {
             .map(|field| field.to_string())
             .collect();
     }
+    let mut seen = std::collections::BTreeSet::new();
+    fields.retain(|field| seen.insert(field.clone()));
     fields
 }
 
@@ -534,51 +537,67 @@ fn retention_rows(conn: &Connection) -> Result<ReportTable> {
 }
 
 fn skills(conn: &Connection) -> Result<ReportTable> {
+    // Skills and credentials are independent records. A join on volunteer_id
+    // alone invents a skill-to-credential relationship and multiplies counts.
     let mut statement = conn.prepare(
-        "SELECT v.name, vs.skill,
-                COALESCE(ct.name, '—'), COALESCE(vc.valid_through, '—'),
-                CASE
-                  WHEN vc.id IS NULL THEN 'no credential'
-                  WHEN vc.valid_through < date('now') THEN 'expired'
-                  WHEN vc.valid_through <= date('now', '+45 days') THEN 'expiring'
-                  ELSE 'current'
-                END
+        "SELECT v.name, vs.skill, '—', '—', 'skill recorded'
          FROM volunteer_skills vs
          JOIN volunteers v ON v.id = vs.volunteer_id
-         LEFT JOIN volunteer_credentials vc ON vc.volunteer_id = v.id
-         LEFT JOIN credential_types ct ON ct.id = vc.credential_type_id
          WHERE (?1 IS NULL OR v.organization_id = ?1)
-         ORDER BY v.name, vs.skill",
+         UNION ALL
+         SELECT v.name, '—', ct.name, vc.valid_through,
+                CASE
+                  WHEN vc.verified_at IS NULL THEN 'unverified'
+                  WHEN vc.valid_through < ?2 THEN 'expired'
+                  WHEN vc.valid_from > ?2 THEN 'not yet valid'
+                  WHEN vc.valid_through <= date(?2, '+45 days') THEN 'expiring'
+                  ELSE 'current'
+                END
+         FROM volunteer_credentials vc
+         JOIN volunteers v ON v.id = vc.volunteer_id
+         JOIN credential_types ct ON ct.id = vc.credential_type_id
+         WHERE (?1 IS NULL OR v.organization_id = ?1)
+         ORDER BY 1, 2, 3, 4",
     )?;
-    let mut rows = statement.query(params![crate::scope::current(conn)?])?;
+    let mut rows = statement.query(params![crate::scope::current(conn)?, demo_date(conn)?])?;
     let mut output = Vec::new();
-    let mut expiring = 0_i64;
+    let mut skill_count = 0;
+    let mut expiring = 0;
     while let Some(row) = rows.next()? {
         let status: String = row.get(4)?;
-        if status == "expiring" || status == "expired" {
+        if status == "skill recorded" {
+            skill_count += 1;
+        } else if status == "expiring" || status == "expired" {
             expiring += 1;
         }
         output.push(vec![
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, String>(2)?,
-            row.get::<_, String>(3)?,
+            row.get(0)?,
+            row.get(1)?,
+            row.get(2)?,
+            row.get(3)?,
             status,
         ]);
     }
+    let credential_count = output.len() - skill_count;
     Ok((
-        vec![
-            "Volunteer".into(),
-            "Skill".into(),
-            "Credential".into(),
-            "Valid through".into(),
-            "Status".into(),
-        ],
-        output.clone(),
+        [
+            "Volunteer",
+            "Skill",
+            "Credential",
+            "Valid through",
+            "Status",
+        ]
+        .map(str::to_string)
+        .to_vec(),
+        output,
         vec![
             ReportSummaryItem {
                 label: "Skill rows".into(),
-                value: output.len().to_string(),
+                value: skill_count.to_string(),
+            },
+            ReportSummaryItem {
+                label: "Credential rows".into(),
+                value: credential_count.to_string(),
             },
             ReportSummaryItem {
                 label: "Expiring or expired".into(),
@@ -681,10 +700,14 @@ pub(crate) fn csv_cell(value: &str) -> String {
     // A cell that starts with one of these is read as a formula by Excel and
     // Sheets when the export is opened. Names and notes are entered by people,
     // so an export must not hand a spreadsheet a command to run.
-    let formula = value
-        .chars()
-        .next()
-        .is_some_and(|first| matches!(first, '=' | '+' | '-' | '@' | '\t' | '\r'));
+    let formula = matches!(value.chars().next(), Some('\t' | '\r' | '\n'))
+        || value
+            .trim_start_matches(|ch: char| ch.is_whitespace() || ch == '\u{feff}')
+            .chars()
+            .next()
+            .is_some_and(|first| {
+                matches!(first, '=' | '+' | '-' | '@' | '＝' | '＋' | '－' | '＠')
+            });
     let guarded = if formula {
         format!("'{value}")
     } else {
@@ -718,73 +741,99 @@ pub fn to_csv(document: &ReportDocument) -> String {
 /// face, Letter pages, and the same rows the CSV gets. The report preview is
 /// the on-screen equivalent, so the file does not need a browser.
 pub fn to_pdf(document: &ReportDocument) -> Vec<u8> {
-    let page_width = 612.0_f64;
-    let page_height = 792.0_f64;
-    let margin = 36.0_f64;
-    let row_height = 16.0_f64;
-    let max_rows = ((page_height - margin * 2.0 - 170.0) / row_height).floor() as usize;
-    let chunks: Vec<&[Vec<String>]> = if document.rows.is_empty() {
-        vec![&[]]
+    let (page_width, page_height) = if document.headers.len() > 6 {
+        (792.0_f64, 612.0_f64)
     } else {
-        document.rows.chunks(max_rows.max(1)).collect()
+        (612.0_f64, 792.0_f64)
     };
+    let margin = 36.0;
     let column_width = (page_width - margin * 2.0) / document.headers.len().max(1) as f64;
-    let mut contents: Vec<String> = Vec::new();
-    let cell_limit = (column_width / 4.4).floor().max(6.0) as usize;
-    for (page_index, chunk) in chunks.iter().enumerate() {
-        let mut stream = String::new();
-        stream.push_str("BT\n");
-        stream.push_str(&format!(
-            "/F1 18 Tf\n1 0 0 1 {margin} 754 Tm\n({}) Tj\n",
-            pdf_text(&document.organization)
-        ));
-        stream.push_str(&format!(
-            "/F1 10 Tf\n1 0 0 1 {margin} 734 Tm\n({}) Tj\n",
-            pdf_text(&document.title)
-        ));
-        stream.push_str(&format!(
-            "/F1 9 Tf\n1 0 0 1 {margin} 718 Tm\n({}) Tj\n",
-            pdf_text(&format!(
-                "{} · generated {}",
-                document.period, document.generated_at
-            ))
-        ));
-        let mut y = 694.0;
-        stream.push_str("/F1 9 Tf\n");
-        for item in &document.summary {
-            stream.push_str(&format!(
-                "1 0 0 1 {margin} {y} Tm\n({}) Tj\n",
-                pdf_text(&format!("{}: {}", item.label, item.value))
-            ));
+    let cell_limit = ((column_width - 4.0) / 8.0).floor().max(1.0) as usize;
+    let leading = 12.0;
+    let mut header = String::from("BT\n/F1 18 Tf\n");
+    let mut y = page_height - margin;
+    for line in wrap_pdf_cell(
+        &document.organization,
+        ((page_width - 2.0 * margin) / 18.0) as usize,
+    ) {
+        pdf_line(&mut header, &line, margin, y);
+        y -= 22.0;
+    }
+    header.push_str("/F1 10 Tf\n");
+    for value in [
+        document.title.clone(),
+        format!("{} · generated {}", document.period, document.generated_at),
+        "CSV preserves complete Unicode text; PDF uses the built-in Latin font.".into(),
+    ] {
+        for line in wrap_pdf_cell(&value, ((page_width - 2.0 * margin) / 10.0) as usize) {
+            pdf_line(&mut header, &line, margin, y);
             y -= 13.0;
         }
-        y -= 8.0;
-        stream.push_str("/F1 8 Tf\n");
-        for (index, header) in document.headers.iter().enumerate() {
-            let x = margin + index as f64 * column_width;
-            stream.push_str(&format!(
-                "1 0 0 1 {x} {y} Tm\n({}) Tj\n",
-                pdf_text(&truncate(header, cell_limit))
-            ));
+    }
+    y -= 5.0;
+    header.push_str("/F1 9 Tf\n");
+    for item in &document.summary {
+        for line in wrap_pdf_cell(
+            &format!("{}: {}", item.label, item.value),
+            ((page_width - 2.0 * margin) / 9.0) as usize,
+        ) {
+            pdf_line(&mut header, &line, margin, y);
+            y -= 13.0;
         }
-        y -= 15.0;
-        for row in chunk.iter() {
-            for (index, value) in row.iter().enumerate() {
-                let x = margin + index as f64 * column_width;
-                stream.push_str(&format!(
-                    "1 0 0 1 {x} {y} Tm\n({}) Tj\n",
-                    pdf_text(&truncate(value, cell_limit))
-                ));
+    }
+    y -= 8.0;
+    header.push_str("/F1 8 Tf\n");
+    let columns = |row: &[String]| {
+        row.iter()
+            .map(|value| wrap_pdf_cell(value, cell_limit))
+            .collect::<Vec<_>>()
+    };
+    let height = |cells: &[Vec<String>]| cells.iter().map(Vec::len).max().unwrap_or(1);
+    let draw = |stream: &mut String, cells: &[Vec<String>], line: usize, y: f64| {
+        for (index, cell) in cells.iter().enumerate() {
+            if let Some(text) = cell.get(line) {
+                pdf_line(stream, text, margin + index as f64 * column_width, y);
             }
-            y -= row_height;
         }
-        stream.push_str("ET\n");
-        stream.push_str(&format!(
-            "BT /F1 8 Tf 1 0 0 1 {margin} 24 Tm (Page {} of {}) Tj ET",
-            page_index + 1,
-            chunks.len()
-        ));
-        contents.push(stream);
+    };
+    let headers = columns(&document.headers);
+    for line in 0..height(&headers) {
+        draw(&mut header, &headers, line, y);
+        y -= leading;
+    }
+    y -= 6.0;
+    let top = y.max(margin + leading);
+    let mut contents = vec![header.clone()];
+    for row in &document.rows {
+        let cells = columns(row);
+        let lines = height(&cells);
+        let row_height = lines as f64 * leading + 4.0;
+        // Keep a row together when it fits. Exceptionally long cells may
+        // continue across a page boundary; never discard their remaining text.
+        if y - row_height < margin && row_height <= top - margin {
+            contents.push(header.clone());
+            y = top;
+        }
+        for line in 0..lines {
+            if y < margin {
+                contents.push(header.clone());
+                y = top;
+            }
+            draw(contents.last_mut().expect("PDF page"), &cells, line, y);
+            y -= leading;
+        }
+        y -= 4.0;
+    }
+    let page_count = contents.len();
+    for (index, stream) in contents.iter_mut().enumerate() {
+        stream.push_str("ET\nBT /F1 8 Tf\n");
+        pdf_line(
+            stream,
+            &format!("Page {} of {page_count}", index + 1),
+            margin,
+            24.0,
+        );
+        stream.push_str("ET");
     }
 
     let mut objects: Vec<String> = Vec::new();
@@ -797,10 +846,11 @@ pub fn to_pdf(document: &ReportDocument) -> Vec<u8> {
     objects.push(format!(
         "<< /Type /Pages /Kids [{kids}] /Count {page_count} >>"
     ));
-    objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into());
+    objects.push(
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".into(),
+    );
     for (index, content) in contents.iter().enumerate() {
         let content_id = 4 + index * 2;
-        let page_id = content_id + 1;
         objects.push(format!(
             "<< /Length {} >>\nstream\n{}\nendstream",
             content.len(),
@@ -810,7 +860,6 @@ pub fn to_pdf(document: &ReportDocument) -> Vec<u8> {
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {page_width} {page_height}] \
              /Resources << /Font << /F1 3 0 R >> >> /Contents {content_id} 0 R >>"
         ));
-        let _ = page_id;
     }
 
     let mut pdf = String::from("%PDF-1.4\n");
@@ -832,44 +881,57 @@ pub fn to_pdf(document: &ReportDocument) -> Vec<u8> {
     pdf.into_bytes()
 }
 
-fn truncate(value: &str, limit: usize) -> String {
-    if value.chars().count() <= limit {
-        return value.to_string();
-    }
-    let mut output: String = value.chars().take(limit.saturating_sub(1)).collect();
-    output.push('…');
-    output
+fn wrap_pdf_cell(value: &str, limit: usize) -> Vec<String> {
+    value
+        .split('\n')
+        .flat_map(|line| {
+            let chars: Vec<char> = line.chars().collect();
+            if chars.is_empty() {
+                return vec![String::new()];
+            }
+            chars
+                .chunks(limit.max(1))
+                .map(|part| part.iter().collect())
+                .collect()
+        })
+        .collect()
+}
+
+fn pdf_line(stream: &mut String, value: &str, x: f64, y: f64) {
+    stream.push_str(&format!("1 0 0 1 {x} {y} Tm\n({}) Tj\n", pdf_text(value)));
 }
 
 fn pdf_text(value: &str) -> String {
-    let folded: String = value
-        .chars()
-        .map(|character| match character {
-            'é' | 'è' | 'ê' | 'ë' => 'e',
-            'á' | 'à' | 'â' | 'ä' | 'ã' | 'å' => 'a',
-            'í' | 'ì' | 'î' | 'ï' => 'i',
-            'ó' | 'ò' | 'ô' | 'ö' | 'õ' => 'o',
-            'ú' | 'ù' | 'û' | 'ü' => 'u',
-            'ñ' => 'n',
-            'ç' => 'c',
-            'É' | 'È' | 'Ê' | 'Ë' => 'E',
-            'Á' | 'À' | 'Â' | 'Ä' | 'Ã' | 'Å' => 'A',
-            'Í' | 'Ì' | 'Î' | 'Ï' => 'I',
-            'Ó' | 'Ò' | 'Ô' | 'Ö' | 'Õ' => 'O',
-            'Ú' | 'Ù' | 'Û' | 'Ü' => 'U',
-            'Ñ' => 'N',
-            'Ç' => 'C',
-            '—' | '–' | '…' => '-',
-            '“' | '”' => '"',
-            '‘' | '’' => '\'',
-            other if other.is_ascii() => other,
-            _ => '?',
-        })
-        .collect();
-    folded
-        .replace('\\', "\\\\")
-        .replace('(', "\\(")
-        .replace(')', "\\)")
+    let mut escaped = String::new();
+    for character in value.chars() {
+        match character {
+            '\\' | '(' | ')' => {
+                escaped.push('\\');
+                escaped.push(character);
+            }
+            character if character.is_ascii_graphic() || character == ' ' => {
+                escaped.push(character)
+            }
+            character if character.is_control() => escaped.push(' '),
+            character => {
+                let byte = match character {
+                    '€' => 0x80,
+                    '…' => 0x85,
+                    '‘' => 0x91,
+                    '’' => 0x92,
+                    '“' => 0x93,
+                    '”' => 0x94,
+                    '•' => 0x95,
+                    '–' => 0x96,
+                    '—' => 0x97,
+                    '\u{a0}'..='\u{ff}' => character as u8,
+                    _ => b'?',
+                };
+                escaped.push_str(&format!("\\{byte:03o}"));
+            }
+        }
+    }
+    escaped
 }
 
 pub fn export(document: &ReportDocument, format: ExportFormat, path: &Path) -> Result<()> {
@@ -936,6 +998,18 @@ mod tests {
         assert!(text.contains("/BaseFont /Helvetica"));
         assert!(text.contains("startxref"));
         assert!(bytes.len() > 900);
+    }
+
+    #[test]
+    fn pdf_wraps_long_cells_without_truncating_and_preserves_latin_text() {
+        let mut report = document();
+        report.rows = vec![vec!["Café (East)".into(), "X".repeat(2500) + "TAILMARKER"]];
+        let text = String::from_utf8(to_pdf(&report)).unwrap();
+        assert!(text.contains("Caf\\351 \\(East\\)"));
+        assert!(text.contains("/WinAnsiEncoding"));
+        assert!(text.contains("TAILMARKER") || text.contains("TAIL") || text.contains("MARKER"));
+        assert!(text.matches("/Type /Page ").count() > 1);
+        assert_eq!(wrap_pdf_cell("ABCDEFGHIJ", 3).concat(), "ABCDEFGHIJ");
     }
 
     #[test]

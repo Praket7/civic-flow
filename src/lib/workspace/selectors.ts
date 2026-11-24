@@ -429,18 +429,22 @@ export function getHourRows(session: SessionOverrides = {}, workspace: DemoWorks
     ...workspace.mayaEntries,
     ...(session.submittedHours ?? []),
   ];
+  const volunteers = new Map(workspace.volunteers.map((row) => [row.id, row]));
+  const opportunities = new Map(getOpportunities(session, workspace).map((row) => [row.id, row]));
+  const shifts = new Map(workspace.shifts.map((row) => [row.id, row]));
+  const byProgramDay = new Map<string, (typeof workspace.shifts)[number]>();
+  for (const shift of workspace.shifts) {
+    const key = shift.opportunityId + ":" + shift.startsAt.slice(0, 10);
+    if (!byProgramDay.has(key)) byProgramDay.set(key, shift);
+  }
   return [...new Map(entries.map((entry) => [entry.id, entry])).values()].flatMap((entry) => {
-    const volunteer = volunteerById(entry.volunteerId, workspace);
-    const opportunity = getOpportunities(session, workspace).find(
-      (row) => row.id === entry.opportunityId,
-    );
+    const volunteer = volunteers.get(entry.volunteerId);
+    const opportunity = opportunities.get(entry.opportunityId);
     if (!volunteer || !opportunity) return [];
     const decision = session.hoursDecisions?.[entry.id];
     const shift = entry.shiftId
-      ? workspace.shifts.find((row) => row.id === entry.shiftId)
-      : workspace.shifts.find(
-          (row) => row.opportunityId === opportunity.id && row.startsAt.slice(0, 10) === entry.date,
-        );
+      ? shifts.get(entry.shiftId)
+      : byProgramDay.get(opportunity.id + ":" + entry.date);
     return [
       {
         id: entry.id,

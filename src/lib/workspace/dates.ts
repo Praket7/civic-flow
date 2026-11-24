@@ -5,6 +5,13 @@ import { parseISO } from "date-fns";
  * decide the period.
  */
 
+/** Strict calendar validation shared by filters and report engines. */
+export function validIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(value + "T00:00:00Z");
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 export type ReportPeriod = "week" | "month" | "year" | "all";
 
 export interface DateRange {

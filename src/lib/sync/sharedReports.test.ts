@@ -149,6 +149,29 @@ describe("shared impact report", () => {
     expect(report.hasData).toBe(true);
   });
 
+  it("preserves zero corrections and ignores stale approvals on pending and rejected claims", () => {
+    const source = data();
+    source.hourEntries[0] = { ...source.hourEntries[0], approved_minutes: 0 };
+    source.hourEntries[1] = { ...source.hourEntries[1], approved_minutes: 999 };
+    source.hourEntries[3] = { ...source.hourEntries[3], approved_minutes: 999 };
+    const report = buildSharedReport(source, RANGE, { now: NOW });
+    expect(report.totals.verifiedMinutes).toBe(180);
+    expect(report.totals.pendingMinutes).toBe(60);
+    expect(report.totals.rejectedMinutes).toBe(30);
+  });
+
+  it("includes real service months beyond the empty-bucket cap", () => {
+    const report = buildSharedReport(
+      data(),
+      { from: "2000-01-01", to: "2026-03-31" },
+      { now: NOW },
+    );
+    expect(report.months.reduce((sum, month) => sum + month.verifiedMinutes, 0)).toBe(
+      report.totals.verifiedMinutes,
+    );
+    expect(report.months.at(-1)?.key).toBe("2026-03");
+  });
+
   it("breaks hours down by program without counting another program's shifts", () => {
     const report = buildSharedReport(data(), RANGE, { now: NOW });
 
@@ -237,6 +260,19 @@ describe("shared impact report", () => {
     expect(report.totals.newVolunteers).toBe(1);
     expect(report.programs).toHaveLength(1);
     expect(report.programs[0].title).toBe('Pantry, "East"');
+  });
+
+  it("does not export service data for incomplete, impossible or reversed dates", () => {
+    for (const range of [
+      { from: "", to: "2026-03-31" },
+      { from: "2026-02-30", to: "2026-03-31" },
+      { from: "2026-04-01", to: "2026-03-31" },
+    ]) {
+      const report = buildSharedReport(data(), range, { now: NOW });
+      expect(report.totals.verifiedMinutes).toBe(0);
+      expect(report.months).toEqual([]);
+      expect(report.hasData).toBe(false);
+    }
   });
 
   it("is empty rather than wrong when the range has no hours", () => {

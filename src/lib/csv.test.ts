@@ -22,6 +22,21 @@ describe("csv", () => {
     expect(csvCell("@handle")).toBe("'@handle");
   });
 
+  it("guards hidden formula prefixes and keeps original text", () => {
+    for (const value of [
+      " =1+1",
+      "\ttext",
+      "\rtext",
+      "\ntext",
+      "＝1+1",
+      "＠SUM(A1)",
+      "\uFEFF=1+1",
+    ]) {
+      expect(csvCell(value)).toContain("'" + value);
+    }
+    expect(csvCell("+")).toBe("'+");
+  });
+
   it("keeps signed numbers and phone numbers readable", () => {
     expect(csvCell(-5)).toBe("-5");
     expect(csvCell("-5")).toBe("-5");

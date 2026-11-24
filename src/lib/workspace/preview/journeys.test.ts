@@ -158,6 +158,56 @@ describe("connected sample journey", () => {
     ).toBe(true);
   });
 
+  it("does not automatically promote an applicant awaiting coordinator review", async () => {
+    const { shift } = await createProgram();
+    const plan = await repository.autoRoster([shift.id], options);
+    const id = plan.assignments[0].candidateId;
+    const other = demoWorkspace.volunteers.find(
+      (v) =>
+        v.id !== id &&
+        v.status === "active" &&
+        !demoWorkspace.registrations.some(
+          (r) => r.volunteerId === v.id && r.shiftId === "sh-tue-pantry",
+        ),
+    )!;
+    await repository.registerForShift(shift.id, id, "General support");
+    await repository.joinWaitlist(shift.id, other.id, "General support", true);
+    const released = await repository.cancelRegistration(shift.id, id, "Plans changed");
+    expect(released.waitlist.find((row) => row.shiftId === shift.id)?.status).toBe("waiting");
+    expect(
+      released.registrations.some((row) => row.shiftId === shift.id && row.status === "registered"),
+    ).toBe(false);
+    await repository.promoteWaitlist(shift.id, other.id);
+    const approved = await repository.getSnapshot();
+    expect(approved.waitlist.find((row) => row.shiftId === shift.id)?.status).toBe("promoted");
+    expect(
+      approved.registrations.some(
+        (row) =>
+          row.shiftId === shift.id && row.volunteerId === other.id && row.status === "registered",
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects an invalid batch atomically and invalidates a plan after reset", async () => {
+    const { shift } = await createProgram();
+    const plan = await repository.autoRoster([shift.id], options);
+    const entry = {
+      shiftId: shift.id,
+      candidateId: plan.assignments[0].candidateId,
+      role: plan.assignments[0].role,
+      promoteWaitlist: false,
+    };
+    const before = await repository.getSnapshot();
+    await expect(
+      repository.applyRosterWeek(plan.revision, plan.policyVersion, [entry, entry]),
+    ).rejects.toThrow();
+    expect(await repository.getSnapshot()).toEqual(before);
+    await repository.resetDemo();
+    await expect(
+      repository.applyRosterWeek(plan.revision, plan.policyVersion, [entry]),
+    ).rejects.toThrow(/stale/i);
+  });
+
   it("rejects credentials whose validity starts after the shift", async () => {
     const evaluation = await repository.evaluateRoster(["sh-sat-food"], options);
     const futureDriver = evaluation.candidates.find(

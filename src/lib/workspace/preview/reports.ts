@@ -9,8 +9,10 @@ import type {
   ReportDocument,
   ReportRequest,
   ReportSummaryItem,
+  RetentionCohort,
 } from "../../../types/domain";
 import { getHourRows } from "../selectors";
+import { validIsoDate } from "../dates";
 
 const REPORT_TITLES: Record<string, string> = {
   participation: "Volunteer participation",
@@ -42,8 +44,7 @@ function requireDate(value: string): void {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new Error("Report dates must use YYYY-MM-DD.");
   }
-  const parsed = new Date(value + "T00:00:00Z");
-  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+  if (!validIsoDate(value)) {
     throw new Error("Report date is not a real calendar day.");
   }
 }
@@ -51,6 +52,44 @@ function requireDate(value: string): void {
 function duration(minutes: number): string {
   const safe = Math.max(0, Math.round(minutes));
   return Math.floor(safe / 60) + "h " + String(safe % 60).padStart(2, "0") + "m";
+}
+
+/** Distinct service days, with a complete 30-day observation window. */
+export function previewRetention(
+  workspace: DemoWorkspace,
+  state: SessionSnapshot,
+): RetentionCohort[] {
+  const today = new Date(workspace.now.slice(0, 10) + "T00:00:00Z");
+  const cutoff = today.getTime() - 30 * 86_400_000;
+  const dates = new Map<string, Set<string>>();
+  for (const row of getHourRows(state, workspace)) {
+    if (row.status === "rejected" || !validIsoDate(row.date)) continue;
+    const days = dates.get(row.volunteer.id) ?? new Set<string>();
+    days.add(row.date);
+    dates.set(row.volunteer.id, days);
+  }
+  const histories = [...dates.values()].map((days) => [...days].sort());
+  return Array.from({ length: 6 }, (_, index) => {
+    const month = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 5 + index, 1));
+    const key = month.toISOString().slice(0, 7);
+    let eligible = 0;
+    let returned = 0;
+    for (const days of histories) {
+      const first = days.find((date) => date.startsWith(key));
+      if (!first) continue;
+      const start = new Date(first + "T00:00:00Z").getTime();
+      if (start > cutoff) continue;
+      eligible++;
+      const end = new Date(start + 30 * 86_400_000).toISOString().slice(0, 10);
+      if (days.some((date) => date > first && date <= end)) returned++;
+    }
+    return {
+      label: month.toLocaleString("en-US", { month: "short", timeZone: "UTC" }),
+      eligible,
+      returned,
+      rate: eligible ? Math.round((returned / eligible) * 100) : 0,
+    };
+  });
 }
 
 /**
@@ -69,7 +108,9 @@ export function buildPreviewReport(
   requireDate(end);
   if (start > end) throw new Error("The report start date must be before its end date.");
 
-  const template = REPORT_TITLES[request.template] ? request.template : "custom";
+  const template = Object.prototype.hasOwnProperty.call(REPORT_TITLES, request.template)
+    ? request.template
+    : "custom";
   const cause = request.cause ?? "";
   const programId = request.programId ?? "";
   const hasPeriod = Boolean(request.dateStart || request.dateEnd);
@@ -171,14 +212,15 @@ export function buildPreviewReport(
     ];
   } else if (template === "retention") {
     headers = ["Cohort", "Eligible", "Returned in 30 days", "Rate"];
-    rows = (state.retention ?? []).map((row) => [
+    const cohorts = previewRetention(workspace, state);
+    rows = cohorts.map((row) => [
       row.label,
       String(row.eligible),
       String(row.returned),
       row.rate + "%",
     ]);
-    const eligible = (state.retention ?? []).reduce((sum, row) => sum + row.eligible, 0);
-    const returned = (state.retention ?? []).reduce((sum, row) => sum + row.returned, 0);
+    const eligible = cohorts.reduce((sum, row) => sum + row.eligible, 0);
+    const returned = cohorts.reduce((sum, row) => sum + row.returned, 0);
     summary = [
       { label: "Cohort eligible", value: String(eligible) },
       { label: "Returned", value: String(returned) },
@@ -190,24 +232,37 @@ export function buildPreviewReport(
     ];
   } else if (template === "skills" || template === "credentials") {
     headers = ["Volunteer", "Skill", "Credential", "Valid through", "Status"];
+    const today = workspace.now.slice(0, 10);
+    const cutoff = new Date(new Date(today + "T00:00:00Z").getTime() + 45 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const names = new Map(workspace.volunteers.map((volunteer) => [volunteer.id, volunteer.name]));
+    rows = workspace.volunteers.flatMap((volunteer) =>
+      volunteer.skills.map((skill) => [volunteer.name, skill, "—", "—", "skill recorded"]),
+    );
+    const skillCount = rows.length;
     let expiring = 0;
-    for (const volunteer of workspace.volunteers) {
-      for (const skill of volunteer.skills) {
-        const credential = (state.credentials ?? []).find(
-          (row) => row.volunteerId === volunteer.id,
-        );
-        if (credential && credential.status !== "current") expiring += 1;
-        rows.push([
-          volunteer.name,
-          skill,
-          credential?.name ?? "—",
-          credential?.validThrough ?? "—",
-          credential?.status ?? "no credential",
-        ]);
-      }
+    for (const credential of state.credentials ?? []) {
+      const name = names.get(credential.volunteerId);
+      if (!name) continue;
+      const status = !credential.verifiedAt
+        ? "unverified"
+        : credential.validThrough < today
+          ? "expired"
+          : credential.validFrom > today
+            ? "not yet valid"
+            : credential.validThrough <= cutoff
+              ? "expiring"
+              : "current";
+      if (status === "expired" || status === "expiring") expiring++;
+      rows.push([name, "—", credential.name, credential.validThrough, status]);
     }
+    rows.sort(
+      (a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]) || a[2].localeCompare(b[2]),
+    );
     summary = [
-      { label: "Skill rows", value: String(rows.length) },
+      { label: "Skill rows", value: String(skillCount) },
+      { label: "Credential rows", value: String(rows.length - skillCount) },
       { label: "Expiring or expired", value: String(expiring) },
       { label: "Scope", value: "Current credential inventory; activity filters not applicable" },
     ];

@@ -32,7 +32,6 @@ import type {
   NotificationItem,
   Opportunity,
   PriorityLevel,
-  RetentionCohort,
   CredentialReadiness,
   EngagementMetrics,
   Milestone,
@@ -61,11 +60,12 @@ import type {
   WaitlistCandidate,
   VolunteerImportPreview,
   WaitlistEntry,
+  WeeklyAssignment,
   WorkspaceSettings,
 } from "../../types/domain";
 import * as previewOrganizations from "../organizations/preview";
 import { buildMissionControl } from "./compute";
-import { buildPreviewReport } from "./preview/reports";
+import { buildPreviewReport, previewRetention } from "./preview/reports";
 import { renderPrintableReport } from "./preview/reportHtml";
 import { IMPORT_COLUMNS, previewVolunteerCsv } from "./preview/volunteerImport";
 import { createPreviewRosterStorage } from "./preview/rosterStorage";
@@ -291,21 +291,6 @@ function defaultImpactMetrics(): ImpactMetric[] {
   return workspace.impactRecords.map((record) => ({ ...record }));
 }
 
-function defaultRetention(): RetentionCohort[] {
-  const dates = [...workspace.hourEntries, ...workspace.mayaEntries].map((entry) => entry.date);
-  const byMonth = new Map<string, number>();
-  for (const date of dates) byMonth.set(date.slice(0, 7), (byMonth.get(date.slice(0, 7)) ?? 0) + 1);
-  return [...byMonth.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-6)
-    .map(([month, eligible]) => ({
-      label: new Date(`${month}-01T12:00:00`).toLocaleString("en-US", { month: "short" }),
-      eligible,
-      returned: Math.round(eligible * 0.62),
-      rate: 62,
-    }));
-}
-
 function defaultAttendance(): SessionSnapshot["attendance"] {
   const arrivedAt = new Date(new Date(workspace.now).getTime() - 18 * 60_000).toISOString();
   const rows = workspace.registrations
@@ -340,7 +325,7 @@ const { readImportedRoster, writeImportedRoster, workspaceRoster } = createPrevi
 );
 
 export function createDefaultSnapshot(): SessionSnapshot {
-  return {
+  const snapshot: SessionSnapshot = {
     savedOpportunityIds: [...seed.savedOpportunityIds],
     attendance: defaultAttendance(),
     hoursDecisions: {},
@@ -363,10 +348,16 @@ export function createDefaultSnapshot(): SessionSnapshot {
     verifications: defaultVerifications(),
     impactMetrics: defaultImpactMetrics(),
     savedViews: defaultSavedViews(),
-    retention: defaultRetention(),
+    retention: [],
     checkinCode: null,
     roster: workspaceRoster(),
   };
+  return withRetention(snapshot);
+}
+
+/** Recompute derived retention rather than persisting a stale synthetic rate. */
+function withRetention(snapshot: SessionSnapshot): SessionSnapshot {
+  return { ...snapshot, retention: previewRetention(journeyWorkspace(snapshot), snapshot) };
 }
 
 function readIds(): string[] {
@@ -395,7 +386,7 @@ function loadSnapshot(): SessionSnapshot {
     const raw = localStorage.getItem(scoped(STORAGE_KEY));
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as Partial<SessionSnapshot>;
-    return {
+    return withRetention({
       ...fallback,
       ...parsed,
       applications: Array.isArray(parsed.applications)
@@ -405,7 +396,7 @@ function loadSnapshot(): SessionSnapshot {
       audit: Array.isArray(parsed.audit) ? parsed.audit : fallback.audit,
       settings: { ...fallback.settings, ...(parsed.settings ?? {}) },
       volunteerProfile: { ...fallback.volunteerProfile, ...(parsed.volunteerProfile ?? {}) },
-    };
+    });
   } catch {
     return fallback;
   }
@@ -422,6 +413,7 @@ const { clone, isRecord, validSnapshot, makeBackup, writeBackups, ensureBackups,
   );
 
 function persist(next: SessionSnapshot): SessionSnapshot {
+  next = withRetention(next);
   state = next;
   bumpRevision();
   try {
@@ -695,6 +687,64 @@ function previewVolunteers(text: string): VolunteerImportPreview {
     text,
     workspaceRoster().map((record) => record.email),
   );
+}
+
+/** Both roster entry points commit one validated snapshot, or no changes at all. */
+/** The common validated transition for direct, planned and waitlist assignment. */
+function assignPreviewSeat(
+  snapshot: SessionSnapshot,
+  shiftId: string,
+  volunteerId: string,
+  role: string,
+): SessionSnapshot {
+  validateJourneySeat(snapshot, shiftId, volunteerId, role);
+  const matches = (row: { shiftId: string; volunteerId: string }) =>
+    row.shiftId === shiftId && row.volunteerId === volunteerId;
+  return {
+    ...snapshot,
+    waitlist: snapshot.waitlist.map((row) =>
+      matches(row) && row.status === "waiting" ? { ...row, status: "promoted" } : row,
+    ),
+    registrations: [
+      ...snapshot.registrations.filter((row) => !matches(row)),
+      { shiftId, volunteerId, role, status: "registered" },
+    ],
+  };
+}
+
+function applyPreviewAssignments(assignments: WeeklyAssignment[]): SessionSnapshot {
+  if (assignments.length === 0) {
+    throw new Error("Select at least one suggested assignment to apply");
+  }
+  let next = state;
+  const events: AuditEvent[] = [];
+  for (const assignment of assignments) {
+    next = assignPreviewSeat(next, assignment.shiftId, assignment.candidateId, assignment.role);
+    events.push(
+      audit(
+        assignment.promoteWaitlist ? "waitlist.promote" : "autoroster.apply",
+        "shift",
+        assignment.shiftId,
+        `AutoRoster assigned ${volunteerName(assignment.candidateId)} as ${assignment.role}`,
+        "Applied from an approved AutoRoster plan",
+      ),
+    );
+  }
+  return persist({
+    ...next,
+    journeyNotifications: [
+      ...assignments.map((assignment) =>
+        journeyNotice(
+          assignment.candidateId,
+          assignment.shiftId,
+          "Shift assignment confirmed",
+          `You are registered as ${assignment.role}.`,
+        ),
+      ),
+      ...(next.journeyNotifications ?? []),
+    ],
+    audit: [...events, ...next.audit],
+  });
 }
 
 export const previewRepository: WorkspaceRepository = {
@@ -1069,13 +1119,14 @@ export const previewRepository: WorkspaceRepository = {
         ? { ...row, status: "canceled" }
         : row,
     );
-    const released = { ...state, registrations: nextRegistrations };
+    let released = { ...state, registrations: nextRegistrations };
     const promoted = state.settings.autoPromoteWaitlist
       ? [...state.waitlist]
           .filter((row) => {
             if (
               row.shiftId !== shiftId ||
               row.status !== "waiting" ||
+              row.requestReview ||
               row.eligibleRole !== registration.role
             )
               return false;
@@ -1098,16 +1149,7 @@ export const previewRepository: WorkspaceRepository = {
       ),
     ];
     if (promoted) {
-      const previous = nextRegistrations.findIndex(
-        (row) => row.shiftId === shiftId && row.volunteerId === promoted.volunteerId,
-      );
-      if (previous >= 0) nextRegistrations.splice(previous, 1);
-      nextRegistrations.push({
-        shiftId,
-        volunteerId: promoted.volunteerId,
-        role: registration.role,
-        status: "registered",
-      });
+      released = assignPreviewSeat(released, shiftId, promoted.volunteerId, registration.role);
       auditEvents.push(
         audit(
           "waitlist.promote",
@@ -1119,13 +1161,7 @@ export const previewRepository: WorkspaceRepository = {
       );
     }
     return persist({
-      ...state,
-      registrations: nextRegistrations,
-      waitlist: promoted
-        ? state.waitlist.map((row) =>
-            row.id === promoted.id ? { ...row, status: "promoted" } : row,
-          )
-        : state.waitlist,
+      ...released,
       journeyNotifications: [
         journeyNotice(volunteerId, shiftId, "Seat canceled", "Your registration was canceled."),
         ...(promoted
@@ -1235,9 +1271,6 @@ export const previewRepository: WorkspaceRepository = {
     return previewEvaluation(shiftIds, options);
   },
   async applyRosterWeek(expectedRevision, expectedPolicyVersion, assignments) {
-    if (assignments.length === 0) {
-      throw new Error("Select at least one suggested assignment to apply");
-    }
     if (expectedRevision !== null && expectedRevision !== revision) {
       throw new Error(
         "PLAN_STALE: the roster changed after this plan was generated. Rebuild the plan so nobody is double-booked.",
@@ -1248,69 +1281,7 @@ export const previewRepository: WorkspaceRepository = {
         "POLICY_STALE: the matching policy changed after this plan was generated. Rebuild the plan before applying it.",
       );
     }
-    let next = state;
-    const events: AuditEvent[] = [];
-    for (const assignment of assignments) {
-      validateJourneySeat(next, assignment.shiftId, assignment.candidateId, assignment.role);
-      if (
-        next.waitlist.some(
-          (row) =>
-            row.shiftId === assignment.shiftId &&
-            row.volunteerId === assignment.candidateId &&
-            row.status === "waiting",
-        )
-      ) {
-        next = {
-          ...next,
-          waitlist: next.waitlist.map((row) =>
-            row.shiftId === assignment.shiftId &&
-            row.volunteerId === assignment.candidateId &&
-            row.status === "waiting"
-              ? { ...row, status: "promoted" }
-              : row,
-          ),
-        };
-      }
-      next = {
-        ...next,
-        registrations: [
-          ...next.registrations.filter(
-            (row) =>
-              !(row.shiftId === assignment.shiftId && row.volunteerId === assignment.candidateId),
-          ),
-          {
-            shiftId: assignment.shiftId,
-            volunteerId: assignment.candidateId,
-            role: assignment.role,
-            status: "registered",
-          },
-        ],
-      };
-      events.push(
-        audit(
-          assignment.promoteWaitlist ? "waitlist.promote" : "autoroster.apply",
-          "shift",
-          assignment.shiftId,
-          `AutoRoster assigned ${volunteerName(assignment.candidateId)} as ${assignment.role}`,
-          "Applied from an approved AutoRoster plan",
-        ),
-      );
-    }
-    return persist({
-      ...next,
-      journeyNotifications: [
-        ...assignments.map((assignment) =>
-          journeyNotice(
-            assignment.candidateId,
-            assignment.shiftId,
-            "Shift assignment confirmed",
-            `You are registered as ${assignment.role}.`,
-          ),
-        ),
-        ...(next.journeyNotifications ?? []),
-      ],
-      audit: [...events, ...next.audit],
-    });
+    return applyPreviewAssignments(assignments);
   },
   async getRosterPolicy(): Promise<RosterPolicyView> {
     return {
@@ -1329,71 +1300,7 @@ export const previewRepository: WorkspaceRepository = {
     return previewExplain(shiftIds, options, candidateId, slotId);
   },
   async applyRoster(shiftId, assignments: RosterApplyAssignment[]) {
-    if (assignments.length === 0) {
-      throw new Error("Select at least one suggested assignment to apply");
-    }
-    let next = state;
-    const events: AuditEvent[] = [];
-    for (const assignment of assignments) {
-      validateJourneySeat(next, shiftId, assignment.candidateId, assignment.role);
-      if (
-        next.waitlist.some(
-          (row) =>
-            row.shiftId === shiftId &&
-            row.volunteerId === assignment.candidateId &&
-            row.status === "waiting",
-        )
-      ) {
-        next = {
-          ...next,
-          waitlist: next.waitlist.map((row) =>
-            row.shiftId === shiftId &&
-            row.volunteerId === assignment.candidateId &&
-            row.status === "waiting"
-              ? { ...row, status: "promoted" }
-              : row,
-          ),
-        };
-      }
-      next = {
-        ...next,
-        registrations: [
-          ...next.registrations.filter(
-            (row) => !(row.shiftId === shiftId && row.volunteerId === assignment.candidateId),
-          ),
-          {
-            shiftId,
-            volunteerId: assignment.candidateId,
-            role: assignment.role,
-            status: "registered",
-          },
-        ],
-      };
-      events.push(
-        audit(
-          assignment.promoteWaitlist ? "waitlist.promote" : "autoroster.apply",
-          "shift",
-          shiftId,
-          `AutoRoster assigned ${volunteerName(assignment.candidateId)} as ${assignment.role}`,
-          "Applied from an approved AutoRoster plan",
-        ),
-      );
-    }
-    return persist({
-      ...next,
-      journeyNotifications: [
-        ...assignments.map((assignment) =>
-          journeyNotice(
-            assignment.candidateId,
-            shiftId,
-            "Shift assignment confirmed",
-            `You are registered as ${assignment.role}.`,
-          ),
-        ),
-        ...(next.journeyNotifications ?? []),
-      ],
-      audit: [...events, ...next.audit],
-    });
+    return applyPreviewAssignments(assignments.map((assignment) => ({ ...assignment, shiftId })));
   },
   async detectDisruptions(): Promise<DisruptionReport> {
     return previewDisruptions();
@@ -1736,18 +1643,8 @@ export const previewRepository: WorkspaceRepository = {
     );
     if (!entry) throw new Error("Waitlist entry not found");
     if (entry.status !== "waiting") return state;
-    validateJourneySeat(state, shiftId, volunteerId, entry.eligibleRole);
     return persist({
-      ...state,
-      waitlist: state.waitlist.map((row) =>
-        row.id === entry.id ? { ...row, status: "promoted" } : row,
-      ),
-      registrations: [
-        ...state.registrations.filter(
-          (row) => !(row.shiftId === shiftId && row.volunteerId === volunteerId),
-        ),
-        { shiftId, volunteerId, role: entry.eligibleRole, status: "registered" },
-      ],
+      ...assignPreviewSeat(state, shiftId, volunteerId, entry.eligibleRole),
       journeyNotifications: [
         journeyNotice(
           volunteerId,
@@ -1878,25 +1775,8 @@ export const previewRepository: WorkspaceRepository = {
     )
       return state;
     const chosen = role.trim() || volunteerRole(volunteerId);
-    validateJourneySeat(state, shiftId, volunteerId, chosen);
     return persist({
-      ...state,
-      waitlist: state.waitlist.map((row) =>
-        row.shiftId === shiftId && row.volunteerId === volunteerId && row.status === "waiting"
-          ? { ...row, status: "promoted" }
-          : row,
-      ),
-      registrations: [
-        ...state.registrations.filter(
-          (row) => !(row.shiftId === shiftId && row.volunteerId === volunteerId),
-        ),
-        {
-          shiftId,
-          volunteerId,
-          role: chosen,
-          status: "registered",
-        },
-      ],
+      ...assignPreviewSeat(state, shiftId, volunteerId, chosen),
       journeyNotifications: [
         journeyNotice(volunteerId, shiftId, "Seat confirmed", `You are registered as ${chosen}.`),
         ...(state.journeyNotifications ?? []),
@@ -1906,7 +1786,7 @@ export const previewRepository: WorkspaceRepository = {
           "shift.register",
           "shift",
           shiftId,
-          `Registered ${volunteerName(volunteerId)} as ${role || volunteerRole(volunteerId)}`,
+          `Registered ${volunteerName(volunteerId)} as ${chosen}`,
         ),
         ...state.audit,
       ],
@@ -2004,6 +1884,7 @@ export const previewRepository: WorkspaceRepository = {
       // Resetting in memory is still meaningful.
     }
     state = createDefaultSnapshot();
+    bumpRevision();
     return state;
   },
   async listBackups() {

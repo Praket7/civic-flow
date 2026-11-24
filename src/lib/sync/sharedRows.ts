@@ -13,5 +13,6 @@ export function text(row: SharedRow | undefined, key: string): string {
 
 export function number(row: SharedRow | undefined, key: string): number {
   const value = row?.[key];
-  return typeof value === "number" ? value : Number(value) || 0;
+  const parsed = typeof value === "number" || typeof value === "string" ? Number(value) : 0;
+  return Number.isFinite(parsed) ? parsed : 0;
 }
