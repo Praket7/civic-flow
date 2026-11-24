@@ -1,124 +1,65 @@
-//! Deterministic roster selection, unchanged from the previous module.
+//! Deterministic roster selection using flow followed by a policy-safe completion pass.
 use super::*;
 
-/// Fills slots the flow pass left open with same-day candidates who do not
-/// overlap a decided booking.
-#[allow(clippy::too_many_arguments)]
-fn fill_same_day_slots(
-    candidates: &[&Candidate],
-    slots: &[&Slot],
-    policy: &RosterPolicy,
-    options: &RosterOptions,
-    decided: &HashSet<&str>,
-    committed: &mut HashMap<String, Vec<TimeBlock>>,
-    assignments: &mut Vec<PlannedAssignment>,
-    filled_slots: &mut HashSet<usize>,
-) {
-    if !options.block_conflicts {
-        return;
-    }
-    let mut pending: Vec<usize> = slots
-        .iter()
-        .enumerate()
-        .filter(|(index, _)| !filled_slots.contains(index))
-        .map(|(index, _)| index)
-        .collect();
-    if pending.is_empty() {
-        return;
+#[derive(Default)]
+struct RunState {
+    blocks: Vec<TimeBlock>,
+    shifts: HashSet<String>,
+    load: RunLoad,
+}
+
+impl RunState {
+    fn eligible(
+        &self,
+        candidate: &Candidate,
+        slot: &Slot,
+        policy: &RosterPolicy,
+        options: &RosterOptions,
+    ) -> bool {
+        !self.shifts.contains(&slot.shift_id)
+            && evaluate(candidate, slot, &self.blocks, self.load, policy, options).eligible
     }
 
-    let eligible_count = |index: usize| -> usize {
-        candidates
-            .iter()
-            .filter(|candidate| !decided.contains(candidate.id.as_str()))
-            .filter(|candidate| {
-                let blocks = committed
-                    .get(&candidate.id)
-                    .map(Vec::as_slice)
-                    .unwrap_or_default();
-                evaluate(
-                    candidate,
-                    slots[index],
-                    blocks,
-                    RunLoad::default(),
-                    policy,
-                    options,
-                )
-                .eligible
-            })
-            .count()
-    };
-    pending.sort_by(|left, right| {
-        let (left_slot, right_slot) = (slots[*left], slots[*right]);
-        right_slot
-            .mandatory
-            .cmp(&left_slot.mandatory)
-            .then_with(|| eligible_count(*left).cmp(&eligible_count(*right)))
-            .then_with(|| left_slot.starts_at.cmp(&right_slot.starts_at))
-            .then_with(|| left_slot.id.cmp(&right_slot.id))
-    });
-
-    let mut run_load: HashMap<String, RunLoad> = HashMap::new();
-    for assignment in assignments.iter() {
-        if let Some(slot) = slots
-            .iter()
-            .find(|slot| slot.role == assignment.role && slot.shift_id == assignment.shift_id)
-        {
-            let entry = run_load.entry(assignment.candidate_id.clone()).or_default();
-            entry.shifts += 1;
-            entry.minutes += minutes_between(slot.starts_at, slot.ends_at);
-        }
-    }
-
-    for index in pending {
-        let slot = slots[index];
-        let mut chosen: Option<(&Candidate, i32, RunLoad)> = None;
-        for candidate in candidates {
-            if decided.contains(candidate.id.as_str()) {
-                continue;
-            }
-            let load = run_load.get(&candidate.id).copied().unwrap_or_default();
-            let blocks = committed
-                .get(&candidate.id)
-                .map(Vec::as_slice)
-                .unwrap_or_default();
-            if !evaluate(candidate, slot, blocks, load, policy, options).eligible {
-                continue;
-            }
-            let (score, _) = score_candidate(candidate, slot, policy, options);
-            // Ordered by id, so the first on a tie wins deterministically.
-            let better = match &chosen {
-                None => true,
-                Some((_, best, _)) => score.total > *best,
-            };
-            if better {
-                chosen = Some((candidate, score.total, load));
-            }
-        }
-        let Some((candidate, _, load)) = chosen else {
-            continue;
-        };
-        filled_slots.insert(index);
-        committed
-            .entry(candidate.id.clone())
-            .or_default()
-            .push(TimeBlock {
-                starts_at: slot.starts_at,
-                ends_at: slot.ends_at,
-            });
-        let entry = run_load.entry(candidate.id.clone()).or_default();
-        entry.shifts += 1;
-        entry.minutes += minutes_between(slot.starts_at, slot.ends_at);
-        assignments.push(assignment_for(
+    fn assign(
+        &mut self,
+        candidate: &Candidate,
+        slot: &Slot,
+        policy: &RosterPolicy,
+        options: &RosterOptions,
+        slots: &[&Slot],
+    ) -> PlannedAssignment {
+        // Explain the choice before adding its own block or consuming its own quota.
+        let assignment = assignment_for(
             candidate,
             slot,
-            &committed.get(&candidate.id).cloned().unwrap_or_default(),
-            load,
+            &self.blocks,
+            self.load,
             policy,
             options,
             slots,
-        ));
+        );
+        self.blocks.push(TimeBlock {
+            starts_at: slot.starts_at,
+            ends_at: slot.ends_at,
+        });
+        self.shifts.insert(slot.shift_id.clone());
+        self.load.shifts += 1;
+        self.load.minutes += minutes_between(slot.starts_at, slot.ends_at);
+        assignment
     }
+}
+
+fn rank(
+    candidate: &Candidate,
+    slot: &Slot,
+    policy: &RosterPolicy,
+    options: &RosterOptions,
+) -> i32 {
+    let score = score_candidate(candidate, slot, policy, options).0.total;
+    let waiting = options.include_waitlist
+        && policy.waitlist_preference
+        && candidate.waitlisted_shift_ids.contains(&slot.shift_id);
+    score + i32::from(waiting) * (MAX_SCORE + 1)
 }
 
 /// Fills slots first, then maximizes match quality. Deterministic for equal input.
@@ -149,31 +90,8 @@ fn plan_inner(
     options: &RosterOptions,
     forced: &[(String, String)],
 ) -> RosterPlan {
-    let forced_slot_for = |candidate_id: &str| -> Option<&Slot> {
-        forced
-            .iter()
-            .find(|(forced_candidate, _)| forced_candidate == candidate_id)
-            .and_then(|(_, slot_id)| slots.iter().find(|slot| &slot.id == slot_id))
-    };
-    let is_forced = |candidate_id: &str, slot: &Slot| -> bool {
-        forced.iter().any(|(forced_candidate, forced_slot)| {
-            forced_candidate == candidate_id && forced_slot == &slot.id
-        })
-    };
-    // A decided seat is out of the solver's pool entirely, and so is the person
-    // already holding it. Otherwise the flow would hand the same seat to a second
-    // volunteer, or give the fixed volunteer a second shift, and the plan would
-    // no longer describe what the coordinator fixed.
-    let forced_slot_ids: HashSet<&str> =
-        forced.iter().map(|(_, slot_id)| slot_id.as_str()).collect();
-    let forced_candidate_ids: HashSet<&str> = forced
-        .iter()
-        .map(|(candidate_id, _)| candidate_id.as_str())
-        .collect();
-
     let mut ordered_candidates: Vec<&Candidate> = candidates.iter().collect();
     ordered_candidates.sort_by(|a, b| a.id.cmp(&b.id));
-
     let mut ordered_slots: Vec<&Slot> = slots.iter().collect();
     ordered_slots.sort_by(|a, b| {
         a.starts_at
@@ -183,171 +101,137 @@ fn plan_inner(
             .then_with(|| a.id.cmp(&b.id))
     });
 
-    let source = 0;
-    let mut nodes = 1;
-    let mut day_nodes: BTreeMap<(String, String), usize> = BTreeMap::new();
-    // Allocate one node per actual candidate/day, not per candidate/slot.
-    // First-occurrence order remains identical, preserving tie-breaking IDs.
-    let mut seen_days = HashSet::new();
-    let days: Vec<&str> = ordered_slots
+    let days: BTreeMap<NaiveDate, usize> = ordered_slots
         .iter()
-        .filter_map(|slot| {
-            let day = slot.day_key.as_str();
-            seen_days.insert(day).then_some(day)
+        .map(|slot| slot.starts_at.date_naive())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .enumerate()
+        .map(|(index, day)| (day, index))
+        .collect();
+    let source = 0;
+    let slot_offset = 1 + days.len() * ordered_candidates.len();
+    let sink = slot_offset + ordered_slots.len();
+    let node_for = |candidate: usize, day: usize| 1 + candidate * days.len() + day;
+    let mut flow = Flow::new(sink + 1);
+    let mut runs: Vec<RunState> = ordered_candidates
+        .iter()
+        .map(|candidate| RunState {
+            blocks: candidate.assigned_blocks.clone(),
+            ..RunState::default()
         })
         .collect();
-    for candidate in &ordered_candidates {
-        for day in &days {
-            day_nodes
-                .entry((candidate.id.clone(), (*day).to_string()))
-                .or_insert_with(|| {
-                    let node = nodes;
-                    nodes += 1;
-                    node
-                });
-        }
-    }
-    let slot_offset = nodes;
-    nodes += ordered_slots.len();
-    let sink = nodes;
-    nodes += 1;
-
-    // Forced assignments are decided before the solver runs.
     let mut assignments = Vec::new();
-    let mut filled_slots: HashSet<usize> = HashSet::new();
-    let mut committed: HashMap<String, Vec<TimeBlock>> = HashMap::new();
-    for candidate in &ordered_candidates {
-        if candidate.assigned_blocks.is_empty() {
+    let mut filled_slots = HashSet::new();
+    let mut fixed_candidates = HashSet::new();
+
+    for (candidate_id, slot_id) in forced {
+        let Some(person) = ordered_candidates.iter().position(|c| &c.id == candidate_id) else {
+            continue;
+        };
+        let Some(index) = ordered_slots.iter().position(|s| &s.id == slot_id) else {
+            continue;
+        };
+        let (candidate, slot) = (ordered_candidates[person], ordered_slots[index]);
+        if fixed_candidates.contains(&person)
+            || filled_slots.contains(&index)
+            || !runs[person].eligible(candidate, slot, policy, options)
+        {
             continue;
         }
-        committed
-            .entry(candidate.id.clone())
-            .or_default()
-            .extend(candidate.assigned_blocks.iter().cloned());
-    }
-    for candidate in &ordered_candidates {
-        let Some(slot) = forced_slot_for(&candidate.id) else {
-            continue;
-        };
-        let Some(index) = ordered_slots.iter().position(|other| other.id == slot.id) else {
-            continue;
-        };
+        assignments.push(runs[person].assign(candidate, slot, policy, options, &ordered_slots));
         filled_slots.insert(index);
-        committed
-            .entry(candidate.id.clone())
-            .or_default()
-            .push(TimeBlock {
-                starts_at: slot.starts_at,
-                ends_at: slot.ends_at,
-            });
-        assignments.push(assignment_for(
-            candidate,
-            slot,
-            &committed.get(&candidate.id).cloned().unwrap_or_default(),
-            RunLoad::default(),
-            policy,
-            options,
-            &ordered_slots,
-        ));
+        fixed_candidates.insert(person);
     }
 
-    let mut flow = Flow::new(nodes);
-    for node in day_nodes.values() {
-        flow.add_edge(source, *node, 1, 0);
+    for person in 0..ordered_candidates.len() {
+        if !fixed_candidates.contains(&person) {
+            for day in 0..days.len() {
+                flow.add_edge(source, node_for(person, day), 1, 0);
+            }
+        }
     }
-
-    let mut candidate_by_id: HashMap<&str, &Candidate> = HashMap::new();
-    for candidate in &ordered_candidates {
-        candidate_by_id.insert(candidate.id.as_str(), candidate);
-    }
-    for (slot_index, slot) in ordered_slots.iter().enumerate() {
-        if forced_slot_ids.contains(slot.id.as_str()) {
+    for (index, slot) in ordered_slots.iter().enumerate() {
+        if filled_slots.contains(&index) {
             continue;
         }
-        let slot_node = slot_offset + slot_index;
+        let day = days[&slot.starts_at.date_naive()];
         let priority = if slot.mandatory {
-            MANDATORY_SLOT_BONUS
+            MANDATORY_SLOT_BONUS + i32::from(policy.waitlist_preference) * SCORE_UNIT
         } else {
             0
         };
-        flow.add_edge(slot_node, sink, 1, -priority);
-        for ((candidate_id, day), node) in &day_nodes {
-            if day != &slot.day_key {
-                continue;
-            }
-            if forced_candidate_ids.contains(candidate_id.as_str()) {
-                continue;
-            }
-            let Some(candidate) = candidate_by_id.get(candidate_id.as_str()) else {
-                continue;
-            };
-            if is_forced(&candidate.id, slot) {
-                continue;
-            }
-            if !evaluate(
-                candidate,
-                slot,
-                &committed.get(&candidate.id).cloned().unwrap_or_default(),
-                RunLoad::default(),
-                policy,
-                options,
-            )
-            .eligible
+        flow.add_edge(slot_offset + index, sink, 1, -priority);
+        for (person, candidate) in ordered_candidates.iter().enumerate() {
+            if fixed_candidates.contains(&person)
+                || !runs[person].eligible(candidate, slot, policy, options)
             {
                 continue;
             }
-            let (score, _) = score_candidate(candidate, slot, policy, options);
-            let tie = (slot_index as i32) % SCORE_UNIT;
-            let cost = (MAX_SCORE - score.total) * SCORE_UNIT + tie;
-            flow.add_edge(*node, slot_node, 1, cost);
+            let tie = (index as i32) % SCORE_UNIT;
+            let cost = (MAX_SCORE - rank(candidate, slot, policy, options)) * SCORE_UNIT + tie;
+            flow.add_edge(node_for(person, day), slot_offset + index, 1, cost);
         }
     }
-
     flow.min_cost_max_flow(source, sink);
 
-    for ((candidate_id, _), node) in &day_nodes {
-        let Some(candidate) = candidate_by_id.get(candidate_id.as_str()) else {
-            continue;
-        };
-        for destination in flow.used_destinations(*node) {
-            if destination < slot_offset || destination >= slot_offset + ordered_slots.len() {
-                continue;
+    // Flow proposes one seat per calendar day. Cross-day caps, rest, and
+    // duplicate registrations can interact, so commit only still-eligible edges.
+    let mut proposed = Vec::new();
+    for person in 0..ordered_candidates.len() {
+        for day in 0..days.len() {
+            for destination in flow.used_destinations(node_for(person, day)) {
+                if (slot_offset..sink).contains(&destination) {
+                    proposed.push((person, destination - slot_offset));
+                }
             }
-            let slot_index = destination - slot_offset;
-            let slot = ordered_slots[slot_index];
-            if is_forced(&candidate.id, slot) {
-                continue;
-            }
-            filled_slots.insert(slot_index);
-            assignments.push(assignment_for(
-                candidate,
-                slot,
-                &committed.get(&candidate.id).cloned().unwrap_or_default(),
-                RunLoad::default(),
-                policy,
-                options,
-                &ordered_slots,
-            ));
-            committed
-                .entry(candidate.id.clone())
-                .or_default()
-                .push(TimeBlock {
-                    starts_at: slot.starts_at,
-                    ends_at: slot.ends_at,
-                });
+        }
+    }
+    proposed.sort_by_key(|&(person, index)| (!ordered_slots[index].mandatory, index, person));
+    for (person, index) in proposed {
+        let (candidate, slot) = (ordered_candidates[person], ordered_slots[index]);
+        if runs[person].eligible(candidate, slot, policy, options) {
+            assignments.push(runs[person].assign(candidate, slot, policy, options, &ordered_slots));
+            filled_slots.insert(index);
         }
     }
 
-    fill_same_day_slots(
-        &ordered_candidates,
-        &ordered_slots,
-        policy,
-        options,
-        &forced_candidate_ids,
-        &mut committed,
-        &mut assignments,
-        &mut filled_slots,
-    );
+    // Fill remaining seats by scarcity and rank, enforcing exactly the same
+    // constraints and preserving deterministic ID tie-breaking.
+    let mut pending: Vec<_> = ordered_slots
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| !filled_slots.contains(index))
+        .map(|(index, slot)| {
+            let eligible = ordered_candidates
+                .iter()
+                .enumerate()
+                .filter(|(person, candidate)| {
+                    !fixed_candidates.contains(person)
+                        && runs[*person].eligible(candidate, slot, policy, options)
+                })
+                .count();
+            (!slot.mandatory, eligible, index)
+        })
+        .collect();
+    pending.sort_unstable();
+    for (_, _, index) in pending {
+        let slot = ordered_slots[index];
+        let best = ordered_candidates
+            .iter()
+            .enumerate()
+            .filter(|(person, candidate)| {
+                !fixed_candidates.contains(person)
+                    && runs[*person].eligible(candidate, slot, policy, options)
+            })
+            .max_by_key(|(person, candidate)| {
+                (rank(candidate, slot, policy, options), std::cmp::Reverse(*person))
+            });
+        if let Some((person, candidate)) = best {
+            assignments.push(runs[person].assign(candidate, slot, policy, options, &ordered_slots));
+            filled_slots.insert(index);
+        }
+    }
 
     assignments.sort_by(|a, b| {
         a.starts_at

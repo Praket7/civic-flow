@@ -10,7 +10,7 @@
 //! The flow allows one slot per calendar day, so a second pass offers remaining
 //! same-day slots to candidates with no time overlap.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 use chrono::{DateTime, Datelike, FixedOffset, NaiveDate, Timelike};
 use serde::{Deserialize, Serialize};
@@ -614,7 +614,11 @@ fn evaluate(
         || policy.max_minutes_per_week.is_some()
     {
         let shifts = candidate.weekly_load + load.shifts + 1;
-        let limit = policy.max_shifts_per_week();
+        let limit = if options.cap_weekly {
+            policy.max_shifts_per_week().min(2)
+        } else {
+            policy.max_shifts_per_week()
+        };
         checks.push(check(
             "Weekly shift limit",
             shifts <= limit,

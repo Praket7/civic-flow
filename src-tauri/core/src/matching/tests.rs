@@ -38,7 +38,7 @@ fn slot(id: &str, role: &str, skill: Option<&str>, starts_at: &str) -> Slot {
     let starts_at = date(starts_at);
     Slot {
         id: id.into(),
-        shift_id: "shift-1".into(),
+        shift_id: id.into(),
         opportunity_id: "opp-1".into(),
         shift_title: "Food distribution".into(),
         role: role.into(),
@@ -791,4 +791,38 @@ fn benchmark_realistic_volunteer_and_shift_counts() {
             volunteer_count, slot_count, timings_ms[2], timings_ms[4]
         );
     }
+}
+
+#[test]
+fn cross_day_caps_and_explanations_hold_for_the_whole_plan() {
+    let people = vec![candidate("a", &["Driver"], &["sat:morning", "sun:morning"])];
+    let slots = vec![
+        slot("s1", "Driver", Some("Driver"), "2026-10-17T09:00:00-04:00"),
+        slot("s2", "Driver", Some("Driver"), "2026-10-18T09:00:00-04:00"),
+        slot("s3", "Driver", Some("Driver"), "2026-10-24T09:00:00-04:00"),
+    ];
+    let limit = policy_with(|p| p.max_shifts_per_week = Some(1));
+    let result = plan(&people, &slots, &limit, &options());
+    assert_eq!(result.assignments.len(), 1);
+    assert!(result.assignments[0].explanation.eligible);
+    let mut capped = options();
+    capped.cap_weekly = true;
+    assert_eq!(
+        plan(&people, &slots, &policy(), &capped).assignments.len(),
+        2
+    );
+}
+
+#[test]
+fn one_volunteer_cannot_hold_two_roles_of_the_same_shift_even_without_overlap_gate() {
+    let people = vec![candidate("a", &["Driver"], &["sat:morning"])];
+    let first = slot("s1", "Driver", Some("Driver"), "2026-10-17T09:00:00-04:00");
+    let mut second = first.clone();
+    second.id = "s2".into();
+    second.role = "Helper".into();
+    let mut unrestricted = options();
+    unrestricted.block_conflicts = false;
+    let result = plan(&people, &[first, second], &policy(), &unrestricted);
+    assert_eq!(result.assignments.len(), 1);
+    assert!(result.assignments[0].explanation.eligible);
 }
