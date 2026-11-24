@@ -279,7 +279,14 @@ pub fn configure(
     user_id: &str,
     membership_epoch: i64,
 ) -> Result<SyncStatus> {
-    configure_inner(conn, organization_id, user_id, membership_epoch, None, false)
+    configure_inner(
+        conn,
+        organization_id,
+        user_id,
+        membership_epoch,
+        None,
+        false,
+    )
 }
 
 fn configure_inner(
