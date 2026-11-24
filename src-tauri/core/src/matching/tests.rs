@@ -258,7 +258,12 @@ fn a_required_credential_must_be_current() {
         assert!(is_eligible(candidate, &restricted, &policy(), &options).is_err());
     }
 
-    let plan = plan(&[unverified, expired, future, pending], &[restricted], &policy(), &options);
+    let plan = plan(
+        &[unverified, expired, future, pending],
+        &[restricted],
+        &policy(),
+        &options,
+    );
     assert!(plan.assignments.is_empty());
 }
 

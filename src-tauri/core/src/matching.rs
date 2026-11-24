@@ -721,12 +721,16 @@ fn evaluate(
         let state = credential_state(candidate, required, slot.starts_at.date_naive());
         let (passed, detail) = match state {
             CredentialState::Current => (true, format!("{required} current")),
-            CredentialState::Expired => (false, format!("{required} expired, unverified, or not yet valid")),
+            CredentialState::Expired => (
+                false,
+                format!("{required} expired, unverified, or not yet valid"),
+            ),
             CredentialState::Missing => (false, format!("No {required} on record")),
         };
         // An explicit policy may allow a missing record, never a known invalid one.
         let allowed = state == CredentialState::Missing
-            && policy.unknown_credential_behavior == crate::policy::MissingRequirementBehavior::Allow;
+            && policy.unknown_credential_behavior
+                == crate::policy::MissingRequirementBehavior::Allow;
         checks.push(check(
             "Required credential",
             passed || allowed,

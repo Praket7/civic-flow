@@ -182,10 +182,9 @@ fn load_candidates(
 
     let mut credentials: HashMap<String, Vec<Credential>> = HashMap::new();
     for row in &credential_rows {
-        let (Some(volunteer), Some(type_id)) = (
-            text(row, "volunteer_id"),
-            text(row, "credential_type_id"),
-        ) else {
+        let (Some(volunteer), Some(type_id)) =
+            (text(row, "volunteer_id"), text(row, "credential_type_id"))
+        else {
             continue;
         };
         let Some(name) = type_names.get(type_id) else {
