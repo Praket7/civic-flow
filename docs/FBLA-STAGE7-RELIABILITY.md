@@ -16,7 +16,7 @@ Repository checks are not production or staging acceptance. Keep the competition
 
 ## Security changes and remaining warnings
 
-The migration makes absent staff membership false rather than SQL NULL, binds device records to their original account and organization, prevents active push endpoint takeover, and limits global job diagnostic exposure. Existing staff and volunteer flows must remain available. The preference read uses caller RLS rather than elevated access.
+The migration makes absent staff membership false rather than SQL NULL, scopes each device record by installation, account and organization, prevents active push endpoint takeover, and limits global job diagnostic exposure. Existing staff and volunteer flows must remain available. Preference and delivery-health reads use caller RLS rather than elevated access. Operation replay is scoped to its actor and tenant; rejected operations remain rejected on replay. Abandoned delivery claims recover after a bounded lease; stale completions cannot finalize a newer attempt. Push delivery is at-least-once at the external provider, not exactly-once.
 
 Intentional privileged command functions still require individual security review and real authorization tests. Never suppress the advisory by moving an equivalent privileged operation behind an unreviewed wrapper. Leaked-password protection is a separate Auth setting, subject to project plan and owner approval.
 

@@ -135,7 +135,10 @@ export async function verifyHostedAccess() {
       ["coordinator B", foreign, foreignOrg.organizationId],
     ]) {
       const result = await pull(subject.client, orgId);
-      ensure(!result.error && result.data?.status === "ok", label + " cannot sync own organization");
+      ensure(
+        !result.error && result.data?.status === "ok",
+        label + " cannot sync own organization",
+      );
     }
 
     await Promise.all([
@@ -151,10 +154,7 @@ export async function verifyHostedAccess() {
     const healthVolunteer = await volunteer.client.rpc("health_snapshot", {
       p_organization_id: coordinatorOrg.organizationId,
     });
-    ensure(
-      isExplicitDenial(healthVolunteer),
-      "volunteer can see staff health",
-    );
+    ensure(isExplicitDenial(healthVolunteer), "volunteer can see staff health");
 
     const foreignHealth = await foreign.client.rpc("health_snapshot", {
       p_organization_id: coordinatorOrg.organizationId,

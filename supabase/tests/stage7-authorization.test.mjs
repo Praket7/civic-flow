@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { asUser, createDatabase, ids, query, seed } from "./harness.mjs";
+import { asUser, createDatabase, ids, query, seed, sendCommand } from "./harness.mjs";
 
 test("staff RPCs fail closed for outsiders and volunteers; staff still has access", async () => {
   const db = await createDatabase();
@@ -23,7 +23,7 @@ test("staff RPCs fail closed for outsiders and volunteers; staff still has acces
   }
 });
 
-test("replica registration and reporting cannot transfer another user's device", async () => {
+test("shared installations have independent account and tenant device state", async () => {
   const db = await createDatabase();
   try {
     await seed(db);
@@ -31,25 +31,31 @@ test("replica registration and reporting cannot transfer another user's device",
       asUser(
         db,
         user,
-        () =>
-          query(db, "select public.register_device($1, $2) as result", [org, ids.replicaA]),
+        () => query(db, "select public.register_device($1, $2) as result", [org, ids.replicaA]),
         { commit: true },
       );
     assert.equal((await register(ids.volunteerUserA, ids.orgA))[0].result.status, "ok");
-    assert.equal((await register(ids.volunteerUserA2, ids.orgA))[0].result.status, "forbidden");
-    assert.equal((await register(ids.ownerB, ids.orgB))[0].result.status, "forbidden");
-    const [report] = await asUser(db, ids.volunteerUserA2, () =>
-      query(db, "select public.report_device_state($1, $2, 99) as result", [
-        ids.orgA,
-        ids.replicaA,
-      ]),
+    assert.equal((await register(ids.volunteerUserA2, ids.orgA))[0].result.status, "ok");
+    assert.equal((await register(ids.ownerB, ids.orgB))[0].result.status, "ok");
+    const [report] = await asUser(
+      db,
+      ids.volunteerUserA2,
+      () =>
+        query(db, "select public.report_device_state($1, $2, 99) as result", [
+          ids.orgA,
+          ids.replicaA,
+        ]),
+      { commit: true },
     );
-    assert.equal(report.result.status, "forbidden");
-    const [device] = await query(db, "select user_id, cursor from sync.devices where id = $1", [
+    assert.equal(report.result.status, "ok");
+    const devices = await query(db, "select user_id, cursor from sync.devices where id = $1", [
       ids.replicaA,
     ]);
-    assert.equal(device.user_id, ids.volunteerUserA);
-    assert.equal(Number(device.cursor), 0);
+    assert.equal(devices.length, 3);
+    const cursor = (user) => Number(devices.find((device) => device.user_id === user).cursor);
+    assert.equal(cursor(ids.volunteerUserA), 0);
+    assert.equal(cursor(ids.volunteerUserA2), 99);
+    assert.equal(cursor(ids.ownerB), 0);
   } finally {
     await db.close();
   }
@@ -75,6 +81,39 @@ test("active push endpoints cannot be hijacked by another account", async () => 
     assert.equal((await register(ids.volunteerUserA2))[0].result.status, "forbidden");
     const [subscription] = await query(db, "select user_id from public.push_subscriptions");
     assert.equal(subscription.user_id, ids.volunteerUserA);
+  } finally {
+    await db.close();
+  }
+});
+
+test("operation replay cannot cross account or tenant and rejected work remains rejected", async () => {
+  const db = await createDatabase();
+  try {
+    await seed(db);
+    const operationId = "99999999-9999-4999-8999-999999999991";
+    const options = {
+      organizationId: ids.orgA,
+      operationId,
+      command: "REGISTER_FOR_SHIFT",
+      payload: { shiftId: ids.shiftSingle },
+    };
+    const first = await sendCommand(db, ids.volunteerUserA, options);
+    assert.equal(first.status, "applied");
+    const replay = await sendCommand(db, ids.volunteerUserA2, options);
+    assert.equal(replay.status, "forbidden");
+    assert.equal(replay.code, "operation_owner_mismatch");
+    assert.equal(replay.data, undefined);
+    const foreign = await sendCommand(db, ids.ownerB, {
+      ...options,
+      organizationId: ids.orgB,
+    });
+    assert.equal(foreign.status, "forbidden");
+    const losing = { ...options, operationId: "99999999-9999-4999-8999-999999999992" };
+    const refused = await sendCommand(db, ids.volunteerUserA2, losing);
+    const retried = await sendCommand(db, ids.volunteerUserA2, losing);
+    assert.equal(refused.status, "conflict");
+    assert.equal(retried.status, "conflict");
+    assert.equal(retried.code, "capacity_full");
   } finally {
     await db.close();
   }

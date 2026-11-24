@@ -8,11 +8,7 @@ test("staging smoke refuses production, mismatched origins and privileged keys",
   const url = "https://" + ref + ".supabase.co";
   assert.equal(validateStagingTarget(url, key, ref).url, url);
   assert.throws(() =>
-    validateStagingTarget(
-      "https://imzdblvljdcbnxtwbmbw.supabase.co",
-      key,
-      "imzdblvljdcbnxtwbmbw",
-    ),
+    validateStagingTarget("https://imzdblvljdcbnxtwbmbw.supabase.co", key, "imzdblvljdcbnxtwbmbw"),
   );
   assert.throws(() => validateStagingTarget(url, key, "other"));
   assert.throws(() => validateStagingTarget(url, "sb_secret_test", ref));

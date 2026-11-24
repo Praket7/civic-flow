@@ -202,8 +202,9 @@ async function dispatch(client: SupabaseClient, limit: number): Promise<Response
       failures.push(`${job.channel} ${job.deliveryId}: ${outcome.error ?? "unknown"}`);
     }
 
-    const completed = await client.rpc("complete_delivery", {
+    const completed = await client.rpc("complete_delivery_attempt", {
       p_id: job.deliveryId,
+      p_attempt: job.attempts,
       p_status: outcome.status,
       p_error: outcome.error ?? null,
       p_provider: outcome.provider ?? "",
@@ -228,7 +229,7 @@ async function dispatch(client: SupabaseClient, limit: number): Promise<Response
     p_detail: detail,
   });
 
-  if (audit.error) failures.push("server_job_audit_failed");
+  if (audit.error || audit.data?.status !== "ok") failures.push("server_job_audit_failed");
 
   return json({
     status: "ok",
@@ -274,9 +275,7 @@ Deno.serve(async (request: Request) => {
   // never accept a signed-in volunteer's user token.
   const bearer = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   const apiKey = request.headers.get("apikey") ?? "";
-  // The gateway verifies the JWT signature before this code runs, so the role
-  // claim is trustworthy here. A signed-in volunteer's token says
-  // "authenticated" and is still refused.
+  // Require the exact configured service credential, not a decoded role claim.
   if (bearer !== serviceKey && apiKey !== serviceKey) {
     return json({ status: "forbidden", message: "This endpoint is for the scheduler." }, 401);
   }
