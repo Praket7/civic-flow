@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { demoWorkspace } from "../dataset";
 import { createDefaultSnapshot } from "../previewRepository";
 import { createPreviewBackupStore } from "./backupStore";
@@ -51,6 +51,17 @@ describe("browser-only backup fixtures", () => {
       JSON.stringify([{ ...backup, snapshot: partial, meta: { ...backup.meta, sha256: "" } }]),
     );
     expect(store.readBackups()[0].meta.integrity).toBe("failed");
+  });
+  it("does not advertise a saved backup when browser storage is unavailable", () => {
+    const write = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Storage full", "QuotaExceededError");
+    });
+    try {
+      expect(store.listBackupMeta()).toEqual([]);
+      expect(() => store.writeBackups([store.makeBackup(snapshot, "manual", "full")])).toThrow();
+    } finally {
+      write.mockRestore();
+    }
   });
   it("retains at most twenty snapshots", () => {
     store.writeBackups(

@@ -150,11 +150,7 @@ export function createPreviewBackupStore(
   }
 
   function writeBackups(backups: StoredBackup[]): void {
-    try {
-      localStorage.setItem(scoped(BACKUP_KEY), JSON.stringify(backups.slice(0, BACKUP_RETENTION)));
-    } catch {
-      // The current session can still create and restore in memory.
-    }
+    localStorage.setItem(scoped(BACKUP_KEY), JSON.stringify(backups.slice(0, BACKUP_RETENTION)));
   }
 
   function ensureBackups(): StoredBackup[] {
@@ -168,8 +164,12 @@ export function createPreviewBackupStore(
       return stored;
     }
     const baseline = makeBackup(getSnapshot(), "automatic", "Initial workspace snapshot");
-    writeBackups([baseline]);
-    return [baseline];
+    try {
+      writeBackups([baseline]);
+      return [baseline];
+    } catch {
+      return [];
+    }
   }
 
   function listBackupMeta(): BackupSnapshot[] {
