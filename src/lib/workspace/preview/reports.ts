@@ -227,24 +227,35 @@ export function buildPreviewReport(
     ];
   } else if (template === "skills" || template === "credentials") {
     headers = ["Volunteer", "Skill", "Credential", "Valid through", "Status"];
+    const today = workspace.now.slice(0, 10);
+    const cutoff = new Date(new Date(today + "T00:00:00Z").getTime() + 45 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const names = new Map(workspace.volunteers.map((volunteer) => [volunteer.id, volunteer.name]));
+    rows = workspace.volunteers.flatMap((volunteer) =>
+      volunteer.skills.map((skill) => [volunteer.name, skill, "—", "—", "skill recorded"]),
+    );
+    const skillCount = rows.length;
     let expiring = 0;
-    for (const volunteer of workspace.volunteers) {
-      for (const skill of volunteer.skills) {
-        const credential = (state.credentials ?? []).find(
-          (row) => row.volunteerId === volunteer.id,
-        );
-        if (credential && credential.status !== "current") expiring += 1;
-        rows.push([
-          volunteer.name,
-          skill,
-          credential?.name ?? "—",
-          credential?.validThrough ?? "—",
-          credential?.status ?? "no credential",
-        ]);
-      }
+    for (const credential of state.credentials ?? []) {
+      const name = names.get(credential.volunteerId);
+      if (!name) continue;
+      const status = !credential.verifiedAt
+        ? "unverified"
+        : credential.validThrough < today
+          ? "expired"
+          : credential.validFrom > today
+            ? "not yet valid"
+            : credential.validThrough <= cutoff
+              ? "expiring"
+              : "current";
+      if (status === "expired" || status === "expiring") expiring++;
+      rows.push([name, "—", credential.name, credential.validThrough, status]);
     }
+    rows.sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]) || a[2].localeCompare(b[2]));
     summary = [
-      { label: "Skill rows", value: String(rows.length) },
+      { label: "Skill rows", value: String(skillCount) },
+      { label: "Credential rows", value: String(rows.length - skillCount) },
       { label: "Expiring or expired", value: String(expiring) },
       { label: "Scope", value: "Current credential inventory; activity filters not applicable" },
     ];

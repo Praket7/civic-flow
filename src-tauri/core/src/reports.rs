@@ -113,18 +113,19 @@ fn demo_date(conn: &Connection) -> Result<String> {
 }
 
 fn range(request: &ReportRequest, conn: &Connection) -> Result<(String, String)> {
+    let validate = |value: &str| {
+        chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d")
+            .ok()
+            .filter(|date| date.format("%Y-%m-%d").to_string() == value)
+            .ok_or_else(|| CoreError::Validation("Report dates must use YYYY-MM-DD.".into()))
+    };
     let end = request.date_end.clone().unwrap_or(demo_date(conn)?);
+    let end_date = validate(&end)?;
     let start = request
         .date_start
         .clone()
-        .unwrap_or_else(|| format!("{}-01-01", &end[..4.min(end.len())]));
-    for value in [&start, &end] {
-        if chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").is_err() {
-            return Err(CoreError::Validation(
-                "Report dates must use YYYY-MM-DD.".into(),
-            ));
-        }
-    }
+        .unwrap_or_else(|| format!("{}-01-01", end_date.format("%Y")));
+    validate(&start)?;
     if start > end {
         return Err(CoreError::Validation(
             "The report start date must be before its end date.".into(),
@@ -179,6 +180,8 @@ fn normalize_fields(request: &ReportRequest) -> Vec<String> {
             .map(|field| field.to_string())
             .collect();
     }
+    let mut seen = std::collections::BTreeSet::new();
+    fields.retain(|field| seen.insert(field.clone()));
     fields
 }
 
@@ -534,51 +537,55 @@ fn retention_rows(conn: &Connection) -> Result<ReportTable> {
 }
 
 fn skills(conn: &Connection) -> Result<ReportTable> {
+    // Skills and credentials are independent records. A join on volunteer_id
+    // alone invents a skill-to-credential relationship and multiplies counts.
     let mut statement = conn.prepare(
-        "SELECT v.name, vs.skill,
-                COALESCE(ct.name, '—'), COALESCE(vc.valid_through, '—'),
-                CASE
-                  WHEN vc.id IS NULL THEN 'no credential'
-                  WHEN vc.valid_through < date('now') THEN 'expired'
-                  WHEN vc.valid_through <= date('now', '+45 days') THEN 'expiring'
-                  ELSE 'current'
-                END
+        "SELECT v.name, vs.skill, '—', '—', 'skill recorded'
          FROM volunteer_skills vs
          JOIN volunteers v ON v.id = vs.volunteer_id
-         LEFT JOIN volunteer_credentials vc ON vc.volunteer_id = v.id
-         LEFT JOIN credential_types ct ON ct.id = vc.credential_type_id
          WHERE (?1 IS NULL OR v.organization_id = ?1)
-         ORDER BY v.name, vs.skill",
+         UNION ALL
+         SELECT v.name, '—', ct.name, vc.valid_through,
+                CASE
+                  WHEN vc.verified_at IS NULL THEN 'unverified'
+                  WHEN vc.valid_through < ?2 THEN 'expired'
+                  WHEN vc.valid_from > ?2 THEN 'not yet valid'
+                  WHEN vc.valid_through <= date(?2, '+45 days') THEN 'expiring'
+                  ELSE 'current'
+                END
+         FROM volunteer_credentials vc
+         JOIN volunteers v ON v.id = vc.volunteer_id
+         JOIN credential_types ct ON ct.id = vc.credential_type_id
+         WHERE (?1 IS NULL OR v.organization_id = ?1)
+         ORDER BY 1, 2, 3, 4",
     )?;
-    let mut rows = statement.query(params![crate::scope::current(conn)?])?;
+    let mut rows = statement.query(params![crate::scope::current(conn)?, demo_date(conn)?])?;
     let mut output = Vec::new();
-    let mut expiring = 0_i64;
+    let mut skill_count = 0;
+    let mut expiring = 0;
     while let Some(row) = rows.next()? {
         let status: String = row.get(4)?;
-        if status == "expiring" || status == "expired" {
+        if status == "skill recorded" {
+            skill_count += 1;
+        } else if status == "expiring" || status == "expired" {
             expiring += 1;
         }
-        output.push(vec![
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, String>(2)?,
-            row.get::<_, String>(3)?,
-            status,
-        ]);
+        output.push(vec![row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, status]);
     }
+    let credential_count = output.len() - skill_count;
     Ok((
-        vec![
-            "Volunteer".into(),
-            "Skill".into(),
-            "Credential".into(),
-            "Valid through".into(),
-            "Status".into(),
-        ],
-        output.clone(),
+        ["Volunteer", "Skill", "Credential", "Valid through", "Status"]
+            .map(str::to_string)
+            .to_vec(),
+        output,
         vec![
             ReportSummaryItem {
                 label: "Skill rows".into(),
-                value: output.len().to_string(),
+                value: skill_count.to_string(),
+            },
+            ReportSummaryItem {
+                label: "Credential rows".into(),
+                value: credential_count.to_string(),
             },
             ReportSummaryItem {
                 label: "Expiring or expired".into(),

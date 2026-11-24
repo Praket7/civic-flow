@@ -356,3 +356,19 @@ describe("computed retention", () => {
     expect(cohorts.find((row) => row.label === "Nov")?.eligible).toBe(0);
   });
 });
+
+it("lists each credential separately, even for a volunteer without skills", () => {
+  const sample = {
+    ...workspace,
+    volunteers: [{ id: "a", name: "Alice", skills: ["Food", "Tutoring"] }, { id: "b", name: "Bob", skills: [] }],
+  } as unknown as DemoWorkspace;
+  const credentials = [
+    { id: "1", volunteerId: "a", name: "Driver", validFrom: "2026-01-01", validThrough: "2026-12-01", verifiedAt: "2026-01-01" },
+    { id: "2", volunteerId: "b", name: "First aid", validFrom: "2026-01-01", validThrough: "2026-12-01", verifiedAt: null },
+  ];
+  const report = buildPreviewReport({ ...request, template: "skills" }, sample, { ...state, credentials } as unknown as SessionSnapshot);
+  expect(report.rows).toHaveLength(4);
+  expect(report.summary).toContainEqual({ label: "Credential rows", value: "2" });
+  expect(report.rows).toContainEqual(["Bob", "—", "First aid", "2026-12-01", "unverified"]);
+  expect(report.rows.filter((row) => row[2] === "Driver")).toHaveLength(1);
+});

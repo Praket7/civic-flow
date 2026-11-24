@@ -195,3 +195,25 @@ fn native_csv_guards_whitespace_and_fullwidth_formula_prefixes() {
         assert!(csv.contains(&format!("\"'{}\"", row[0])));
     }
 }
+
+#[test]
+fn native_dates_reject_noncanonical_and_unicode_without_panicking() {
+    let database = seeded();
+    let mut query = request("custom");
+    query.date_start = None;
+    for invalid in ["abcé", "2026-2-1", "2026-02-30"] {
+        query.date_end = Some(invalid.into());
+        assert!(generate(database.connection(), &query).is_err());
+    }
+}
+
+#[test]
+fn credential_inventory_does_not_cross_multiply_skills() {
+    let database = seeded();
+    let report = generate(database.connection(), &request("skills")).expect("inventory");
+    let credential_count: usize = database.connection().query_row(
+        "SELECT count(*) FROM volunteer_credentials", [], |row| row.get(0)
+    ).expect("credential count");
+    assert_eq!(report.rows.iter().filter(|row| row[1] == "—").count(), credential_count);
+    assert!(report.rows.iter().all(|row| row[1] == "—" || row[2] == "—"));
+}

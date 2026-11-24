@@ -505,6 +505,10 @@ fn load_retention(conn: &Connection) -> Result<Vec<RetentionCohort>> {
             dates.entry(volunteer).or_default().push(date);
         }
     }
+    for events in dates.values_mut() {
+        events.sort_unstable();
+        events.dedup();
+    }
     let mut cohorts = Vec::new();
     for offset in (0_i32..6).rev() {
         let total_month = today.year() * 12 + today.month0() as i32 - offset;
@@ -520,10 +524,7 @@ fn load_retention(conn: &Connection) -> Result<Vec<RetentionCohort>> {
         let month_end = next_month - chrono::Duration::days(1);
         let mut eligible = 0;
         let mut returned = 0;
-        for events in dates.values() {
-            let mut unique = events.clone();
-            unique.sort();
-            unique.dedup();
+        for unique in dates.values() {
             let first = unique
                 .iter()
                 .copied()
