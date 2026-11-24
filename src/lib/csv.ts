@@ -10,7 +10,12 @@ export type CsvValue = string | number | boolean | null | undefined;
  */
 export function csvCell(value: CsvValue): string {
   const raw = value === null || value === undefined ? "" : String(value);
-  const formulaLike = /^[=@]/.test(raw) || (/^[+-]/.test(raw) && !/^[+-][\d\s().-]*$/.test(raw));
+  // Detect disguised prefixes without normalizing or losing the original text.
+  const prefix = raw.normalize("NFKC").trimStart();
+  const formulaLike =
+    /^[\t\r\n]/.test(raw) ||
+    /^[=@]/.test(prefix) ||
+    (/^[+-]/.test(prefix) && !/^[+-][\d ().-]*\d[\d ().-]*$/.test(raw));
   const neutral = formulaLike ? `'${raw}` : raw;
   return /[",\r\n]/.test(neutral) ? `"${neutral.replace(/"/g, '""')}"` : neutral;
 }

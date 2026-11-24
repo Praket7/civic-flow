@@ -180,3 +180,18 @@ fn report_program_id_uses_stable_ids_and_restricts_source_rows() {
     let csv = to_csv(&report);
     assert!(csv.contains("Record ID"));
 }
+
+#[test]
+fn native_csv_guards_whitespace_and_fullwidth_formula_prefixes() {
+    let database = seeded();
+    let mut report = generate(database.connection(), &request("custom")).expect("report");
+    report.headers = vec!["Value".into()];
+    report.rows = [" =1+1", "\ttext", "\rtext", "\ntext", "＝1+1", "＠SUM(A1)"]
+        .into_iter()
+        .map(|value| vec![value.into()])
+        .collect();
+    let csv = to_csv(&report);
+    for row in &report.rows {
+        assert!(csv.contains(&format!("\"'{}\"", row[0])));
+    }
+}

@@ -681,10 +681,12 @@ pub(crate) fn csv_cell(value: &str) -> String {
     // A cell that starts with one of these is read as a formula by Excel and
     // Sheets when the export is opened. Names and notes are entered by people,
     // so an export must not hand a spreadsheet a command to run.
-    let formula = value
-        .chars()
-        .next()
-        .is_some_and(|first| matches!(first, '=' | '+' | '-' | '@' | '\t' | '\r'));
+    let formula = matches!(value.chars().next(), Some('\t' | '\r' | '\n'))
+        || value
+            .trim_start_matches(|ch: char| ch.is_whitespace() || ch == '\u{feff}')
+            .chars()
+            .next()
+            .is_some_and(|first| matches!(first, '=' | '+' | '-' | '@' | '＝' | '＋' | '－' | '＠'));
     let guarded = if formula {
         format!("'{value}")
     } else {
