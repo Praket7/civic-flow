@@ -75,9 +75,9 @@ import { createPreviewRosterEngine, roleRequirement } from "./preview/rosterEngi
 import { demoWorkspace } from "./dataset";
 import {
   blankWorkspaceForOrganization,
-  withCreatedPrograms,
-  withCreatedShifts,
+  workspaceWithSnapshot,
   withRoster,
+  withRegistrationCounts,
 } from "./organizationWorkspace";
 import type { OrganizationScope } from "./organizationWorkspace";
 import type { WorkspaceRepository } from "./repository";
@@ -506,37 +506,11 @@ function registeredRole(shiftId: string, volunteerId: string): string {
  * Control and Schedule must agree on these numbers.
  */
 function journeyWorkspace(snapshot = state): DemoWorkspace {
-  return withCreatedShifts(
-    withCreatedPrograms(
-      withRoster(workspace, snapshot.roster ?? []),
-      snapshot.createdOpportunities,
-    ),
-    snapshot.createdSeries ?? [],
-    snapshot.createdShifts ?? [],
-  );
+  return workspaceWithSnapshot(workspace, snapshot);
 }
 
 function countedWorkspace(): DemoWorkspace {
-  const base = journeyWorkspace();
-  return {
-    ...base,
-    shifts: base.shifts.map((shift) => {
-      const live = state.registrations.filter(
-        (row) => row.shiftId === shift.id && row.status === "registered",
-      );
-      return {
-        ...shift,
-        confirmed: live.length,
-        waitlisted: state.waitlist.filter(
-          (row) => row.shiftId === shift.id && row.status === "waiting",
-        ).length,
-        roles: shift.roles.map((role) => ({
-          ...role,
-          filled: live.filter((row) => row.role === role.name).length,
-        })),
-      };
-    }),
-  };
+  return withRegistrationCounts(journeyWorkspace(), state);
 }
 
 /// Matches the desktop core: attendance row, audit entry, and the reason together.
@@ -747,6 +721,15 @@ function applyPreviewAssignments(assignments: WeeklyAssignment[]): SessionSnapsh
   });
 }
 
+function previewSession(account: Account): AuthSession {
+  activePreviewAccount = account;
+  return {
+    token: previewToken(account),
+    user: account,
+    expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+  };
+}
+
 export const previewRepository: WorkspaceRepository = {
   source: "preview",
   async listOrganizations() {
@@ -834,12 +817,7 @@ export const previewRepository: WorkspaceRepository = {
     if (!demo) throw new Error("The browser preview has no demo workspace to open.");
     previewOrganizations.select(demo, DEMO_ORGANIZATION_ID);
     const live = withLiveRole(demo);
-    activePreviewAccount = live;
-    return {
-      token: previewToken(live),
-      user: live,
-      expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
-    };
+    return previewSession(live);
   },
   async signIn(email, password, _remember): Promise<AuthSession> {
     if (import.meta.env.PROD && !isTauri()) {
@@ -853,12 +831,7 @@ export const previewRepository: WorkspaceRepository = {
       throw new Error("That email and password do not match an account on this device.");
     }
     const live = withLiveRole(account);
-    activePreviewAccount = live;
-    return {
-      token: previewToken(live),
-      user: live,
-      expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
-    };
+    return previewSession(live);
   },
   async createAccount(name, email, password): Promise<AuthSession> {
     if (import.meta.env.PROD && !isTauri()) {
@@ -896,12 +869,7 @@ export const previewRepository: WorkspaceRepository = {
       throw new Error("The browser preview could not save the new account.");
     }
     previewAccounts.push(account);
-    activePreviewAccount = account;
-    return {
-      token: previewToken(account),
-      user: account,
-      expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
-    };
+    return previewSession(account);
   },
   async signInWithHosted({ name, email }): Promise<AuthSession> {
     if (import.meta.env.PROD && !isTauri()) {
@@ -911,12 +879,7 @@ export const previewRepository: WorkspaceRepository = {
     const existing = previewAccounts.find((row) => row.email.toLowerCase() === clean);
     if (existing) {
       const live = withLiveRole(existing);
-      activePreviewAccount = live;
-      return {
-        token: previewToken(live),
-        user: live,
-        expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
-      };
+      return previewSession(live);
     }
     const suffix = Date.now().toString(36);
     const account: Account = {
@@ -935,12 +898,7 @@ export const previewRepository: WorkspaceRepository = {
       throw new Error("The browser preview could not save the hosted account.");
     }
     previewAccounts.push(account);
-    activePreviewAccount = account;
-    return {
-      token: previewToken(account),
-      user: account,
-      expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
-    };
+    return previewSession(account);
   },
   async signOut(token) {
     void token;

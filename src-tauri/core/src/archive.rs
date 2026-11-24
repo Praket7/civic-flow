@@ -76,6 +76,13 @@ fn derive_key(passphrase: &str, salt: &[u8], header: &Header) -> Result<[u8; KEY
             "Use a passphrase of at least {MIN_PASSPHRASE} characters. It is the only thing protecting the archive."
         )));
     }
+    // Version 1 writers always use these parameters. Reject unauthenticated
+    // resource requests before allocating Argon2 memory.
+    if header.memory_kib != MEMORY_KIB || header.iterations != ITERATIONS
+        || header.parallelism != PARALLELISM || salt.len() != SALT_LEN
+    {
+        return Err(validation("This archive has unsupported key settings."));
+    }
     let params = Params::new(
         header.memory_kib,
         header.iterations,
@@ -148,7 +155,7 @@ pub fn open(archive: &[u8], passphrase: &str) -> Result<Vec<u8>> {
             .map_err(|_| validation("That archive is truncated."))?,
     ) as usize;
     let body_at = length_at + 4;
-    if archive.len() < body_at + header_len {
+    if header_len > 65_536 || header_len > archive.len() - body_at {
         return Err(validation("That archive is truncated."));
     }
     let encoded = &archive[body_at..body_at + header_len];

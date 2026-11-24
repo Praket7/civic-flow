@@ -9,6 +9,10 @@ describe("scanned check-in codes", () => {
     expect(parseScannedCode("civicflow://checkin/a%20b")).toBe("a b");
   });
 
+  it("rejects invalid percent escapes without crashing", () => {
+    expect(parseScannedCode("civicflow://checkin/%E0%A4%A")).toBe("");
+  });
+
   it("reads a code from a printed web link", () => {
     expect(parseScannedCode("https://example.org/checkin?code=482913")).toBe("482913");
   });

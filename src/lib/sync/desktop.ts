@@ -15,6 +15,8 @@ import {
 import { SyncEngine, type SyncStatus } from "./engine";
 import { createSupabaseTransport } from "./transport";
 import { messageOf } from "../errors";
+import { onRepositoryTokenChange } from "../nativeSession";
+import { supabaseAnonKey } from "./config";
 
 /**
  * The desktop's own shared workspace.
@@ -69,6 +71,7 @@ let engine: SyncEngine | null = null;
 let active: { organizationId: string; userId: string } | null = null;
 let starting: Promise<DesktopSyncState> | null = null;
 let unsubscribeEngine: (() => void) | null = null;
+let generation = 0;
 const listeners = new Set<Listener>();
 
 function publish(patch: Partial<DesktopSyncState>): void {
@@ -173,6 +176,7 @@ interface Target {
   name: string | null;
   client: SupabaseClient | null;
   online: boolean;
+  accessToken?: string;
 }
 
 async function chooseTarget(): Promise<Target> {
@@ -182,8 +186,8 @@ async function chooseTarget(): Promise<Target> {
   const client = cloudClient();
 
   if (session && client) {
-    const workspaces = await withTimeout(cloudWorkspaces(), 6_000).catch(() => []);
-    const chosen = selectHostedWorkspace(workspaces, remembered, local);
+    const workspaces = await withTimeout(cloudWorkspaces(), 6_000).catch(() => null);
+    const chosen = workspaces && selectHostedWorkspace(workspaces, remembered, local);
     if (chosen) {
       return {
         organizationId: chosen.organizationId,
@@ -192,8 +196,10 @@ async function chooseTarget(): Promise<Target> {
         name: chosen.organization.name,
         client,
         online: true,
+        accessToken: session.access_token,
       };
     }
+    if (workspaces) throw new Error("This account no longer has access to a shared organization.");
   }
 
   // Offline, or signed out of the hosted provider: the last replica is still
@@ -205,7 +211,7 @@ async function chooseTarget(): Promise<Target> {
     );
   }
   const replica = await replicaStatus(organizationId);
-  if (!replica.configured || !replica.userId) {
+  if (!replica.configured || !replica.userId || (session && session.user.id !== replica.userId)) {
     throw new Error("The synced copy on this desktop is not configured.");
   }
   return {
@@ -249,6 +255,7 @@ function engineSnapshot(next: SyncStatus): void {
 }
 
 async function runStart(forceBootstrap: boolean): Promise<DesktopSyncState> {
+  const ticket = generation;
   if (!isTauri()) {
     publish({ phase: "error", error: "The synced copy is only available in the desktop app." });
     return state;
@@ -256,6 +263,14 @@ async function runStart(forceBootstrap: boolean): Promise<DesktopSyncState> {
   publish({ phase: "starting", error: null });
   try {
     const target = await chooseTarget();
+    if (ticket !== generation) return state;
+    if (engine && (!target.online || forceBootstrap || active?.organizationId !== target.organizationId || active.userId !== target.userId)) {
+      unsubscribeEngine?.();
+      unsubscribeEngine = null;
+      await engine.stopAndWait();
+      engine = null;
+      active = null;
+    }
     publish({
       organizationId: target.organizationId,
       userId: target.userId,
@@ -274,11 +289,15 @@ async function runStart(forceBootstrap: boolean): Promise<DesktopSyncState> {
       previous.membershipEpoch !== target.membershipEpoch,
     );
 
+    if (ticket !== generation) return state;
     const configured = await configureReplica({
       organizationId: target.organizationId,
       userId: target.userId,
       membershipEpoch: target.membershipEpoch,
+      hostedAccessToken: target.accessToken,
+      anonKey: target.accessToken ? supabaseAnonKey : undefined,
     });
+    if (ticket !== generation) return state;
     publish({
       configured: configured.configured,
       cursor: configured.cursor,
@@ -309,6 +328,7 @@ async function runStart(forceBootstrap: boolean): Promise<DesktopSyncState> {
       ) {
         await bootstrap(target);
       }
+      if (ticket !== generation) return state;
       await mergeReplica(target.organizationId);
       const name = await organizationName(target.organizationId);
       publish({ organizationName: name ?? target.name });
@@ -334,6 +354,7 @@ async function runStart(forceBootstrap: boolean): Promise<DesktopSyncState> {
         });
         active = { organizationId: target.organizationId, userId: target.userId };
       }
+      if (ticket !== generation) return state;
       const running = engine;
       if (!running) throw new Error("The shared sync engine did not start.");
       await running.start(target.userId, target.organizationId);
@@ -355,18 +376,25 @@ async function runStart(forceBootstrap: boolean): Promise<DesktopSyncState> {
     });
     return state;
   } catch (error) {
+    if (ticket !== generation) return state;
     const message = messageOf(error);
-    publish({ phase: state.configured ? "offline" : "error", online: false, error: message });
+    engine?.stop();
+    unsubscribeEngine?.();
+    unsubscribeEngine = null;
+    engine = null;
+    active = null;
+    publish({ ...INITIAL, phase: "error", error: message });
     return state;
   }
 }
 
 export async function startDesktopSync(forceBootstrap = false): Promise<DesktopSyncState> {
   if (starting) return starting;
-  starting = runStart(forceBootstrap).finally(() => {
-    starting = null;
+  const flight = runStart(forceBootstrap).finally(() => {
+    if (starting === flight) starting = null;
   });
-  return starting;
+  starting = flight;
+  return flight;
 }
 
 export async function syncDesktopNow(): Promise<DesktopSyncState> {
@@ -376,3 +404,14 @@ export async function syncDesktopNow(): Promise<DesktopSyncState> {
   }
   return state;
 }
+
+onRepositoryTokenChange(() => {
+  generation += 1;
+  engine?.stop();
+  unsubscribeEngine?.();
+  engine = null;
+  active = null;
+  starting = null;
+  unsubscribeEngine = null;
+  publish({ ...INITIAL });
+});

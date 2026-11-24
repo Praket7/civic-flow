@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invokeAuthed as invoke } from "../nativeSession";
 import type { CandidateAnswer, RosterEvaluation, RosterOptions } from "../../types/domain";
 
 /** Defaults match the local AutoRoster screen; the shared panel exposes the same four choices. */

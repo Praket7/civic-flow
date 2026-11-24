@@ -11,6 +11,8 @@ import {
 import { messageOf } from "../errors";
 
 export interface SyncStore {
+  activate?(userId: string, organizationId: string, membershipEpoch: number): Promise<void>;
+  claimReady?(userId: string, organizationId: string, now: number): Promise<OutboxRow | null>;
   recoverStaleSending(cutoff: number, now: number): Promise<number>;
   nextReady(userId: string, organizationId: string, now: number): Promise<OutboxRow | null>;
   markSending(id: number): Promise<void>;
@@ -109,6 +111,7 @@ export class SyncEngine {
   private organizationId: string | null = null;
   private userId: string | null = null;
   private revision = 0;
+  private generation = 0;
   private timer: number | null = null;
   private unsubscribeRealtime: (() => void) | null = null;
   private flight: Promise<void> | null = null;
@@ -144,7 +147,8 @@ export class SyncEngine {
     for (const listener of this.listeners) listener(event);
   }
 
-  private async publish(patch: Partial<SyncStatus> = {}): Promise<void> {
+  private async publish(patch: Partial<SyncStatus> = {}, generation = this.generation): Promise<void> {
+    if (generation !== this.generation) return;
     if (!this.organizationId) {
       this.status = { ...this.status, ...patch };
       this.emit({ type: "status", status: this.snapshot() });
@@ -160,19 +164,28 @@ export class SyncEngine {
       this.store.pendingCount(userId, this.organizationId),
       this.store.openConflictCount(this.organizationId),
     ]);
+    if (generation !== this.generation) return;
     this.status = { ...this.status, ...patch, pending, conflicts };
     this.emit({ type: "status", status: this.snapshot() });
   }
 
-  async start(userId: string, organizationId: string): Promise<void> {
+  async start(userId: string, organizationId: string, membershipEpoch = 0): Promise<void> {
     if (this.userId === userId && this.organizationId === organizationId && this.timer !== null) {
       return;
     }
     this.stop();
+    const generation = this.generation;
+    await this.flight?.catch(() => {});
+    if (generation !== this.generation) return;
     this.userId = userId;
     this.organizationId = organizationId;
-    this.revision = await this.store.readRevision(organizationId);
-    await this.publish({ organizationId, revision: this.revision });
+    await this.store.activate?.(userId, organizationId, membershipEpoch);
+    if (generation !== this.generation) return;
+    const revision = await this.store.readRevision(organizationId);
+    if (generation !== this.generation) return;
+    this.revision = revision;
+    await this.publish({ organizationId, revision, lastSyncedAt: null, lastError: null, online: false, running: false }, generation);
+    if (generation !== this.generation) return;
     this.unsubscribeRealtime =
       this.transport.subscribe?.(organizationId, () => {
         void this.syncNow();
@@ -184,12 +197,19 @@ export class SyncEngine {
   }
 
   stop(): void {
+    this.generation += 1;
     if (this.timer !== null) window.clearInterval(this.timer);
     this.timer = null;
     this.unsubscribeRealtime?.();
     this.unsubscribeRealtime = null;
     this.organizationId = null;
     this.userId = null;
+  }
+
+  /** Stop accepting work and wait for any durable operation already in flight. */
+  async stopAndWait(): Promise<void> {
+    this.stop();
+    await this.flight?.catch(() => {});
   }
 
   /** Called after a local write queues a command. */
@@ -203,47 +223,59 @@ export class SyncEngine {
    */
   syncNow(): Promise<void> {
     if (this.flight) return this.flight;
-    this.flight = this.pass().finally(() => {
+    if (!this.organizationId || !this.userId) return Promise.resolve();
+    this.flight = this.pass(this.generation).finally(() => {
       this.flight = null;
     });
     return this.flight;
   }
 
-  private async pass(): Promise<void> {
+  private async pass(generation: number): Promise<void> {
     const organizationId = this.organizationId;
     const userId = this.userId;
     if (!organizationId || !userId) return;
-    await this.publish({ running: true });
     try {
+      await this.publish({ running: true }, generation);
+      if (generation !== this.generation) return;
       await this.store.recoverStaleSending(this.now() - SENDING_STALE_MS, this.now());
-      await this.drain(userId, organizationId);
-      await this.pullAll(organizationId);
+      await this.drain(userId, organizationId, generation);
+      if (generation !== this.generation) return;
+      await this.pullAll(organizationId, generation);
       await this.publish({
         online: true,
         lastError: null,
         lastSyncedAt: new Date(this.now()).toISOString(),
         revision: this.revision,
-      });
+      }, generation);
     } catch (error) {
       await this.publish({
         online: false,
         lastError: messageOf(error),
-      });
+      }, generation);
     } finally {
-      await this.publish({ running: false });
+      await this.publish({ running: false }, generation);
     }
   }
 
-  private async drain(userId: string, organizationId: string): Promise<void> {
+  private async drain(userId: string, organizationId: string, generation: number): Promise<void> {
     for (let index = 0; index < MAX_COMMANDS_PER_PASS; index += 1) {
-      const row = await this.store.nextReady(userId, organizationId, this.now());
+      if (generation !== this.generation) return;
+      const row = await (this.store.claimReady ?? this.store.nextReady).call(this.store, userId, organizationId, this.now());
       if (!row) return;
+      if (generation !== this.generation) {
+        if (this.store.claimReady && row.id !== undefined) await this.store.markRetry(row.id, "Session changed before upload.", this.now());
+        return;
+      }
       // A row from another account or organization is not this pass's work. It
       // stays bound to its owner and is never rewritten.
       if (row.userId !== userId || row.organizationId !== organizationId || row.id === undefined) {
         return;
       }
-      await this.store.markSending(row.id);
+      if (!this.store.claimReady) await this.store.markSending(row.id);
+      if (generation !== this.generation) {
+        await this.store.markRetry(row.id, "Session changed before upload.", this.now());
+        return;
+      }
       let result: CommandResult;
       try {
         result = await this.transport.push(row.envelope);
@@ -257,12 +289,17 @@ export class SyncEngine {
         throw error;
       }
 
+      if (generation !== this.generation) {
+        // Retry with the same operation ID if the response belonged to a closed session.
+        await this.store.markRetry(row.id, "Session changed during upload.", this.now());
+        return;
+      }
       if (isAccepted(result.status)) {
         await this.store.markSent(row.id, result);
         if (typeof result.cursor === "number") {
           // The server's change log may already contain this operation; the
           // pull below is what makes the local replica agree.
-          await this.pullAll(organizationId);
+          await this.pullAll(organizationId, generation);
         }
         continue;
       }
@@ -280,6 +317,7 @@ export class SyncEngine {
         const conflict: ConflictRow = {
           id: crypto.randomUUID(),
           organizationId,
+          userId,
           operationId: row.operationId,
           command: row.command,
           entity:
@@ -294,10 +332,11 @@ export class SyncEngine {
           resolvedAt: null,
         };
         await this.store.markRefused(row.id, result, conflict);
+        if (generation !== this.generation) return;
         this.emit({ type: "conflict", conflict });
         // The authoritative state may already have moved past this command;
         // pulling now is what lets the screen explain both versions.
-        await this.pullAll(organizationId);
+        await this.pullAll(organizationId, generation);
         continue;
       }
 
@@ -311,10 +350,13 @@ export class SyncEngine {
     }
   }
 
-  private async pullAll(organizationId: string): Promise<void> {
+  private async pullAll(organizationId: string, generation: number): Promise<void> {
     for (let batch = 0; batch < MAX_PULL_BATCHES; batch += 1) {
+      if (generation !== this.generation) return;
       const cursor = await this.store.readCursor(organizationId);
+      if (generation !== this.generation) return;
       const result = await this.transport.pull(organizationId, cursor, 500);
+      if (generation !== this.generation) return;
       if (result.status !== "ok") {
         throw new Error("This device no longer has access to that organization.");
       }
@@ -323,6 +365,7 @@ export class SyncEngine {
         // batch can be empty when every row in it is invisible to this member;
         // the cursor still has to move or the next poll reads it forever.
         await this.store.applyPull(organizationId, result.changes, result.cursor);
+        if (generation !== this.generation) return;
         if (result.changes.length > 0) this.emit({ type: "data" });
       }
       this.revision = result.revision;

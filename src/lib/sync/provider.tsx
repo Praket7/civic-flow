@@ -25,11 +25,12 @@ import {
   readCursor,
   readWorkspace,
   replicaId,
+  replicaScope,
   volunteerDb,
   writeWorkspace,
 } from "./db";
 import { SyncEngine, type SyncStatus } from "./engine";
-import { DexieSyncStore, queueCommand } from "./localStore";
+import { DexieSyncStore, queueCommand, retryQueuedConflict } from "./localStore";
 import { createSupabaseTransport } from "./transport";
 import { buildVolunteerView, type Row, type VolunteerView } from "./views";
 import type { ConflictRow } from "./db";
@@ -121,7 +122,10 @@ export function CloudProvider({ children }: { children: ReactNode }) {
   const [pendingShiftIds, setPendingShiftIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
-  const starting = useRef(false);
+  const starting = useRef<string | null>(null);
+  const ownerRef = useRef<string | null>(null);
+  const epochRef = useRef(0);
+  const generation = useRef(0);
   const organizationRef = useRef<string | null>(null);
   const lastReport = useRef<string>("");
   const userId = session?.user.id ?? null;
@@ -137,15 +141,20 @@ export function CloudProvider({ children }: { children: ReactNode }) {
   );
 
   const loadConflicts = useCallback(async (organizationId: string) => {
+    const owner = ownerRef.current;
+    const ticket = generation.current;
+    if (!owner) return;
     const rows = await volunteerDb()
-      .conflicts.where("organizationId")
-      .equals(organizationId)
+      .conflicts.where("[userId+organizationId]")
+      .equals([owner, organizationId])
       .filter((row) => row.status === "open")
       .toArray();
+    if (ticket !== generation.current || organizationRef.current !== organizationId) return;
     setConflicts(rows.sort((left, right) => right.createdAt.localeCompare(left.createdAt)));
   }, []);
 
   const loadPending = useCallback(async (organizationId: string, owner: string) => {
+    const ticket = generation.current;
     // Only this account's queued work is shown or uploaded.
     const rows = await volunteerDb()
       .outbox.where("[userId+organizationId+state]")
@@ -158,13 +167,17 @@ export function CloudProvider({ children }: { children: ReactNode }) {
     const ids = [...rows, ...sending]
       .map((row) => row.envelope.payload.shiftId)
       .filter((id): id is string => typeof id === "string");
-    setPendingShiftIds([...new Set(ids)]);
+    if (ticket === generation.current && ownerRef.current === owner && organizationRef.current === organizationId) {
+      setPendingShiftIds([...new Set(ids)]);
+    }
   }, []);
 
   const reportDevice = useCallback(
     async (organizationId: string, pending: number, error: string | null) => {
       try {
-        const cursor = await readCursor(organizationId);
+        const owner = ownerRef.current;
+        if (!owner || organizationRef.current !== organizationId) return;
+        const cursor = await readCursor(replicaScope(organizationId, owner, epochRef.current));
         await supabase().rpc("report_device_state", {
           p_organization_id: organizationId,
           p_replica_id: await replicaId(),
@@ -205,36 +218,25 @@ export function CloudProvider({ children }: { children: ReactNode }) {
   }, [engine, loadConflicts, reportDevice]);
 
   const loadView = useCallback(async (current: Workspace) => {
-    if (!current.volunteerId) {
+    const owner = ownerRef.current;
+    const ticket = generation.current;
+    if (!owner || current.role !== "volunteer" || !current.volunteerId) {
       setView(null);
       return;
     }
-    const rows = await readRows(current.organizationId);
+    const rows = await readRows(replicaScope(current.organizationId, owner, current.membershipEpoch));
+    if (ticket !== generation.current || organizationRef.current !== current.organizationId) return;
     setView(
       buildVolunteerView({
         now: new Date().toISOString(),
         volunteerId: current.volunteerId,
-        rows: {
-          volunteers: rows.volunteers,
-          opportunities: rows.opportunities,
-          shifts: rows.shifts,
-          roles: rows.roles,
-          registrations: rows.registrations,
-          waitlist: rows.waitlist,
-          attendance: rows.attendance,
-          hours: rows.hours,
-          credentials: rows.credentials,
-          credentialTypes: rows.credentialTypes,
-          notifications: rows.notifications,
-          saved: rows.saved,
-        },
+        rows,
       }),
     );
   }, []);
 
   useEffect(() => {
-    if (!workspace) return;
-    if (!userId) return;
+    if (!workspace || !userId || phase !== "ready") return;
     let active = true;
     void (async () => {
       await loadPending(workspace.organizationId, userId);
@@ -245,13 +247,24 @@ export function CloudProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [workspace, userId, dataVersion, loadConflicts, loadPending, loadView]);
+  }, [workspace, userId, phase, dataVersion, loadConflicts, loadPending, loadView]);
 
   const openWorkspace = useCallback(
     async (chosen: Workspace, owner: string) => {
-      setWorkspace(chosen);
+      const ticket = ++generation.current;
+      ownerRef.current = owner;
+      epochRef.current = chosen.membershipEpoch;
       organizationRef.current = chosen.organizationId;
+      setPhase("loading");
+      setView(null);
+      setConflicts([]);
+      setPendingShiftIds([]);
+      setStatus(EMPTY_STATUS);
+      await engine.stopAndWait();
+      if (ticket !== generation.current) return;
       await writeWorkspace(chosen.organizationId);
+      if (ticket !== generation.current) return;
+      setWorkspace(chosen);
 
       // A coordinator reads the server's health and delivery state, not a
       // volunteer replica. Pulling every table onto a phone would be a privacy
@@ -264,7 +277,8 @@ export function CloudProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      await engine.start(owner, chosen.organizationId);
+      await engine.start(owner, chosen.organizationId, chosen.membershipEpoch);
+      if (ticket !== generation.current) return;
       setPhase("ready");
       setError(null);
       // The coordinator's health view is only useful if a device says who it
@@ -289,15 +303,25 @@ export function CloudProvider({ children }: { children: ReactNode }) {
         // Registration is health metadata; it must not block the shift list.
       }
       // The first pull may have arrived while the screen was still loading.
-      setDataVersion((value) => value + 1);
+      if (ticket === generation.current) setDataVersion((value) => value + 1);
     },
     [engine],
   );
 
   const bootstrap = useCallback(
     async (next: Session) => {
-      if (starting.current) return;
-      starting.current = true;
+      if (starting.current === next.user.id) return;
+      starting.current = next.user.id;
+      const ticket = ++generation.current;
+      ownerRef.current = next.user.id;
+      organizationRef.current = null;
+      engine.stop();
+      setWorkspace(null);
+      setView(null);
+      setConflicts([]);
+      setPendingShiftIds([]);
+      setStatus(EMPTY_STATUS);
+      setWorkspaces([]);
       try {
         setPhase("loading");
         setSession(next);
@@ -307,6 +331,7 @@ export function CloudProvider({ children }: { children: ReactNode }) {
           // A profile row is a convenience; membership is what matters.
         }
         const all = await myWorkspaces();
+        if (ticket !== generation.current) return;
         setWorkspaces(all);
         const active = all.filter((entry) => entry.status === "active");
         if (active.length === 0) {
@@ -319,19 +344,22 @@ export function CloudProvider({ children }: { children: ReactNode }) {
           return;
         }
         const remembered = await readWorkspace();
+        if (ticket !== generation.current) return;
         const chosen = active.find((entry) => entry.organizationId === remembered) ?? active[0];
         // The hosted browser supports a limited but real coordinator console.
         // openWorkspace keeps coordinator data on the server and does not pull
         // the volunteer offline replica or impersonate a volunteer.
         await openWorkspace(chosen, next.user.id);
       } catch (caught) {
-        setPhase("error");
-        setError(messageOf(caught));
+        if (ownerRef.current === next.user.id) {
+          setPhase("error");
+          setError(messageOf(caught));
+        }
       } finally {
-        starting.current = false;
+        if (starting.current === next.user.id) starting.current = null;
       }
     },
-    [openWorkspace],
+    [engine, openWorkspace],
   );
 
   useEffect(() => {
@@ -355,15 +383,24 @@ export function CloudProvider({ children }: { children: ReactNode }) {
     })();
     const unsubscribe = onAuthChange((next) => {
       if (next) {
-        if (!organizationRef.current) void bootstrap(next);
+        if (ownerRef.current !== next.user.id || !organizationRef.current) {
+          // Supabase auth callbacks must not await further calls on the auth lock.
+          window.setTimeout(() => { if (active) void bootstrap(next); }, 0);
+        }
         return;
       }
-      engine.stop();
+      generation.current += 1;
+      const previousOwner = ownerRef.current;
+      ownerRef.current = null;
+      starting.current = null;
+      void engine.stopAndWait().then(() => { if (previousOwner && ownerRef.current !== previousOwner) return clearVolunteerCache(previousOwner); });
       organizationRef.current = null;
       setSession(null);
       setWorkspace(null);
       setWorkspaces([]);
       setView(null);
+      setConflicts([]);
+      setPendingShiftIds([]);
       setStatus(EMPTY_STATUS);
       setPhase("signed-out");
     });
@@ -384,24 +421,15 @@ export function CloudProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
+    // The auth callback closes the screen and stops the engine on every sign-out,
+    // including sign-out from a different tab.
     await providerSignOut();
-    engine.stop();
-    organizationRef.current = null;
-    await clearVolunteerCache();
-    setSession(null);
-    setWorkspace(null);
-    setWorkspaces([]);
-    setView(null);
-    setConflicts([]);
-    setPendingShiftIds([]);
-    setStatus(EMPTY_STATUS);
-    setPhase("signed-out");
-  }, [engine]);
+  }, []);
 
   const selectWorkspace = useCallback(
     async (organizationId: string) => {
       const chosen = workspaces.find((entry) => entry.organizationId === organizationId);
-      if (!chosen) throw new Error("That workspace is not available to this account.");
+      if (!chosen || chosen.status !== "active") throw new Error("That workspace is not available to this account.");
       if (!userId) throw new Error("Sign in again to open a workspace.");
       await openWorkspace(chosen, userId);
       setDataVersion((value) => value + 1);
@@ -415,7 +443,7 @@ export function CloudProvider({ children }: { children: ReactNode }) {
       payload: Record<string, unknown>,
       entityVersions: Record<string, number> = {},
     ) => {
-      if (!workspace) throw new Error("Open a workspace first.");
+      if (!workspace || workspace.status !== "active" || organizationRef.current !== workspace.organizationId || ownerRef.current !== userId) throw new Error("Open a workspace first.");
       if (!userId) throw new Error("Sign in again to record this change.");
       await queueCommand({
         userId,
@@ -434,9 +462,12 @@ export function CloudProvider({ children }: { children: ReactNode }) {
 
   const dismissConflict = useCallback(
     async (id: string) => {
-      await volunteerDb().conflicts.update(id, {
-        status: "resolved",
-        resolvedAt: new Date().toISOString(),
+      const db = volunteerDb();
+      await db.transaction("rw", db.conflicts, async () => {
+        const row = await db.conflicts.get(id);
+        if (row?.userId === ownerRef.current && row.organizationId === organizationRef.current) {
+          await db.conflicts.update(id, { status: "resolved", resolvedAt: new Date().toISOString() });
+        }
       });
       if (workspace) await loadConflicts(workspace.organizationId);
     },
@@ -445,12 +476,8 @@ export function CloudProvider({ children }: { children: ReactNode }) {
 
   const retryConflict = useCallback(
     async (conflict: ConflictRow) => {
-      if (!workspace || !userId) return;
-      await volunteerDb().conflicts.update(conflict.id, {
-        status: "resolved",
-        resolvedAt: new Date().toISOString(),
-      });
-      await queueCommand({
+      if (!workspace || !userId || ownerRef.current !== userId || organizationRef.current !== workspace.organizationId) return;
+      await retryQueuedConflict(conflict.id, {
         userId,
         organizationId: workspace.organizationId,
         membershipEpoch: workspace.membershipEpoch,
@@ -476,7 +503,17 @@ export function CloudProvider({ children }: { children: ReactNode }) {
         if (!active) return;
         setWorkspaces(all);
         const current = all.find((entry) => entry.organizationId === workspace.organizationId);
-        if (current) setWorkspace(current);
+        if (!current || current.status !== "active") {
+          generation.current += 1;
+          engine.stop();
+          organizationRef.current = null;
+          setView(null);
+          setWorkspace(null);
+          setPhase("error");
+          setError("This device no longer has access to that organization.");
+        } else if (current.membershipEpoch !== workspace.membershipEpoch || current.role !== workspace.role) {
+          if (userId) await openWorkspace(current, userId);
+        }
       } catch {
         // Offline: the stored epoch stays until the next successful sync.
       }
@@ -484,7 +521,7 @@ export function CloudProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [conflicts, workspace]);
+  }, [conflicts, workspace, engine, openWorkspace, userId]);
 
   const syncNow = useCallback(async () => {
     await engine.syncNow();

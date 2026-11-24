@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "../platform";
 import {
   desktopSyncSnapshot,
@@ -36,6 +36,8 @@ export function useReplicaSource<T>(
   // The browser has no SQLite replica, so it is never waiting for one.
   const [loading, setLoading] = useState(() => isTauri());
   const [error, setError] = useState<string | null>(null);
+  const request = useRef(0);
+  const [loadedScope, setLoadedScope] = useState("");
 
   useEffect(() => subscribeDesktopSync(setSync), []);
 
@@ -45,19 +47,26 @@ export function useReplicaSource<T>(
   }, []);
 
   const load = useCallback(async () => {
-    const organizationId = desktopSyncSnapshot().organizationId;
+    const ticket = ++request.current;
+    const selected = desktopSyncSnapshot();
+    const organizationId = selected.organizationId;
+    const scope = `${selected.userId}:${organizationId}`;
     if (!isTauri() || !organizationId) {
       setData(empty);
       setLoading(false);
       return;
     }
     try {
-      setData(await read(organizationId));
+      const next = await read(organizationId);
+      const latest = desktopSyncSnapshot();
+      if (ticket !== request.current || latest.organizationId !== organizationId || latest.userId !== selected.userId) return;
+      setData(next);
+      setLoadedScope(scope);
       setError(null);
     } catch (caught) {
-      setError(messageOf(caught));
+      if (ticket === request.current) setError(messageOf(caught));
     } finally {
-      setLoading(false);
+      if (ticket === request.current) setLoading(false);
     }
   }, [empty, read]);
 
@@ -73,8 +82,9 @@ export function useReplicaSource<T>(
     })();
     return () => {
       current = false;
+      request.current += 1;
     };
-  }, [load, sync.organizationId, sync.cursor, sync.entities]);
+  }, [load, sync.organizationId, sync.userId, sync.cursor, sync.entities]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -91,5 +101,5 @@ export function useReplicaSource<T>(
     await load();
   }, [load]);
 
-  return { sync, data, loading, error, reload, rebuild };
+  return { sync, data: loadedScope === `${sync.userId}:${sync.organizationId}` ? data : empty, loading, error, reload, rebuild };
 }

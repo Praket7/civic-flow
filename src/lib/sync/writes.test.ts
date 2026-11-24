@@ -264,13 +264,13 @@ describe("shared coordinator writes", () => {
   it("reads and closes conflict records through Rust", async () => {
     mock.mockResolvedValueOnce([]);
     await expect(listSharedConflicts()).resolves.toEqual([]);
-    expect(mock).toHaveBeenCalledWith("sync_list_conflicts", {
+    expect(mock).toHaveBeenCalledWith("sync_list_conflicts", { token: "",
       organizationId: "11111111-1111-4111-8111-111111111111",
     });
 
     mock.mockResolvedValueOnce(undefined);
     await resolveSharedConflict("conflict-1", "resolved");
-    expect(mock).toHaveBeenCalledWith("sync_resolve_conflict", {
+    expect(mock).toHaveBeenCalledWith("sync_resolve_conflict", { token: "",
       organizationId: "11111111-1111-4111-8111-111111111111",
       conflictId: "conflict-1",
       resolution: "resolved",

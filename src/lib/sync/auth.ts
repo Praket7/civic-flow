@@ -1,7 +1,7 @@
 import { createClient, type Session, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { describeAuthError } from "../auth/errors";
 import type { BridgedSession } from "../cloud/bridge";
-import { cloudClient } from "../cloud/client";
+import { cloudClient, type CloudWorkspace } from "../cloud/client";
 import { isTauri } from "../platform";
 import { MissingCloudConfigError, requireCloudConfig } from "./config";
 
@@ -74,22 +74,7 @@ export function supabase(): SupabaseClient {
   return cached;
 }
 
-export interface Workspace {
-  organizationId: string;
-  role: "owner" | "coordinator" | "volunteer";
-  status: "active" | "invited" | "disabled";
-  membershipEpoch: number;
-  volunteerId: string | null;
-  joinedAt: string;
-  organization: {
-    id: string;
-    name: string;
-    initials: string;
-    timezone: string;
-    visibility: string;
-    image: string | null;
-  };
-}
+export type Workspace = CloudWorkspace;
 
 export async function signInWithPassword(email: string, password: string): Promise<Session> {
   const { data, error } = await supabase().auth.signInWithPassword({

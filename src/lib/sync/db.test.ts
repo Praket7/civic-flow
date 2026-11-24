@@ -1,6 +1,9 @@
 import "fake-indexeddb/auto";
 import {
   applyChanges,
+  clearVolunteerCache,
+  replicaId,
+  replicaScope,
   entityById,
   entitiesOf,
   readCursor,
@@ -16,6 +19,41 @@ describe("volunteer replica", () => {
     const db = volunteerDb();
     await db.delete();
     await db.open();
+  });
+
+  it("isolates account and membership-epoch replicas while retaining the installation identity", async () => {
+    const alice = new DexieSyncStore();
+    const bob = new DexieSyncStore();
+    await alice.activate("alice", ORG, 1);
+    await bob.activate("bob", ORG, 1);
+    await alice.applyPull(ORG, [{ sequence: 7, entity: "volunteer", id: "private", operation: "insert", payload: { name: "Alice" } }], 7);
+    expect(await bob.readCursor(ORG)).toBe(0);
+    expect(await entitiesOf(replicaScope(ORG, "bob", 1), "volunteer")).toEqual([]);
+    await alice.activate("alice", ORG, 2);
+    expect(await alice.readCursor(ORG)).toBe(0);
+    const original = await replicaId();
+    await clearVolunteerCache("alice");
+    expect(await replicaId()).toBe(original);
+    expect(await entitiesOf(replicaScope(ORG, "alice", 1), "volunteer")).toEqual([]);
+  });
+
+  it("atomically claims the earliest queued command across browser tabs", async () => {
+    const input = { userId: "alice", organizationId: ORG, membershipEpoch: 1, command: "CREATE_SHIFT" as const, payload: {} };
+    const first = await queueCommand(input);
+    const second = await queueCommand(input);
+    const left = new DexieSyncStore();
+    const right = new DexieSyncStore();
+    const claimed = await Promise.all([left.claimReady("alice", ORG, 1000), right.claimReady("alice", ORG, 1000)]);
+    expect(claimed.filter(Boolean).map((row) => row?.id)).toEqual([first.id]);
+    await left.markSent(first.id!, { status: "applied" });
+    expect((await right.claimReady("alice", ORG, 1000))?.id).toBe(second.id);
+  });
+
+  it("never rewinds a committed cursor or resurrects stale rows", async () => {
+    await applyChanges(ORG, [{ sequence: 5, entity: "shift", id: "one", operation: "delete" }], 5);
+    await applyChanges(ORG, [{ sequence: 3, entity: "shift", id: "one", operation: "insert", payload: { id: "one" } }], 3);
+    expect(await readCursor(ORG)).toBe(5);
+    expect(await entityById(ORG, "shift", "one")).toBeNull();
   });
 
   it("writes rows and the cursor together", async () => {

@@ -2,6 +2,7 @@ import { createClient, type Session, type SupabaseClient } from "@supabase/supab
 import { describeAuthError } from "../auth/errors";
 import { cloudConfigured, supabaseAnonKey, supabaseUrl } from "../sync/config";
 import { CloudSessionStorage, CLOUD_SESSION_KEY } from "./storage";
+import { onRepositoryTokenChange } from "../nativeSession";
 
 export interface CloudWorkspace {
   organizationId: string;
@@ -21,6 +22,10 @@ export interface CloudWorkspace {
 }
 
 let cached: SupabaseClient | null = null;
+onRepositoryTokenChange(() => {
+  void cached?.auth.stopAutoRefresh();
+  cached = null;
+});
 
 export function cloudAvailable(): boolean {
   return cloudConfigured();

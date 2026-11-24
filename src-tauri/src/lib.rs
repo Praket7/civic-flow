@@ -72,6 +72,17 @@ impl AppState {
         let account = require_installation_steward(&database, token)?;
         Ok((database, account))
     }
+    fn replica(&self, token: &str, organization_id: &str) -> Result<MutexGuard<'_, Database>, AppError> {
+        let (database, account) = self.user(token)?;
+        sync_replica::require_local_owner(database.connection(), organization_id, &account.id)?;
+        Ok(database)
+    }
+    fn outbox(&self, token: &str, id: i64) -> Result<MutexGuard<'_, Database>, AppError> {
+        let (database, account) = self.user(token)?;
+        sync_replica::require_outbox_owner(database.connection(), id, &account.id)?;
+        Ok(database)
+    }
+
 }
 
 fn lock_error() -> AppError {
@@ -98,8 +109,14 @@ fn keychain_error(error: keyring::Error) -> AppError {
     }
 }
 
+fn cloud_credential(state: &AppState, token: &str) -> Result<keyring::Entry, AppError> {
+    let (_database, account) = state.user(token)?;
+    keyring::Entry::new(CLOUD_SESSION_SERVICE, &format!("{CLOUD_SESSION_ACCOUNT}:{}", account.id))
+        .map_err(keychain_error)
+}
+
 #[tauri::command]
-fn save_cloud_session(value: String) -> Result<(), AppError> {
+fn save_cloud_session(state: State<'_, AppState>, token: String, value: String) -> Result<(), AppError> {
     if value.trim().is_empty() {
         return Err(AppError {
             code: "VALIDATION".into(),
@@ -108,16 +125,12 @@ fn save_cloud_session(value: String) -> Result<(), AppError> {
             action: None,
         });
     }
-    let entry = keyring::Entry::new(CLOUD_SESSION_SERVICE, CLOUD_SESSION_ACCOUNT)
-        .map_err(keychain_error)?;
-    entry.set_password(&value).map_err(keychain_error)
+    cloud_credential(&state, &token)?.set_password(&value).map_err(keychain_error)
 }
 
 #[tauri::command]
-fn load_cloud_session() -> Result<Option<String>, AppError> {
-    let entry = keyring::Entry::new(CLOUD_SESSION_SERVICE, CLOUD_SESSION_ACCOUNT)
-        .map_err(keychain_error)?;
-    match entry.get_password() {
+fn load_cloud_session(state: State<'_, AppState>, token: String) -> Result<Option<String>, AppError> {
+    match cloud_credential(&state, &token)?.get_password() {
         Ok(value) => Ok(Some(value)),
         Err(keyring::Error::NoEntry) => Ok(None),
         Err(error) => Err(keychain_error(error)),
@@ -125,10 +138,8 @@ fn load_cloud_session() -> Result<Option<String>, AppError> {
 }
 
 #[tauri::command]
-fn clear_cloud_session() -> Result<(), AppError> {
-    let entry = keyring::Entry::new(CLOUD_SESSION_SERVICE, CLOUD_SESSION_ACCOUNT)
-        .map_err(keychain_error)?;
-    match entry.delete_credential() {
+fn clear_cloud_session(state: State<'_, AppState>, token: String) -> Result<(), AppError> {
+    match cloud_credential(&state, &token)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(error) => Err(keychain_error(error)),
     }
@@ -1673,12 +1684,12 @@ fn import_encrypted_backup(
 
 #[tauri::command]
 fn shared_evaluate_roster(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     organization_id: String,
     shift_ids: Vec<String>,
     options: RosterOptions,
 ) -> Result<civicflow_core::matching::RosterEvaluation, AppError> {
-    let database = state.lock()?;
+    let database = state.replica(&token, &organization_id)?;
     shared_roster::evaluate_roster(
         database.connection(),
         &organization_id,
@@ -1690,14 +1701,14 @@ fn shared_evaluate_roster(
 
 #[tauri::command]
 fn shared_explain_roster(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     organization_id: String,
     shift_ids: Vec<String>,
     options: RosterOptions,
     candidate_id: String,
     slot_id: String,
 ) -> Result<CandidateAnswer, AppError> {
-    let database = state.lock()?;
+    let database = state.replica(&token, &organization_id)?;
     shared_roster::explain_candidate(
         database.connection(),
         &organization_id,
@@ -1710,31 +1721,61 @@ fn shared_explain_roster(
 }
 
 #[tauri::command]
-fn sync_configure(
-    state: State<'_, AppState>,
+async fn sync_configure(
+    state: State<'_, AppState>, token: String,
     organization_id: String,
     user_id: String,
     membership_epoch: i64,
+    hosted_access_token: Option<String>,
+    anon_key: Option<String>,
 ) -> Result<SyncStatus, AppError> {
-    let database = state.lock()?;
-    sync_replica::configure(
-        database.connection(),
-        &organization_id,
-        &user_id,
-        membership_epoch,
-    )
-    .map_err(AppError::from)
+    { let _authorized = state.user(&token)?; }
+    // A client-supplied hosted identity or membership is never enough to claim
+    // an existing replica. Verify against the same fixed provider as sign-in.
+    let verified = if let (Some(access), Some(key)) = (hosted_access_token, anon_key) {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(12))
+            .redirect(reqwest::redirect::Policy::none())
+            .build().map_err(|_| hosted_auth_error())?;
+        let base = "https://imzdblvljdcbnxtwbmbw.supabase.co";
+        let identity: Value = client.get(format!("{base}/auth/v1/user"))
+            .header("apikey", &key).bearer_auth(&access).send().await
+            .map_err(|_| hosted_auth_error())?.error_for_status().map_err(|_| hosted_auth_error())?
+            .json().await.map_err(|_| hosted_auth_error())?;
+        let memberships: Value = client.post(format!("{base}/rest/v1/rpc/my_workspaces"))
+            .header("apikey", &key).bearer_auth(&access).json(&serde_json::json!({})).send().await
+            .map_err(|_| hosted_auth_error())?.error_for_status().map_err(|_| hosted_auth_error())?
+            .json().await.map_err(|_| hosted_auth_error())?;
+        if identity.get("id").and_then(Value::as_str) != Some(user_id.as_str())
+            || memberships.get("status").and_then(Value::as_str) != Some("ok")
+            || !memberships.get("workspaces").and_then(Value::as_array).is_some_and(|rows| rows.iter().any(|row|
+                row.get("organizationId").and_then(Value::as_str) == Some(organization_id.as_str())
+                && row.get("status").and_then(Value::as_str) == Some("active")
+                && row.get("membershipEpoch").and_then(Value::as_i64) == Some(membership_epoch)
+            )) {
+            return Err(hosted_auth_error());
+        }
+        true
+    } else {
+        false
+    };
+    let (database, account) = state.user(&token)?;
+    sync_replica::configure_owned(database.connection(), &organization_id, &user_id, membership_epoch, &account.id, verified).map_err(AppError::from)
 }
 
 #[tauri::command]
 fn sync_apply_bootstrap(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     organization_id: String,
     user_id: String,
     membership_epoch: i64,
     payload: Value,
 ) -> Result<SyncStatus, AppError> {
-    let database = state.lock()?;
+    let database = state.replica(&token, &organization_id)?;
+    sync_replica::require_hosted_owner(database.connection(), &organization_id, &user_id)?;
+    if sync_replica::status(database.connection(), &organization_id)?.membership_epoch != membership_epoch {
+        return Err(hosted_auth_error());
+    }
     sync_replica::apply_bootstrap(
         database.connection(),
         &organization_id,
@@ -1747,49 +1788,60 @@ fn sync_apply_bootstrap(
 
 #[tauri::command]
 fn sync_status(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     organization_id: String,
 ) -> Result<SyncStatus, AppError> {
-    let database = state.lock()?;
+    let database = state.replica(&token, &organization_id)?;
     sync_replica::status(database.connection(), &organization_id).map_err(AppError::from)
 }
 
 #[tauri::command]
-fn sync_list_workspaces(state: State<'_, AppState>) -> Result<Vec<String>, AppError> {
-    let database = state.lock()?;
-    sync_replica::list_workspaces(database.connection()).map_err(AppError::from)
+fn sync_list_workspaces(state: State<'_, AppState>, token: String) -> Result<Vec<String>, AppError> {
+    let (database, account) = state.user(&token)?;
+    let conn = database.connection();
+    let mut allowed = Vec::new();
+    for id in sync_replica::list_workspaces(conn)? {
+        if sync_replica::local_owner(conn, &id)?.as_deref() == Some(account.id.as_str()) { allowed.push(id); }
+    }
+    Ok(allowed)
 }
 
 #[tauri::command]
 fn sync_entities(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     organization_id: String,
     entity: String,
     limit: Option<i64>,
 ) -> Result<Vec<Value>, AppError> {
-    let database = state.lock()?;
+    let database = state.replica(&token, &organization_id)?;
     sync_replica::read_entities(database.connection(), &organization_id, &entity, limit)
         .map_err(AppError::from)
 }
 
 #[tauri::command]
 fn sync_report_entities(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     organization_id: String,
 ) -> Result<Value, AppError> {
-    let database = state.lock()?;
+    let database = state.replica(&token, &organization_id)?;
     sync_replica::read_report_entities(database.connection(), &organization_id)
         .map_err(AppError::from)
 }
 
 #[tauri::command]
+fn sync_workspace_entities(state: State<'_, AppState>, token: String, organization_id: String) -> Result<Value, AppError> {
+    let database = state.replica(&token, &organization_id)?;
+    sync_replica::read_workspace_entities(database.connection(), &organization_id).map_err(AppError::from)
+}
+
+#[tauri::command]
 fn sync_apply_changes(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     organization_id: String,
     changes: Vec<Change>,
     cursor: i64,
 ) -> Result<SyncStatus, AppError> {
-    let database = state.lock()?;
+    let database = state.replica(&token, &organization_id)?;
     let revision = sync_replica::read_revision(database.connection(), &organization_id)?;
     sync_replica::apply_changes(
         database.connection(),
@@ -1802,41 +1854,41 @@ fn sync_apply_changes(
 }
 
 #[tauri::command]
-fn sync_read_cursor(state: State<'_, AppState>, organization_id: String) -> Result<i64, AppError> {
-    let database = state.lock()?;
+fn sync_read_cursor(state: State<'_, AppState>, token: String, organization_id: String) -> Result<i64, AppError> {
+    let database = state.replica(&token, &organization_id)?;
     sync_replica::read_cursor(database.connection(), &organization_id).map_err(AppError::from)
 }
 
 #[tauri::command]
 fn sync_read_revision(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     organization_id: String,
 ) -> Result<i64, AppError> {
-    let database = state.lock()?;
+    let database = state.replica(&token, &organization_id)?;
     sync_replica::read_revision(database.connection(), &organization_id).map_err(AppError::from)
 }
 
 #[tauri::command]
 fn sync_write_revision(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     organization_id: String,
     revision: i64,
 ) -> Result<SyncStatus, AppError> {
-    let database = state.lock()?;
+    let database = state.replica(&token, &organization_id)?;
     sync_replica::write_revision(database.connection(), &organization_id, revision)
         .map_err(AppError::from)
 }
 
 #[tauri::command]
 fn sync_enqueue_command(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     organization_id: String,
     command: CommandType,
     payload: Value,
     entity_versions: BTreeMap<String, i64>,
     base_revision: Option<i64>,
 ) -> Result<i64, AppError> {
-    let database = state.lock()?;
+    let database = state.replica(&token, &organization_id)?;
     sync_replica::enqueue_command(
         database.connection(),
         &organization_id,
@@ -1850,21 +1902,21 @@ fn sync_enqueue_command(
 
 #[tauri::command]
 fn sync_list_conflicts(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     organization_id: String,
 ) -> Result<Vec<Value>, AppError> {
-    let database = state.lock()?;
+    let database = state.replica(&token, &organization_id)?;
     sync_replica::list_conflicts(database.connection(), &organization_id).map_err(AppError::from)
 }
 
 #[tauri::command]
 fn sync_resolve_conflict(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     organization_id: String,
     conflict_id: String,
     resolution: String,
 ) -> Result<(), AppError> {
-    let database = state.lock()?;
+    let database = state.replica(&token, &organization_id)?;
     sync_replica::resolve_conflict(
         database.connection(),
         &organization_id,
@@ -1876,79 +1928,84 @@ fn sync_resolve_conflict(
 
 #[tauri::command]
 fn sync_recover_stale_sending(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     cutoff: i64,
     now: i64,
+    organization_id: String,
+    user_id: String,
 ) -> Result<usize, AppError> {
-    let database = state.lock()?;
-    sync_replica::recover_stale_sending(database.connection(), cutoff, now).map_err(AppError::from)
+    let database = state.replica(&token, &organization_id)?;
+    sync_replica::require_hosted_owner(database.connection(), &organization_id, &user_id)?;
+    sync_replica::recover_owned_sending(database.connection(), &organization_id, &user_id, cutoff, now).map_err(AppError::from)
 }
 
 #[tauri::command]
 fn sync_next_ready(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     user_id: String,
     organization_id: String,
     now: i64,
 ) -> Result<Option<OutboxItem>, AppError> {
-    let database = state.lock()?;
+    let database = state.replica(&token, &organization_id)?;
+    sync_replica::require_hosted_owner(database.connection(), &organization_id, &user_id)?;
     sync_replica::next_ready(database.connection(), &user_id, &organization_id, now)
         .map_err(AppError::from)
 }
 
 #[tauri::command]
-fn sync_mark_sending(state: State<'_, AppState>, id: i64, now: i64) -> Result<(), AppError> {
-    let database = state.lock()?;
+fn sync_mark_sending(state: State<'_, AppState>, token: String, id: i64, now: i64) -> Result<(), AppError> {
+    let database = state.outbox(&token, id)?;
     sync_replica::mark_sending(database.connection(), id, now).map_err(AppError::from)
 }
 
 #[tauri::command]
-fn sync_mark_sent(state: State<'_, AppState>, id: i64, result: Value) -> Result<(), AppError> {
-    let database = state.lock()?;
+fn sync_mark_sent(state: State<'_, AppState>, token: String, id: i64, result: Value) -> Result<(), AppError> {
+    let database = state.outbox(&token, id)?;
     sync_replica::mark_sent(database.connection(), id, &result).map_err(AppError::from)
 }
 
 #[tauri::command]
 fn sync_mark_retry(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     id: i64,
     error: String,
     next_attempt_at: i64,
 ) -> Result<(), AppError> {
-    let database = state.lock()?;
+    let database = state.outbox(&token, id)?;
     sync_replica::mark_retry(database.connection(), id, &error, next_attempt_at)
         .map_err(AppError::from)
 }
 
 #[tauri::command]
 fn sync_mark_refused(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     id: i64,
     result: Value,
     conflict: Value,
 ) -> Result<(), AppError> {
-    let database = state.lock()?;
+    let database = state.outbox(&token, id)?;
     sync_replica::mark_refused(database.connection(), id, &result, &conflict)
         .map_err(AppError::from)
 }
 
 #[tauri::command]
 fn sync_pending_count(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     user_id: String,
     organization_id: String,
 ) -> Result<i64, AppError> {
-    let database = state.lock()?;
+    let database = state.replica(&token, &organization_id)?;
+    sync_replica::require_hosted_owner(database.connection(), &organization_id, &user_id)?;
     sync_replica::pending_count(database.connection(), &user_id, &organization_id)
         .map_err(AppError::from)
 }
 
 #[tauri::command]
 fn sync_open_conflict_count(
-    state: State<'_, AppState>,
+    state: State<'_, AppState>, token: String,
     organization_id: String,
 ) -> Result<i64, AppError> {
-    let database = state.lock()?;
+    let database = state.replica(&token, &organization_id)?;
     sync_replica::open_conflict_count(database.connection(), &organization_id)
         .map_err(AppError::from)
 }
@@ -2087,6 +2144,7 @@ pub fn run() {
             sync_list_workspaces,
             sync_entities,
             sync_report_entities,
+            sync_workspace_entities,
             sync_apply_changes,
             sync_read_cursor,
             sync_read_revision,

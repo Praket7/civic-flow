@@ -1,3 +1,5 @@
+import { invokeAuthed, repositoryToken } from "../nativeSession";
+
 /**
  * A single Supabase session, kept in the operating system credential store.
  *
@@ -14,19 +16,15 @@ export interface CredentialStore {
 
 export const CLOUD_SESSION_KEY = "civicflow.desktop.cloud";
 
-async function invokeKeychain<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke<T>(command, args);
-}
-
 /** The native desktop uses the OS keychain; the browser preview uses local storage. */
 export function credentialStore(): CredentialStore {
   const desktop = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
   if (desktop) {
+    const credential = repositoryToken();
     return {
-      read: () => invokeKeychain<string | null>("load_cloud_session"),
-      write: (value) => invokeKeychain<void>("save_cloud_session", { value }),
-      remove: () => invokeKeychain<void>("clear_cloud_session"),
+      read: () => invokeAuthed<string | null>("load_cloud_session", {}, credential),
+      write: (value) => invokeAuthed<void>("save_cloud_session", { value }, credential),
+      remove: () => invokeAuthed<void>("clear_cloud_session", {}, credential),
     };
   }
   return {

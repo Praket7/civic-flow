@@ -403,6 +403,35 @@ describe("sync engine", () => {
     expect(await store.readRevision(ORG)).toBe(2);
   });
 
+  it("ignores a delayed pull after stopping and starts the next account cleanly", async () => {
+    const store = new MemoryStore();
+    let release!: (result: PullResult) => void;
+    let entered!: () => void;
+    const pulling = new Promise<void>((resolve) => { entered = resolve; });
+    let pulls = 0;
+    const sync: SyncTransport = {
+      async push() { return { status: "applied" }; },
+      async pull() {
+        if (++pulls === 1) {
+          entered();
+          return new Promise<PullResult>((resolve) => { release = resolve; });
+        }
+        return { status: "ok", cursor: 0, hasMore: false, revision: 2, changes: [] };
+      },
+    };
+    const engine = engineFor(store, sync, () => 0);
+    const old = engine.start(USER, ORG);
+    await pulling;
+    const next = engine.start("user-bob", ORG);
+    release({ status: "ok", cursor: 7, hasMore: false, revision: 1,
+      changes: [{ sequence: 7, entity: "volunteer", id: "private", operation: "insert", payload: { name: "Alice" } }] });
+    await Promise.all([old, next]);
+    expect(store.applied).toEqual([]);
+    expect(await store.readCursor(ORG)).toBe(0);
+    expect(engine.snapshot().revision).toBe(2);
+    engine.stop();
+  });
+
   it("recovers a sending row left behind by a crash", async () => {
     const store = new MemoryStore();
     const row = store.enqueue(ORG, "CHECK_OUT", { shiftId: "shift-1" });
