@@ -170,6 +170,17 @@ export async function verifyHostedAccess() {
         "foreign shift visibility was not denied by RLS",
       );
     }
+    for (const subject of [coordinator, volunteer, foreign]) {
+      const refreshed = await subject.client.auth.refreshSession();
+      ensure(
+        !refreshed.error && refreshed.data.user?.id === subject.account.id,
+        "session refresh lost or changed the authenticated identity",
+      );
+      const signedOut = await subject.client.auth.signOut();
+      ensure(!signedOut.error, "session sign-out failed");
+      const after = await subject.client.auth.getSession();
+      ensure(!after.error && !after.data.session, "local session survived sign-out");
+    }
   } finally {
     await Promise.allSettled([
       coordinator.client.auth.signOut(),

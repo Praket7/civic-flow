@@ -1,7 +1,7 @@
 name: Reminder dispatch
 
-# The database has no scheduler of its own on this plan. This job is the
-# clock: it asks the dispatcher to generate and send whatever is due.
+# Keep the scheduler token independent of Supabase's database-wide key.
+# JWT verification stays enabled at the Edge Function gateway.
 on:
   schedule:
     - cron: "*/15 * * * *"
@@ -20,29 +20,37 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    environment: reminder-production
+    env:
+      SUPABASE_URL: https://imzdblvljdcbnxtwbmbw.supabase.co
+      GATEWAY_ANON_JWT: ${{ secrets.CIVICFLOW_REMINDER_GATEWAY_ANON_JWT }}
+      SCHEDULER_TOKEN: ${{ secrets.CIVICFLOW_REMINDER_SCHEDULER_TOKEN }}
     steps:
-      - name: Check configuration
-        env:
-          SUPABASE_URL: https://imzdblvljdcbnxtwbmbw.supabase.co
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Validate scheduler configuration without printing credentials
         run: |
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-            echo "::error title=Reminder dispatch unconfigured::Set SUPABASE_SERVICE_ROLE_KEY repository secret; no reminders were sent."
-            exit 1
-          fi
-          if [[ "$SUPABASE_URL" != https://imzdblvljdcbnxtwbmbw.supabase.co ]]; then
-            echo "::error title=Unexpected Supabase URL::The dispatcher URL must be the HTTPS Supabase project origin."
-            exit 1
-          fi
+          python3 - <<'PY'
+          import base64, json, os, re, sys
+          token = os.environ.get("SCHEDULER_TOKEN", "")
+          key = os.environ.get("GATEWAY_ANON_JWT", "")
+          if not re.fullmatch(r"[A-Za-z0-9_-]{43,128}", token):
+              sys.exit("Configure a dedicated high-entropy reminder scheduler token.")
+          try:
+              parts = key.split(".")
+              if len(parts) != 3:
+                  raise ValueError()
+              role = json.loads(base64.urlsafe_b64decode(parts[1] + "=" * (-len(parts[1]) % 4))).get("role")
+              if role != "anon":
+                  raise ValueError()
+          except Exception:
+              sys.exit("Configure the legacy public anon JWT for gateway authentication; never use a service key.")
+          PY
       - name: Invoke the dispatcher
-        env:
-          SUPABASE_URL: https://imzdblvljdcbnxtwbmbw.supabase.co
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          response="$(curl --fail --silent --show-error --retry 3 --retry-delay 5 --max-time 60 \
-            --request POST "$SUPABASE_URL/functions/v1/dispatch-reminders?limit=100" \
-            --header "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-            --header "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+          response="$(curl --fail --silent --show-error --retry 2 --retry-delay 5 --max-time 100 \
+            --request POST "$SUPABASE_URL/functions/v1/dispatch-reminders?limit=25" \
+            --header "Authorization: Bearer $GATEWAY_ANON_JWT" \
+            --header "apikey: $GATEWAY_ANON_JWT" \
+            --header "x-civicflow-scheduler: $SCHEDULER_TOKEN" \
             --header "Content-Type: application/json" \
             --data '{}')"
           printf '%s' "$response" | python3 -c '
@@ -54,6 +62,6 @@ jobs:
           counts = {name: payload[name] for name in names}
           print("Reminder dispatch:", counts)
           if payload.get("status") != "ok" or counts["failed"] or payload.get("failures") or counts["claimed"] != sum(counts[name] for name in ("sent", "failed", "skipped", "deferred")):
-              print("::error title=Reminder delivery requires attention::One or more deliveries or audit writes failed; review Supabase server job logs.")
+              print("::error title=Reminder delivery requires attention::Review restricted Supabase server-job logs.")
               sys.exit(1)
           '

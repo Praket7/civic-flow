@@ -7,9 +7,10 @@
 // to the delivery row.
 //
 // Deploy with JWT verification on. The public config action accepts any valid
-// project key; dispatch requires the service role key exactly.
+// project key; dispatch requires a separate high-entropy scheduler token.
 
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.58.0";
+import { schedulerAuthorized } from "../_shared/scheduler-auth.mjs";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -193,8 +194,8 @@ async function dispatch(client: SupabaseClient, limit: number): Promise<Response
     let outcome: Outcome;
     try {
       outcome = await deliver(client, job);
-    } catch (error) {
-      outcome = { status: "failed", error: String((error as Error).message ?? error) };
+    } catch {
+      outcome = { status: "failed", error: "delivery_execution_failed" };
     }
 
     counts[outcome.status] += 1;
@@ -270,19 +271,23 @@ Deno.serve(async (request: Request) => {
     return config(client, request);
   }
 
-  // Supabase clients send the key in both `apikey` and `Authorization`.
-  // Accept either so a scheduler that only sets one still authenticates, but
-  // never accept a signed-in volunteer's user token.
-  const bearer = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  const apiKey = request.headers.get("apikey") ?? "";
-  // Require the exact configured service credential, not a decoded role claim.
-  if (bearer !== serviceKey && apiKey !== serviceKey) {
+  if (request.method !== "POST") {
+    return json({ status: "error", message: "Method not allowed." }, 405);
+  }
+  // A scheduler credential can invoke this operation, not the database API.
+  // The service-role key remains inside the Edge Function runtime.
+  if (
+    !schedulerAuthorized(
+      Deno.env.get("CIVICFLOW_REMINDER_SCHEDULER_TOKEN"),
+      request.headers.get("x-civicflow-scheduler"),
+    )
+  ) {
     return json({ status: "forbidden", message: "This endpoint is for the scheduler." }, 401);
   }
 
   const limit = Math.min(
     Math.max(Number(new URL(request.url).searchParams.get("limit") ?? 50) || 50, 1),
-    200,
+    25,
   );
 
   try {

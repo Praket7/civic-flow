@@ -13,6 +13,7 @@ jobs:
   # tag commit itself rather than trusting that CI ran on it earlier.
   verify:
     name: Verify tagged commit
+    environment: release-signing
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -82,6 +83,7 @@ jobs:
       - run: bash scripts/verify.sh
 
   publish:
+    environment: release-signing
     name: Bundle ${{ matrix.label }}
     needs: verify
     strategy:
@@ -308,10 +310,24 @@ jobs:
     needs: publish
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Confirm the release remains unpublished
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          test "$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
       - name: Download every installer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir artifacts --clobber
+
+      - name: Verify expected installers and signed updater metadata
+        run: node scripts/verify-release-assets.mjs artifacts "$GITHUB_REF_NAME"
 
       - name: Write SHA-256 checksums
         working-directory: artifacts
