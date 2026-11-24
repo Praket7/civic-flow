@@ -28,3 +28,9 @@ Intentional privileged command functions still require individual security revie
 - [GitHub protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches)
 
 All live acceptance gates remain pending until actual evidence is collected.
+
+## Reproducible staging race
+
+The manual `hosted-capacity-acceptance.yml` workflow uses two independently authenticated volunteers and a coordinator. Configure the staging project reference, organization ID, a future empty one-seat shift, and the second volunteer credentials in the protected staging environment. A reviewer must explicitly enable the disposable-fixture input. The test claims the same seat concurrently, checks one confirmation and one waitlist entry, replays both operation IDs, and checks that cleanup returns the fixture to empty capacity. Audit history is retained as synthetic staging evidence; never point this workflow at a real organization.
+
+The public VAPID key is now an invoker read over a column-restricted view; private signing material remains inaccessible. This changes the warning posture only after the migration is deployed and rescanned.

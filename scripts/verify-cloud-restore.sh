@@ -67,6 +67,13 @@ psql --dbname "$CIVICFLOW_RESTORE_DATABASE_URL" --no-psqlrc \
        OR to_regclass('auth.users') IS NULL THEN
       RAISE EXCEPTION 'Restored CivicFlow schema is incomplete';
     END IF;
+    IF EXISTS (SELECT 1 FROM public.shifts WHERE confirmed > capacity OR confirmed < 0 OR waitlisted < 0) THEN
+      RAISE EXCEPTION 'Restored shift capacity invariant failed';
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname IN ('public', 'sync') AND c.relkind = 'r' AND NOT c.relrowsecurity) THEN
+      RAISE EXCEPTION 'Restored application table is missing RLS';
+    END IF;
   END \$\$;"
 
 echo "Encrypted archive restored and critical application tables verified in an isolated database."
