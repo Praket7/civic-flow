@@ -39,3 +39,5 @@ This is a behavior-preserving cleanup and targeted correctness pass after the ei
 - [OWASP CSV Injection](https://community.owasp.org/attacks/CSV_Injection): spreadsheet formula prefixes, locale variants and application-specific limitations.
 
 The exact candidate must pass the original regression gates. Competition submission, clean-device/offline rehearsal, participant feedback, competitor's own technical explanation and attribution are independent requirements. Never present synthetic records or automated checks as genuine nonprofit impact or a guaranteed competition score.
+
+- Shared seat transitions now preserve explicit coordinator-review requests on cancellation; reset invalidates previously reviewed plans, and duplicate-assignment batches are tested for atomic rejection.
