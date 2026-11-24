@@ -10,7 +10,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -159,7 +159,17 @@ try {
   // protects the judging path from inadvertently sending visitors to sign in.
   const demoAction = await evaluate(`(() => {
     const link = document.querySelector('a[href="/judge/demo/#/welcome"]');
-    return { primary: Boolean(link?.className?.includes("welcomePrimary")) };
+    const signup = document.querySelector('a[href="#/create-account"]');
+    const signin = document.querySelector('a[href="#/sign-in"]');
+    if (!link || !signup || !signin) return { primary: false };
+    const ordered = [link, signup, signin].every((item) => item.parentElement === link.parentElement)
+      && link.parentElement.firstElementChild === link;
+    const background = getComputedStyle(link).backgroundColor;
+    const primary = ordered && link.getBoundingClientRect().height >= 44
+      && background !== getComputedStyle(signup).backgroundColor
+      && background !== getComputedStyle(signin).backgroundColor
+      && background !== "rgba(0, 0, 0, 0)";
+    return { primary, ordered, background };
   })()`);
   assert.equal(demoAction.primary, true, "the no-account demo must be the primary welcome action");
   await evaluate("document.querySelector('a[href=\\\"/judge/demo/#/welcome\\\"]')?.click()");
@@ -592,6 +602,263 @@ try {
     "future-only report must contain zero source rows",
   );
   console.log("Stage 4: live report filters and future period passed.");
+  // Stage 6: public sample role switching and actual UI writes.
+  const evidenceDir = path.join(root, "journey-review");
+  await mkdir(evidenceDir, { recursive: true });
+  async function capture(name) {
+    const shot = await send("Page.captureScreenshot", {
+      format: "png",
+      captureBeyondViewport: false,
+    });
+    await writeFile(path.join(evidenceDir, name + ".png"), Buffer.from(shot.data, "base64"));
+  }
+  async function fixtureRole(id, route) {
+    await open("/judge/demo/#/welcome");
+    await heading("Service, organized");
+    await clickText(id === "user-maya" ? "Explore as volunteer" : "Explore as coordinator");
+    await until(
+      () =>
+        evaluate(
+          "location.hash.startsWith(" +
+            JSON.stringify(id === "user-maya" ? "#/volunteer/" : "#/coordinator/") +
+            ")",
+        ),
+      "sample role changed",
+    );
+    await open("/judge/demo/#" + route);
+  }
+  async function clickText(label) {
+    await until(
+      () =>
+        evaluate(`(() => {
+      const button = [...document.querySelectorAll("button")].find(b => b.textContent.trim() === ${JSON.stringify(label)} && !b.disabled);
+      if (!button) return false;
+      button.scrollIntoView({block:"center"});
+      button.click();
+      return true;
+    })()`),
+      "click " + label,
+    );
+  }
+  async function snapshot() {
+    return evaluate('JSON.parse(localStorage.getItem("civicflow.workflow.v1") || "{}")');
+  }
+  await fixtureRole("user-maya", "/volunteer/check-in");
+  await until(
+    () => evaluate("document.querySelectorAll('[aria-label^=\"Digit \"]').length === 6"),
+    "volunteer check-in inputs",
+  );
+  const codeWindow = Math.floor(new Date("2026-10-13T07:45:00-04:00").getTime() / (15 * 60_000));
+  let hash = 0xcbf29ce4;
+  const codeSeed = "sh-tue-pantry:" + codeWindow;
+  for (const character of codeSeed) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  const code = String(hash % 1_000_000).padStart(6, "0");
+  async function enterCode(value) {
+    await evaluate("document.querySelector('[aria-label=\"Digit 1 of 6\"]').focus()");
+    for (let i = 0; i < value.length; i++) {
+      const selector = '[aria-label="Digit ' + (i + 1) + ' of 6"]';
+      await evaluate("document.querySelector(" + JSON.stringify(selector) + ").focus()");
+      await send("Input.insertText", { text: value[i] });
+    }
+    await clickText("Check in");
+  }
+  await enterCode(code === "000000" ? "111111" : "000000");
+  await until(
+    () =>
+      evaluate('document.querySelector("#event-code-error")?.textContent.includes("not valid")'),
+    "invalid code stays on form",
+  );
+  await capture("01-invalid-checkin");
+  await enterCode(code);
+  await heading("checked in");
+  await capture("02-checked-in");
+  await open("/judge/demo/#/volunteer/shifts/sh-tue-pantry");
+  await heading("Pantry Setup");
+  await clickText("Check out");
+  const service = await until(
+    async () =>
+      (await snapshot()).submittedHours?.find(
+        (row) => row.shiftId === "sh-tue-pantry" && row.volunteerId === "vol-maya",
+      ),
+    "one pending service record",
+  );
+  assert.equal(service.status, "pending");
+  assert.equal((await snapshot()).submittedHours.filter((row) => row.id === service.id).length, 1);
+  await capture("03-checked-out");
+  await open("/judge/demo/#/volunteer/hours");
+  await heading("My hours");
+  await until(
+    () =>
+      evaluate(
+        'Array.from(document.querySelectorAll("tbody tr")).some(row => row.textContent.includes("Pantry Setup") && row.textContent.includes("Pending"))',
+      ),
+    "pending hours visible to volunteer",
+  );
+  await evaluate(
+    `Array.from(document.querySelectorAll("tbody tr")).find(row => row.textContent.includes("Pantry Setup") && row.textContent.includes("Pending"))?.scrollIntoView({block:"center"})`,
+  );
+  await capture("04-pending-hours");
+  await fixtureRole("user-praket", "/coordinator/hours");
+  await heading("Hours review");
+  await until(
+    () =>
+      evaluate(`(() => {
+    const button = [...document.querySelectorAll('button[class*="queueItem"]')].find(b => b.textContent.includes("Maya Chen") && b.textContent.includes("Pantry Setup") && b.textContent.includes("1m requested"));
+    if (!button) return false;
+    button.click(); return true;
+  })()`),
+    "select newly submitted service",
+  );
+  await capture("05-coordinator-review");
+  await clickText("Approve submitted");
+  await until(
+    async () => (await snapshot()).hoursDecisions?.[service.id]?.status === "verified",
+    "coordinator decision persisted",
+  );
+  await capture("06-approved-hours");
+  await fixtureRole("user-maya", "/volunteer/hours");
+  await heading("My hours");
+  await until(
+    () =>
+      evaluate(
+        'Array.from(document.querySelectorAll("tbody tr")).some(row => row.textContent.includes("Pantry Setup") && row.textContent.includes("Verified"))',
+      ),
+    "approved record visible to volunteer",
+  );
+  await evaluate(
+    `Array.from(document.querySelectorAll("tbody tr")).find(row => row.textContent.includes("Pantry Setup") && row.textContent.includes("Verified"))?.scrollIntoView({block:"center"})`,
+  );
+  await capture("07-volunteer-verified");
+  await fixtureRole("user-praket", "/coordinator/opportunities/new");
+  await heading("Create an opportunity");
+  async function fillLabel(label, value) {
+    await until(
+      () =>
+        evaluate(`(() => {
+      const label = [...document.querySelectorAll("label")].find(node => {
+        const copy = node.cloneNode(true);
+        copy.querySelectorAll("input, textarea, select, button").forEach(child => child.remove());
+        return copy.textContent.trim() === ${JSON.stringify(label)};
+      });
+      const field = label?.control ?? label?.querySelector("input, textarea, select");
+      if (!field) return false;
+      const proto = field instanceof HTMLSelectElement ? HTMLSelectElement.prototype : field instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(proto, "value").set.call(field, ${JSON.stringify(value)});
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      field.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    })()`),
+      "fill " + label,
+    );
+  }
+  const title = "Community welcome desk";
+  await fillLabel("Opportunity name", title);
+  await fillLabel("Cause", "community");
+  await clickText("Continue");
+  await fillLabel(
+    "What volunteers will do",
+    "Welcome visitors, organize supplies, and direct families to community services.",
+  );
+  await fillLabel("Volunteer capacity", "1");
+  await clickText("Continue");
+  await clickText("Save opportunity");
+  await heading(title + " is ready");
+  await clickText("One shift only");
+  await fillLabel("Shift date", "2026-10-17");
+  await fillLabel("Starts at", "09:00");
+  await fillLabel("Roles, one per line as Name x Count", "General support x 1");
+  await clickText("Schedule the series");
+  const program = await until(
+    async () => (await snapshot()).createdOpportunities?.find((row) => row.title === title),
+    "created program",
+  );
+  const series = await until(
+    async () => (await snapshot()).createdSeries?.find((row) => row.opportunityId === program.id),
+    "created series",
+  );
+  const shift = await until(
+    async () => (await snapshot()).createdShifts?.find((row) => row.id.includes(series.id)),
+    "created shift",
+  );
+  await capture("08-created-program");
+  await fixtureRole("user-maya", "/volunteer/discover");
+  await fillLabel("Search opportunities", title);
+  await until(
+    () =>
+      evaluate(
+        `(() => { const link = [...document.querySelectorAll("a")].find(node => node.textContent.trim() === ${JSON.stringify(title)}); if (!link) return false; link.click(); return true; })()`,
+      ),
+    "discover created program",
+  );
+  await heading(title);
+  await clickText("Request coordinator review");
+  await until(
+    async () =>
+      (await snapshot()).waitlist?.some(
+        (row) =>
+          row.shiftId === shift.id &&
+          row.volunteerId === "vol-maya" &&
+          row.status === "waiting" &&
+          row.requestReview,
+      ),
+    "application pending",
+  );
+  await capture("09-volunteer-application");
+  await fixtureRole("user-praket", "/coordinator/autoroster");
+  await until(
+    () =>
+      evaluate(
+        `(() => { const button = [...document.querySelectorAll("button")].find(node => node.textContent.includes("One shift")); if (!button) return false; button.click(); return true; })()`,
+      ),
+    "single shift planning",
+  );
+  await fillLabel("Shift to optimize", shift.id);
+  await clickText("Run optimizer");
+  await until(
+    () =>
+      evaluate(
+        `document.querySelector('[aria-label="Proposed roster"]')?.textContent.includes("Maya Chen")`,
+      ),
+    "eligible applicant recommended",
+  );
+  await capture("10-eligible-applicant-plan");
+  await clickText("Apply 1 assignment");
+  await until(
+    async () =>
+      (await snapshot()).registrations?.some(
+        (row) =>
+          row.shiftId === shift.id && row.volunteerId === "vol-maya" && row.status === "registered",
+      ),
+    "assignment applied",
+  );
+  assert.equal(
+    (await snapshot()).waitlist.find(
+      (row) => row.shiftId === shift.id && row.volunteerId === "vol-maya",
+    ).status,
+    "promoted",
+  );
+  await fixtureRole("user-maya", "/volunteer/notifications");
+  await until(
+    () => evaluate(`document.body.textContent.includes("Shift assignment confirmed")`),
+    "recipient-specific assignment notification",
+  );
+  await capture("11-assignment-notification");
+  await open("/judge/demo/#/volunteer/schedule");
+  await until(
+    () => evaluate(`document.body.textContent.includes(${JSON.stringify(title)})`),
+    "assigned shift appears in volunteer schedule",
+  );
+  await capture("12-new-shift-on-schedule");
+  console.log(
+    "Stage 6: created opportunity, scheduled shift, discovered and applied, verified eligibility, applied AutoRoster, notification and schedule passed.",
+  );
+  console.log(
+    "Stage 6: invalid code, check-in, checkout, pending record, coordinator approval, volunteer verified history passed.",
+  );
+
   console.log(
     "Judge browser flow passed: public review, sample launch, AutoRoster, schedule and reports.",
   );

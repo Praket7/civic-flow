@@ -40,14 +40,14 @@ export function ShiftDetailScreen() {
   const range = formatShiftRange(shift.startsAt, shift.endsAt, timezone);
   const statusPill = shiftStatus(shift);
 
-  async function run(command: CommandType, payload: Record<string, unknown>, note: string) {
-    if (!shift || !view) return;
+  async function run(command: CommandType, payload: Record<string, unknown>) {
+    if (!shift || !view || busy || pending) return;
     setBusy(command);
     setProblem(null);
     setMessage(null);
     try {
       await queue(command, { shiftId: shift.id, volunteerId: view.volunteerId, ...payload });
-      setMessage(note);
+      setMessage("Request saved on this device. The server will confirm the result.");
     } catch (caught) {
       setProblem(messageOf(caught));
     } finally {
@@ -95,8 +95,16 @@ export function ShiftDetailScreen() {
         </Card>
       ) : null}
 
-      {message ? <p className={styles.success}>{message}</p> : null}
-      {problem ? <p className={styles.error}>{problem}</p> : null}
+      {message ? (
+        <p className={styles.queuedNote} role="status">
+          {message}
+        </p>
+      ) : null}
+      {problem ? (
+        <p className={styles.error} role="alert">
+          {problem}
+        </p>
+      ) : null}
       {pending ? (
         <p className={styles.queuedNote}>
           <TriangleAlert aria-hidden size={15} /> Saved on this device. It will send when you're
@@ -142,7 +150,17 @@ export function ShiftDetailScreen() {
       </Card>
 
       <Card className={styles.actionCard}>
-        {shift.registration ? (
+        {shift.status === "canceled" ? (
+          <p className={styles.actionTitle}>This shift is canceled.</p>
+        ) : shift.attendance?.status === "completed" ? (
+          <p className={styles.actionTitle}>
+            Service completed. View your hours for the review status.
+          </p>
+        ) : shift.attendance?.status === "no_show" ? (
+          <p className={styles.actionTitle}>
+            No show recorded. Contact your coordinator if this is incorrect.
+          </p>
+        ) : shift.registration ? (
           <>
             <p className={styles.actionTitle}>
               <BadgeCheck aria-hidden size={18} /> You're registered
@@ -156,7 +174,8 @@ export function ShiftDetailScreen() {
                 <Button
                   variant="secondary"
                   loading={busy === "CHECK_OUT"}
-                  onClick={() => void run("CHECK_OUT", {}, "Check-out saved.")}
+                  disabled={pending || busy !== null}
+                  onClick={() => void run("CHECK_OUT", {})}
                 >
                   Check out
                 </Button>
@@ -165,12 +184,9 @@ export function ShiftDetailScreen() {
                 <Button
                   variant="ghost"
                   loading={busy === "CANCEL_REGISTRATION"}
+                  disabled={pending || busy !== null}
                   onClick={() =>
-                    void run(
-                      "CANCEL_REGISTRATION",
-                      { reason: "Canceled from the volunteer app" },
-                      "Your seat was released.",
-                    )
+                    void run("CANCEL_REGISTRATION", { reason: "Canceled from the volunteer app" })
                   }
                 >
                   Cancel my seat
@@ -187,17 +203,14 @@ export function ShiftDetailScreen() {
             <Button
               variant="ghost"
               loading={busy === "CANCEL_REGISTRATION"}
-              onClick={() =>
-                void run(
-                  "CANCEL_REGISTRATION",
-                  { reason: "Left the waitlist" },
-                  "You left the waitlist.",
-                )
-              }
+              disabled={pending || busy !== null}
+              onClick={() => void run("CANCEL_REGISTRATION", { reason: "Left the waitlist" })}
             >
               Leave waitlist
             </Button>
           </>
+        ) : !shift.canRegister ? (
+          <p className={styles.actionTitle}>Registration is closed for this shift.</p>
         ) : (
           <>
             <p className={styles.actionTitle}>
@@ -208,14 +221,12 @@ export function ShiftDetailScreen() {
             <div className={styles.rowActions}>
               <Button
                 loading={busy === "REGISTER_FOR_SHIFT"}
+                disabled={pending || busy !== null}
                 onClick={() =>
-                  void run(
-                    "REGISTER_FOR_SHIFT",
-                    { role: shift.roles[0]?.name ?? "", allowWaitlist: true },
-                    shift.seatsLeft === 0
-                      ? "You're on the waitlist."
-                      : "Seat saved. It will sync when you're online.",
-                  )
+                  void run("REGISTER_FOR_SHIFT", {
+                    role: shift.roles[0]?.name ?? "",
+                    allowWaitlist: true,
+                  })
                 }
               >
                 {shift.seatsLeft === 0 ? "Join the waitlist" : "Register"}
@@ -224,13 +235,8 @@ export function ShiftDetailScreen() {
                 <Button
                   variant="secondary"
                   loading={busy === "JOIN_WAITLIST"}
-                  onClick={() =>
-                    void run(
-                      "JOIN_WAITLIST",
-                      { role: shift.roles[0]?.name ?? "" },
-                      "You joined the waitlist.",
-                    )
-                  }
+                  disabled={pending || busy !== null}
+                  onClick={() => void run("JOIN_WAITLIST", { role: shift.roles[0]?.name ?? "" })}
                 >
                   Waitlist instead
                 </Button>

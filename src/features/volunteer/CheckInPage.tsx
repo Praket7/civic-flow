@@ -9,7 +9,7 @@ import {
   Clock3,
   ShieldCheck,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { CheckInQr } from "../../components/checkin/CheckInQr";
 import { Avatar, Button, ButtonLink } from "../../components/ui";
 import { t } from "../../lib/i18n";
@@ -59,9 +59,10 @@ type LiveEvent = NonNullable<ReturnType<typeof getLiveEvent>>;
 
 export function CheckInPage() {
   const { workspace, session } = useWorkspace();
-  const liveEvent = getLiveEvent(session, workspace);
+  const [params] = useSearchParams();
+  const liveEvent = getLiveEvent(session, workspace, params.get("shift") || undefined);
   if (!liveEvent) return <NoEventPanel />;
-  return <CheckInBody liveEvent={liveEvent} />;
+  return <CheckInBody key={liveEvent.shift.id} liveEvent={liveEvent} />;
 }
 
 function CheckInBody({ liveEvent }: { liveEvent: LiveEvent }) {
@@ -72,6 +73,7 @@ function CheckInBody({ liveEvent }: { liveEvent: LiveEvent }) {
   const [digits, setDigits] = useState<string[]>(emptyDigits);
   const [error, setError] = useState("");
   const [codeAccepted, setCodeAccepted] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [qrPayload, setQrPayload] = useState<string | null>(null);
   const { data: checkinWindow } = useCheckinWindow(shift.id);
   const inputs = useRef<Array<HTMLInputElement | null>>([]);
@@ -119,7 +121,11 @@ function CheckInBody({ liveEvent }: { liveEvent: LiveEvent }) {
   const capacity = shift.capacity;
   const percent = capacity === 0 ? 0 : Math.round((checkedInCount / capacity) * 100);
   const canSubmit =
-    isOpen && Boolean(myRow) && !alreadyCheckedIn && digits.every((digit) => digit.length === 1);
+    isOpen &&
+    Boolean(myRow) &&
+    !alreadyCheckedIn &&
+    !busy &&
+    digits.every((digit) => digit.length === 1);
 
   function focusInput(index: number) {
     const bounded = Math.max(0, Math.min(CODE_LENGTH - 1, index));
@@ -198,6 +204,7 @@ function CheckInBody({ liveEvent }: { liveEvent: LiveEvent }) {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy || alreadyCheckedIn) return;
     if (!myRow) {
       setError(
         t("You are not on today's roster. Ask the shift lead to add you before checking in."),
@@ -212,13 +219,15 @@ function CheckInBody({ liveEvent }: { liveEvent: LiveEvent }) {
     // The workspace, not this screen, decides whether the code is live. Sending
     // what the volunteer typed also keeps the demo hint from becoming the gate.
     setError("");
+    setBusy(true);
     actions
       .checkIn(shift.id, volunteer.id, digits.join(""))
       .then(() => setCodeAccepted(true))
       .catch((caught: unknown) => {
         setError(messageOf(caught));
         resetCode();
-      });
+      })
+      .finally(() => setBusy(false));
   }
 
   return (

@@ -26,6 +26,7 @@ import {
 } from "../../lib/workspace/selectors";
 import type { HourRow } from "../../lib/workspace/selectors";
 import styles from "./HoursReview.module.css";
+import { messageOf } from "../../lib/errors";
 
 type Mode = "approve" | "adjust" | "reject";
 
@@ -39,6 +40,7 @@ export function HoursReviewPage() {
   const [approved, setApproved] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -68,67 +70,78 @@ export function HoursReviewPage() {
     setMessage("");
   }
 
-  function submit(decision: Mode) {
-    if (!active) return;
-    if (decision === "approve") {
-      actions.reviewHours(active.id, {
-        status: "verified",
-        approvedMinutes: active.requestedMinutes,
-        reason: reason.trim() || t("Approved as submitted"),
-        reviewedAt: workspace.now,
-      });
-      setMessage(
-        t("Approved {duration} for {name}.", {
-          duration: formatMinutes(active.requestedMinutes),
-          name: active.volunteer.name,
-        }),
-      );
-    } else if (decision === "adjust") {
-      const minutes = Number(approved);
-      if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 24 * 60) {
-        setError("Enter an approved duration between 1 minute and 24 hours.");
-        return;
+  async function submit(decision: Mode) {
+    if (!active || busy) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      if (decision === "approve") {
+        await actions.reviewHours(active.id, {
+          status: "verified",
+          approvedMinutes: active.requestedMinutes,
+          reason: reason.trim() || t("Approved as submitted"),
+          reviewedAt: workspace.now,
+        });
+        setMessage(
+          t("Approved {duration} for {name}.", {
+            duration: formatMinutes(active.requestedMinutes),
+            name: active.volunteer.name,
+          }),
+        );
+      } else if (decision === "adjust") {
+        const minutes = Number(approved);
+        if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 24 * 60) {
+          setError("Enter an approved duration between 1 minute and 24 hours.");
+          return;
+        }
+        if (reason.trim().length < 8) {
+          setError("An adjustment needs a short reason (at least 8 characters).");
+          return;
+        }
+        await actions.reviewHours(active.id, {
+          status: "verified",
+          approvedMinutes: Math.round(minutes),
+          reason: reason.trim(),
+          reviewedAt: workspace.now,
+        });
+        setMessage(
+          t("Adjusted to {duration} for {name}. The reason was saved to the audit log.", {
+            duration: formatMinutes(Math.round(minutes)),
+            name: active.volunteer.name,
+          }),
+        );
+      } else {
+        if (reason.trim().length < 8) {
+          setError("A rejection needs a short reason so the volunteer understands what to fix.");
+          return;
+        }
+        await actions.reviewHours(active.id, {
+          status: "rejected",
+          approvedMinutes: null,
+          reason: reason.trim(),
+          reviewedAt: workspace.now,
+        });
+        setMessage(
+          t("Rejected {name}'s submission with a recorded reason.", {
+            name: active.volunteer.name,
+          }),
+        );
       }
-      if (reason.trim().length < 8) {
-        setError("An adjustment needs a short reason (at least 8 characters).");
-        return;
-      }
-      actions.reviewHours(active.id, {
-        status: "verified",
-        approvedMinutes: Math.round(minutes),
-        reason: reason.trim(),
-        reviewedAt: workspace.now,
-      });
-      setMessage(
-        t("Adjusted to {duration} for {name}. The reason was saved to the audit log.", {
-          duration: formatMinutes(Math.round(minutes)),
-          name: active.volunteer.name,
-        }),
-      );
-    } else {
-      if (reason.trim().length < 8) {
-        setError("A rejection needs a short reason so the volunteer understands what to fix.");
-        return;
-      }
-      actions.reviewHours(active.id, {
-        status: "rejected",
-        approvedMinutes: null,
-        reason: reason.trim(),
-        reviewedAt: workspace.now,
-      });
-      setMessage(
-        t("Rejected {name}'s submission with a recorded reason.", {
-          name: active.volunteer.name,
-        }),
-      );
+      setSelectedId(null);
+      setReason("");
+      setError("");
+      setMode("approve");
+    } catch (caught) {
+      setError(messageOf(caught));
+    } finally {
+      setBusy(false);
     }
-    setSelectedId(null);
-    setReason("");
-    setError("");
-    setMode("approve");
   }
 
   const evidenceShift = active?.shiftId ? shiftById(active.shiftId, workspace) : undefined;
+  const attendance = active?.shiftId
+    ? session.attendance[active.shiftId]?.find((row) => row.volunteerId === active.volunteer.id)
+    : undefined;
   const overRequested = active ? active.requestedMinutes > active.calculatedMinutes + 30 : false;
 
   return (
@@ -206,6 +219,7 @@ export function HoursReviewPage() {
                     key={row.id}
                     type="button"
                     className={`${styles.queueItem} ${active?.id === row.id ? styles.queueItemActive : ""}`}
+                    disabled={busy}
                     onClick={() => choose(row)}
                   >
                     <Avatar initials={row.volunteer.initials} tone={row.volunteer.tone} size={30} />
@@ -274,9 +288,16 @@ export function HoursReviewPage() {
                   <div className={styles.evidence}>
                     <div className={styles.evidenceLabel}>Attendance evidence</div>
                     <div className={styles.evidenceValue}>
-                      {active.status === "pending" ? t("Awaiting") : statusLabel(active.status)}
+                      {attendance?.status === "completed"
+                        ? "Completed"
+                        : attendance?.status === "checked_in"
+                          ? "Checked in"
+                          : "Not recorded"}
                     </div>
-                    <div className={styles.evidenceNote}>check-in / check-out timestamps</div>
+                    <div className={styles.evidenceNote}>
+                      {attendance?.checkedInAt ? formatTime(attendance.checkedInAt) : "—"} /{" "}
+                      {attendance?.checkedOutAt ? formatTime(attendance.checkedOutAt) : "—"}
+                    </div>
                   </div>
                 </div>
 
@@ -288,10 +309,11 @@ export function HoursReviewPage() {
                 ) : null}
 
                 <div className={styles.notes}>
-                  <div className={styles.notesLabel}>Volunteer explanation</div>
+                  <div className={styles.notesLabel}>Review evidence</div>
                   <p className={styles.notesBody}>
-                    “{active.opportunity.description.split(".")[0]}. I stayed to finish restocking
-                    and helped close the pantry.” — {active.volunteer.name}
+                    {attendance?.checkedOutAt
+                      ? "This submission is linked to recorded check-in and check-out timestamps."
+                      : "No completed attendance record is linked. Confirm the service with the volunteer before approving."}
                   </p>
                 </div>
 
@@ -357,11 +379,16 @@ export function HoursReviewPage() {
                     </p>
                   ) : null}
                   <div className={styles.actions}>
-                    <Button variant="primary" onClick={() => submit("approve")}>
+                    <Button
+                      variant="primary"
+                      disabled={busy}
+                      onClick={() => void submit("approve")}
+                    >
                       Approve submitted
                     </Button>
                     <Button
                       variant="secondary"
+                      disabled={busy}
                       onClick={() => {
                         setMode("adjust");
                         setError("");
@@ -371,9 +398,10 @@ export function HoursReviewPage() {
                     </Button>
                     <Button
                       variant="danger"
+                      disabled={busy}
                       onClick={() => {
                         if (mode === "reject") {
-                          submit("reject");
+                          void submit("reject");
                         } else {
                           setMode("reject");
                           setError("");
@@ -394,7 +422,11 @@ export function HoursReviewPage() {
                       </Button>
                     ) : null}
                     {mode === "adjust" ? (
-                      <Button variant="primary" onClick={() => submit("adjust")}>
+                      <Button
+                        variant="primary"
+                        disabled={busy}
+                        onClick={() => void submit("adjust")}
+                      >
                         Save adjusted hours
                       </Button>
                     ) : null}
@@ -408,7 +440,7 @@ export function HoursReviewPage() {
             ) : (
               <EmptyState
                 title="Select a submission"
-                copy="Choose a request from the queue to review scheduled time, evidence, and the volunteer's explanation."
+                copy="Choose a request from the queue to review scheduled time, and available attendance evidence."
               />
             )}
           </Card>

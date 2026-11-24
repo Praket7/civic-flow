@@ -75,6 +75,15 @@ jobs:
           node scripts/audit-judge-flow.mjs
           node -e "const fs = require('node:fs'); const html = fs.readFileSync('dist/index.html','utf8'); if (!html.includes('CivicFlow Volunteer') || !/assets\/pwa-/.test(html)) process.exit(1);"
 
+      - name: Upload connected journey evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage6-journey-screenshots
+          path: journey-review/
+          if-no-files-found: ignore
+          retention-days: 14
+
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest

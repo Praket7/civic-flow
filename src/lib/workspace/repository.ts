@@ -69,7 +69,7 @@ export interface WorkspaceRepository {
   readonly source: "desktop" | "preview";
   signIn(email: string, password: string, remember: boolean): Promise<AuthSession>;
   /** Creates the bundled demo workspace on request and signs in as its coordinator. */
-  openDemoWorkspace(): Promise<AuthSession>;
+  openDemoWorkspace(role?: "coordinator" | "volunteer"): Promise<AuthSession>;
   createAccount(name: string, email: string, password: string): Promise<AuthSession>;
   /** Resumes the local workspace behind an email the hosted provider verified. */
   signInWithHosted(identity: HostedIdentity): Promise<AuthSession>;
@@ -126,7 +126,12 @@ export interface WorkspaceRepository {
     volunteerId: string,
     reason?: string,
   ): Promise<SessionSnapshot>;
-  joinWaitlist(shiftId: string, volunteerId: string, role: string): Promise<SessionSnapshot>;
+  joinWaitlist(
+    shiftId: string,
+    volunteerId: string,
+    role: string,
+    requestReview?: boolean,
+  ): Promise<SessionSnapshot>;
   getCheckinCode(shiftId: string): Promise<CheckinCode>;
   checkinWindow(shiftId: string): Promise<CheckinWindow>;
   installationAccess(): Promise<InstallationAccess>;

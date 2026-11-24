@@ -29,6 +29,7 @@ import type {
   ImpactMetric,
   InstallationAccess,
   NewOpportunityInput,
+  NotificationItem,
   Opportunity,
   PriorityLevel,
   RetentionCohort,
@@ -70,9 +71,14 @@ import { IMPORT_COLUMNS, previewVolunteerCsv } from "./preview/volunteerImport";
 import { createPreviewRosterStorage } from "./preview/rosterStorage";
 import { createPreviewRosterPolicyStore } from "./preview/rosterPolicyStore";
 import { createPreviewBackupStore } from "./preview/backupStore";
-import { createPreviewRosterEngine } from "./preview/rosterEngine";
+import { createPreviewRosterEngine, roleRequirement } from "./preview/rosterEngine";
 import { demoWorkspace } from "./dataset";
-import { blankWorkspaceForOrganization, withRoster } from "./organizationWorkspace";
+import {
+  blankWorkspaceForOrganization,
+  withCreatedPrograms,
+  withCreatedShifts,
+  withRoster,
+} from "./organizationWorkspace";
 import type { OrganizationScope } from "./organizationWorkspace";
 import type { WorkspaceRepository } from "./repository";
 import {
@@ -481,12 +487,15 @@ function previewCheckinWindow(shiftId: string): CheckinWindow {
 }
 
 function volunteerName(id: string): string {
-  return workspace.volunteers.find((volunteer) => volunteer.id === id)?.name ?? "Volunteer";
+  return (
+    journeyWorkspace().volunteers.find((volunteer) => volunteer.id === id)?.name ?? "Volunteer"
+  );
 }
 
 function volunteerRole(id: string): string {
   return (
-    workspace.volunteers.find((volunteer) => volunteer.id === id)?.skills[0] ?? "General support"
+    journeyWorkspace().volunteers.find((volunteer) => volunteer.id === id)?.skills[0] ??
+    "General support"
   );
 }
 
@@ -504,10 +513,22 @@ function registeredRole(shiftId: string, volunteerId: string): string {
  * Counts the registration rows, which the seed's own totals predate. Mission
  * Control and Schedule must agree on these numbers.
  */
+function journeyWorkspace(snapshot = state): DemoWorkspace {
+  return withCreatedShifts(
+    withCreatedPrograms(
+      withRoster(workspace, snapshot.roster ?? []),
+      snapshot.createdOpportunities,
+    ),
+    snapshot.createdSeries ?? [],
+    snapshot.createdShifts ?? [],
+  );
+}
+
 function countedWorkspace(): DemoWorkspace {
+  const base = journeyWorkspace();
   return {
-    ...workspace,
-    shifts: workspace.shifts.map((shift) => {
+    ...base,
+    shifts: base.shifts.map((shift) => {
       const live = state.registrations.filter(
         (row) => row.shiftId === shift.id && row.status === "registered",
       );
@@ -527,6 +548,85 @@ function countedWorkspace(): DemoWorkspace {
 }
 
 /// Matches the desktop core: attendance row, audit entry, and the reason together.
+function validateJourneySeat(
+  snapshot: SessionSnapshot,
+  shiftId: string,
+  volunteerId: string,
+  role: string,
+) {
+  const base = journeyWorkspace(snapshot);
+  const shift = base.shifts.find((row) => row.id === shiftId);
+  const volunteer = base.volunteers.find((row) => row.id === volunteerId);
+  if (!shift || shift.status !== "scheduled" || new Date(shift.endsAt) <= new Date(base.now))
+    throw new Error("This shift is not accepting registrations.");
+  if (!volunteer || volunteer.status !== "active")
+    throw new Error("Only active volunteers can hold a seat.");
+  const requested = shift.roles.find((row) => row.name === role);
+  if (!requested) throw new Error("Choose a role offered on this shift.");
+  const live = snapshot.registrations.filter(
+    (row) => row.shiftId === shiftId && row.status === "registered",
+  );
+  if (live.some((row) => row.volunteerId === volunteerId))
+    throw new Error("This volunteer already holds a seat.");
+  if (
+    live.length >= shift.capacity ||
+    live.filter((row) => row.role === role).length >= requested.required
+  )
+    throw new Error("That role is full. Join the waitlist instead.");
+  if (
+    snapshot.registrations.some((row) => {
+      if (row.volunteerId !== volunteerId || row.status !== "registered" || row.shiftId === shiftId)
+        return false;
+      const other = base.shifts.find((item) => item.id === row.shiftId);
+      return (
+        other &&
+        other.status === "scheduled" &&
+        new Date(other.startsAt) < new Date(shift.endsAt) &&
+        new Date(other.endsAt) > new Date(shift.startsAt)
+      );
+    })
+  )
+    throw new Error("This shift overlaps an existing registration.");
+  const requirement = roleRequirement(role);
+  if (
+    requirement.skill &&
+    !volunteer.skills.some((skill) => skill.toLowerCase().includes(requirement.skill.toLowerCase()))
+  )
+    throw new Error(`Required skill: ${requirement.skill}.`);
+  if (
+    requirement.credential &&
+    !snapshot.credentials.some(
+      (row) =>
+        row.volunteerId === volunteerId &&
+        row.name.toLowerCase() === requirement.credential?.toLowerCase() &&
+        row.verifiedAt &&
+        row.validFrom.slice(0, 10) <= shift.startsAt.slice(0, 10) &&
+        row.validThrough.slice(0, 10) >= shift.startsAt.slice(0, 10),
+    )
+  )
+    throw new Error(`A verified ${requirement.credential} credential is required.`);
+}
+
+function journeyNotice(
+  volunteerId: string,
+  shiftId: string,
+  title: string,
+  body: string,
+  kind: NotificationItem["kind"] = "shift",
+): NotificationItem & { volunteerId: string } {
+  return {
+    id: crypto.randomUUID(),
+    volunteerId,
+    kind,
+    title,
+    body,
+    priority: "normal",
+    createdAt: workspace.now,
+    readAt: null,
+    href: `/volunteer/shifts/${shiftId}`,
+  };
+}
+
 function recordArrival(
   snapshot: SessionSnapshot,
   shiftId: string,
@@ -537,7 +637,19 @@ function recordArrival(
   const existing = (snapshot.attendance[shiftId] ?? []).find(
     (row) => row.volunteerId === volunteerId,
   );
-  if (existing && existing.status !== "expected") return snapshot;
+  if (existing?.status === "checked_in" || existing?.status === "completed") return snapshot;
+  if (existing?.status === "no_show")
+    throw new Error("Correct the no-show before recording an arrival.");
+  const shift = journeyWorkspace(snapshot).shifts.find((row) => row.id === shiftId);
+  if (!shift || shift.status === "canceled") throw new Error("This shift is not available.");
+  if (
+    !snapshot.registrations.some(
+      (row) =>
+        row.shiftId === shiftId && row.volunteerId === volunteerId && row.status === "registered",
+    )
+  ) {
+    throw new Error("That volunteer does not hold a seat on this shift.");
+  }
   const next = withAttendance(snapshot, shiftId, {
     volunteerId,
     shiftId,
@@ -667,11 +779,10 @@ export const previewRepository: WorkspaceRepository = {
   async transferOrganizationOwnership(organizationId, userId) {
     return previewOrganizations.transferOwnership(requirePreviewAccount(), organizationId, userId);
   },
-  async openDemoWorkspace(): Promise<AuthSession> {
-    const demo = previewAccounts.find(
-      (row) => row.email.toLowerCase() === "praket@rivergate.example",
-    );
+  async openDemoWorkspace(role = "coordinator"): Promise<AuthSession> {
+    const demo = seededAccounts.find((row) => row.role === role);
     if (!demo) throw new Error("The browser preview has no demo workspace to open.");
+    previewOrganizations.select(demo, DEMO_ORGANIZATION_ID);
     const live = withLiveRole(demo);
     activePreviewAccount = live;
     return {
@@ -821,7 +932,7 @@ export const previewRepository: WorkspaceRepository = {
     return state;
   },
   async setSaved(opportunityId, saved) {
-    const opportunity = workspace.opportunities.find((row) => row.id === opportunityId);
+    const opportunity = journeyWorkspace().opportunities.find((row) => row.id === opportunityId);
     if (!opportunity) throw new Error("Opportunity not found");
     const currentlySaved = state.savedOpportunityIds.includes(opportunityId);
     if (currentlySaved === saved) return state;
@@ -847,6 +958,8 @@ export const previewRepository: WorkspaceRepository = {
     const applicant = state.applications.find((row) => row.id === applicationId);
     if (!applicant) throw new Error("Application not found");
     if (applicant.stage === stage) return state;
+    if (!["applied", "review", "onboarding", "active"].includes(stage))
+      throw new Error("Unknown application stage.");
     return persist({
       ...state,
       applications: state.applications.map((row) =>
@@ -891,16 +1004,45 @@ export const previewRepository: WorkspaceRepository = {
     const existing = (state.attendance[shiftId] ?? []).find(
       (row) => row.volunteerId === volunteerId,
     );
+    if (existing?.status === "completed") return state;
+    if (existing?.status !== "checked_in" || !existing.checkedInAt) {
+      throw new Error("Check this volunteer in before checking them out.");
+    }
+    const shift = journeyWorkspace().shifts.find((row) => row.id === shiftId);
+    if (!shift || shift.status === "canceled") throw new Error("This shift is not available.");
+    const minutes = Math.max(
+      1,
+      Math.min(
+        1440,
+        Math.floor(
+          (new Date(workspace.now).getTime() - new Date(existing.checkedInAt).getTime()) / 60_000,
+        ),
+      ),
+    );
     const next = withAttendance(state, shiftId, {
       volunteerId,
       shiftId,
-      role: existing?.role ?? volunteerRole(volunteerId),
+      role: existing.role,
       status: "completed",
-      checkedInAt: existing?.checkedInAt ?? workspace.now,
+      checkedInAt: existing.checkedInAt,
       checkedOutAt: workspace.now,
     });
+    const id = `service:${shiftId}:${volunteerId}`;
     return persist({
       ...next,
+      submittedHours: [
+        ...(next.submittedHours ?? []).filter((row) => row.id !== id),
+        {
+          id,
+          volunteerId,
+          opportunityId: shift.opportunityId,
+          shiftId,
+          date: shift.startsAt.slice(0, 10),
+          minutes,
+          status: "pending",
+          verificationId: null,
+        },
+      ],
       audit: [
         audit("shift.checkout", "shift", shiftId, `Checked out ${volunteerName(volunteerId)}`),
         ...next.audit,
@@ -911,22 +1053,41 @@ export const previewRepository: WorkspaceRepository = {
     const registration = state.registrations.find(
       (row) => row.shiftId === shiftId && row.volunteerId === volunteerId,
     );
-    if (!registration) throw new Error("That registration no longer exists.");
-    const promoted = state.settings.autoPromoteWaitlist
-      ? [...state.waitlist]
-          .filter(
-            (row) =>
-              row.shiftId === shiftId &&
-              row.status === "waiting" &&
-              row.eligibleRole === registration.role,
-          )
-          .sort((a, b) => a.position - b.position)[0]
-      : undefined;
+    if (registration?.status === "canceled") return state;
+    if (!registration || registration.status !== "registered")
+      throw new Error("That registration no longer exists.");
+    if (
+      (state.attendance[shiftId] ?? []).some(
+        (row) =>
+          row.volunteerId === volunteerId &&
+          (row.status === "checked_in" || row.status === "completed"),
+      )
+    )
+      throw new Error("An attended shift cannot be canceled.");
     const nextRegistrations: SessionSnapshot["registrations"] = state.registrations.map((row) =>
       row.shiftId === shiftId && row.volunteerId === volunteerId
         ? { ...row, status: "canceled" }
         : row,
     );
+    const released = { ...state, registrations: nextRegistrations };
+    const promoted = state.settings.autoPromoteWaitlist
+      ? [...state.waitlist]
+          .filter((row) => {
+            if (
+              row.shiftId !== shiftId ||
+              row.status !== "waiting" ||
+              row.eligibleRole !== registration.role
+            )
+              return false;
+            try {
+              validateJourneySeat(released, shiftId, row.volunteerId, row.eligibleRole);
+              return true;
+            } catch {
+              return false;
+            }
+          })
+          .sort((a, b) => a.position - b.position)[0]
+      : undefined;
     const auditEvents = [
       audit(
         "shift.cancel_registration",
@@ -937,6 +1098,10 @@ export const previewRepository: WorkspaceRepository = {
       ),
     ];
     if (promoted) {
+      const previous = nextRegistrations.findIndex(
+        (row) => row.shiftId === shiftId && row.volunteerId === promoted.volunteerId,
+      );
+      if (previous >= 0) nextRegistrations.splice(previous, 1);
       nextRegistrations.push({
         shiftId,
         volunteerId: promoted.volunteerId,
@@ -961,10 +1126,25 @@ export const previewRepository: WorkspaceRepository = {
             row.id === promoted.id ? { ...row, status: "promoted" } : row,
           )
         : state.waitlist,
+      journeyNotifications: [
+        journeyNotice(volunteerId, shiftId, "Seat canceled", "Your registration was canceled."),
+        ...(promoted
+          ? [
+              journeyNotice(
+                promoted.volunteerId,
+                shiftId,
+                "Waitlist promoted",
+                `Your ${registration.role} seat is confirmed.`,
+                "WAITLIST_PROMOTED",
+              ),
+            ]
+          : []),
+        ...(state.journeyNotifications ?? []),
+      ],
       audit: [...auditEvents, ...state.audit],
     });
   },
-  async joinWaitlist(shiftId, volunteerId, role) {
+  async joinWaitlist(shiftId, volunteerId, role, requestReview = false) {
     if (
       state.waitlist.some(
         (row) =>
@@ -973,26 +1153,54 @@ export const previewRepository: WorkspaceRepository = {
     ) {
       return state;
     }
+    const shift = journeyWorkspace().shifts.find((row) => row.id === shiftId);
+    if (
+      !shift ||
+      shift.status !== "scheduled" ||
+      new Date(shift.startsAt) <= new Date(workspace.now)
+    )
+      throw new Error("This shift is not accepting waitlist requests.");
+    if (!journeyWorkspace().volunteers.some((row) => row.id === volunteerId))
+      throw new Error("Volunteer not found.");
+    if (
+      state.registrations.some(
+        (row) =>
+          row.shiftId === shiftId && row.volunteerId === volunteerId && row.status === "registered",
+      )
+    )
+      throw new Error("This volunteer already holds a seat.");
+    if (!shift.roles.some((row) => row.name === role))
+      throw new Error("Choose a role offered on this shift.");
     const entry: WaitlistEntry = {
-      id: `wait-${Date.now()}`,
+      id: `wait-${shiftId}-${volunteerId}-${crypto.randomUUID()}`,
       shiftId,
       volunteerId,
       createdAt: workspace.now,
       status: "waiting",
       position:
-        state.waitlist.filter((row) => row.shiftId === shiftId && row.status === "waiting").length +
-        1,
+        Math.max(
+          0,
+          ...state.waitlist.filter((row) => row.shiftId === shiftId).map((row) => row.position),
+        ) + 1,
       eligibleRole: role,
+      requestReview,
     };
     return persist({
       ...state,
-      waitlist: [...state.waitlist, entry],
+      waitlist: [
+        ...state.waitlist.filter(
+          (row) => row.shiftId !== shiftId || row.volunteerId !== volunteerId,
+        ),
+        entry,
+      ],
       audit: [
         audit(
           "waitlist.join",
           "shift",
           shiftId,
-          `Added ${volunteerName(volunteerId)} to the waitlist`,
+          requestReview
+            ? `Requested coordinator review for ${volunteerName(volunteerId)} as ${role}`
+            : `Added ${volunteerName(volunteerId)} to the waitlist`,
         ),
         ...state.audit,
       ],
@@ -1043,7 +1251,15 @@ export const previewRepository: WorkspaceRepository = {
     let next = state;
     const events: AuditEvent[] = [];
     for (const assignment of assignments) {
-      if (assignment.promoteWaitlist) {
+      validateJourneySeat(next, assignment.shiftId, assignment.candidateId, assignment.role);
+      if (
+        next.waitlist.some(
+          (row) =>
+            row.shiftId === assignment.shiftId &&
+            row.volunteerId === assignment.candidateId &&
+            row.status === "waiting",
+        )
+      ) {
         next = {
           ...next,
           waitlist: next.waitlist.map((row) =>
@@ -1080,7 +1296,21 @@ export const previewRepository: WorkspaceRepository = {
         ),
       );
     }
-    return persist({ ...next, audit: [...events, ...next.audit] });
+    return persist({
+      ...next,
+      journeyNotifications: [
+        ...assignments.map((assignment) =>
+          journeyNotice(
+            assignment.candidateId,
+            assignment.shiftId,
+            "Shift assignment confirmed",
+            `You are registered as ${assignment.role}.`,
+          ),
+        ),
+        ...(next.journeyNotifications ?? []),
+      ],
+      audit: [...events, ...next.audit],
+    });
   },
   async getRosterPolicy(): Promise<RosterPolicyView> {
     return {
@@ -1105,7 +1335,15 @@ export const previewRepository: WorkspaceRepository = {
     let next = state;
     const events: AuditEvent[] = [];
     for (const assignment of assignments) {
-      if (assignment.promoteWaitlist) {
+      validateJourneySeat(next, shiftId, assignment.candidateId, assignment.role);
+      if (
+        next.waitlist.some(
+          (row) =>
+            row.shiftId === shiftId &&
+            row.volunteerId === assignment.candidateId &&
+            row.status === "waiting",
+        )
+      ) {
         next = {
           ...next,
           waitlist: next.waitlist.map((row) =>
@@ -1141,7 +1379,21 @@ export const previewRepository: WorkspaceRepository = {
         ),
       );
     }
-    return persist({ ...next, audit: [...events, ...next.audit] });
+    return persist({
+      ...next,
+      journeyNotifications: [
+        ...assignments.map((assignment) =>
+          journeyNotice(
+            assignment.candidateId,
+            shiftId,
+            "Shift assignment confirmed",
+            `You are registered as ${assignment.role}.`,
+          ),
+        ),
+        ...(next.journeyNotifications ?? []),
+      ],
+      audit: [...events, ...next.audit],
+    });
   },
   async detectDisruptions(): Promise<DisruptionReport> {
     return previewDisruptions();
@@ -1242,7 +1494,7 @@ export const previewRepository: WorkspaceRepository = {
     }
     const dates = previewOccurrences(rule);
     const series: ShiftSeriesRecord = {
-      id: `series-${Date.now().toString(36)}`,
+      id: `series-${crypto.randomUUID()}`,
       opportunityId,
       opportunityTitle: opportunity.title,
       timezone: workspace.organization.timezone,
@@ -1484,6 +1736,7 @@ export const previewRepository: WorkspaceRepository = {
     );
     if (!entry) throw new Error("Waitlist entry not found");
     if (entry.status !== "waiting") return state;
+    validateJourneySeat(state, shiftId, volunteerId, entry.eligibleRole);
     return persist({
       ...state,
       waitlist: state.waitlist.map((row) =>
@@ -1493,7 +1746,17 @@ export const previewRepository: WorkspaceRepository = {
         ...state.registrations.filter(
           (row) => !(row.shiftId === shiftId && row.volunteerId === volunteerId),
         ),
-        { shiftId, volunteerId, role: volunteerRole(volunteerId), status: "registered" },
+        { shiftId, volunteerId, role: entry.eligibleRole, status: "registered" },
+      ],
+      journeyNotifications: [
+        journeyNotice(
+          volunteerId,
+          shiftId,
+          "Waitlist promoted",
+          `Your ${entry.eligibleRole} seat is confirmed.`,
+          "WAITLIST_PROMOTED",
+        ),
+        ...(state.journeyNotifications ?? []),
       ],
       audit: [
         audit(
@@ -1507,16 +1770,37 @@ export const previewRepository: WorkspaceRepository = {
     });
   },
   async reviewHours(entryId, decision: HoursDecision) {
-    const entry = [...workspace.hourEntries, ...workspace.mayaEntries].find(
-      (row) => row.id === entryId,
-    );
-    if (!entry || entry.status !== "pending") throw new Error("Only pending hours can be reviewed");
-    if (decision.status === "verified" && !decision.approvedMinutes) {
+    const entry = [
+      ...workspace.hourEntries,
+      ...workspace.mayaEntries,
+      ...(state.submittedHours ?? []),
+    ].find((row) => row.id === entryId);
+    if (!entry || state.hoursDecisions[entryId] || entry.status !== "pending")
+      throw new Error("Only pending hours can be reviewed");
+    if (decision.reason.trim().length === 0) throw new Error("Enter a review reason.");
+    if (
+      decision.status === "verified" &&
+      (!Number.isInteger(decision.approvedMinutes) ||
+        (decision.approvedMinutes ?? 0) <= 0 ||
+        (decision.approvedMinutes ?? 0) > 1440)
+    ) {
       throw new Error("Approved hours need an approved minute value");
     }
     return persist({
       ...state,
       hoursDecisions: { ...state.hoursDecisions, [entryId]: decision },
+      journeyNotifications: entry.shiftId
+        ? [
+            journeyNotice(
+              entry.volunteerId,
+              entry.shiftId,
+              decision.status === "verified" ? "Service hours approved" : "Service hours rejected",
+              decision.reason,
+              decision.status === "verified" ? "HOURS_APPROVED" : "hours",
+            ),
+            ...(state.journeyNotifications ?? []),
+          ]
+        : state.journeyNotifications,
       audit: [
         audit(
           decision.status === "verified" ? "hours.approve" : "hours.reject",
@@ -1545,7 +1829,7 @@ export const previewRepository: WorkspaceRepository = {
     });
   },
   async createOpportunity(input: NewOpportunityInput) {
-    const id = `opp-new-${Date.now()}`;
+    const id = `opp-new-${crypto.randomUUID()}`;
     const opportunity: Opportunity = {
       id,
       slug: input.title
@@ -1586,8 +1870,22 @@ export const previewRepository: WorkspaceRepository = {
     };
   },
   async registerForShift(shiftId, volunteerId, role) {
+    if (
+      state.registrations.some(
+        (row) =>
+          row.shiftId === shiftId && row.volunteerId === volunteerId && row.status === "registered",
+      )
+    )
+      return state;
+    const chosen = role.trim() || volunteerRole(volunteerId);
+    validateJourneySeat(state, shiftId, volunteerId, chosen);
     return persist({
       ...state,
+      waitlist: state.waitlist.map((row) =>
+        row.shiftId === shiftId && row.volunteerId === volunteerId && row.status === "waiting"
+          ? { ...row, status: "promoted" }
+          : row,
+      ),
       registrations: [
         ...state.registrations.filter(
           (row) => !(row.shiftId === shiftId && row.volunteerId === volunteerId),
@@ -1595,9 +1893,13 @@ export const previewRepository: WorkspaceRepository = {
         {
           shiftId,
           volunteerId,
-          role: role.trim() || volunteerRole(volunteerId),
+          role: chosen,
           status: "registered",
         },
+      ],
+      journeyNotifications: [
+        journeyNotice(volunteerId, shiftId, "Seat confirmed", `You are registered as ${chosen}.`),
+        ...(state.journeyNotifications ?? []),
       ],
       audit: [
         audit(
@@ -1748,7 +2050,12 @@ export const previewRepository: WorkspaceRepository = {
   },
   async getNotifications(role: AccountRole) {
     const read = readIds();
-    return workspace.notifications
+    const recipient = activePreviewAccount?.volunteerId ?? workspace.currentVolunteerId;
+    const updates =
+      role === "volunteer"
+        ? (state.journeyNotifications ?? []).filter((row) => row.volunteerId === recipient)
+        : [];
+    return [...updates, ...workspace.notifications]
       .filter((notification) =>
         role === "volunteer"
           ? notification.href.startsWith("/volunteer")
@@ -1794,10 +2101,10 @@ export const previewRepository: WorkspaceRepository = {
     });
   },
   async generateReport(request) {
-    return buildPreviewReport(request, workspace, state);
+    return buildPreviewReport(request, countedWorkspace(), state);
   },
   async exportReport(request, format) {
-    const report = buildPreviewReport(request, workspace, state);
+    const report = buildPreviewReport(request, countedWorkspace(), state);
     if (format === "csv") {
       const blob = downloadCsv(`civicflow-${report.template}-${report.period.slice(0, 10)}.csv`, [
         report.headers,
@@ -2367,7 +2674,7 @@ function previewReminders(): string[] {
 
 function createMatchingEngine() {
   return createPreviewRosterEngine({
-    workspace,
+    workspace: journeyWorkspace(),
     state,
     revision,
     readRosterPolicy,

@@ -114,7 +114,7 @@ export interface Shift {
   roles: ShiftRole[];
 }
 
-interface HourEntry {
+export interface HourEntry {
   id: string;
   volunteerId: string;
   opportunityId: string;
@@ -122,6 +122,7 @@ interface HourEntry {
   minutes: number;
   status: "verified" | "pending" | "rejected";
   verificationId: string | null;
+  shiftId?: string;
 }
 
 export interface CoverageDay {
@@ -220,6 +221,8 @@ export interface WaitlistEntry {
   status: WaitlistStatus;
   position: number;
   eligibleRole: string;
+  /** An open-seat application entered into the same review queue. */
+  requestReview?: boolean;
 }
 
 export type AttendanceStatus = "expected" | "checked_in" | "completed" | "no_show";
@@ -804,6 +807,9 @@ export interface SessionSnapshot {
    */
   createdSeries?: ShiftSeriesRecord[];
   createdShifts?: SeriesShift[];
+  /** Browser sample service entries created by completed attendance. */
+  submittedHours?: HourEntry[];
+  journeyNotifications?: (NotificationItem & { volunteerId: string })[];
 }
 
 /** The repeat rule a coordinator filled in. */

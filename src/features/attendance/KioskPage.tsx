@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { ArrowLeft, ArrowRight, CalendarDays, Check, ScanQrCode, ShieldCheck } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Avatar } from "../../components/ui";
 import { t } from "../../lib/i18n";
 import { QrScanner } from "../../components/checkin/QrScanner";
@@ -27,7 +27,8 @@ type LiveEvent = NonNullable<ReturnType<typeof getLiveEvent>>;
 /** Shows one shift, or says there is nothing to check into. */
 export function KioskPage() {
   const { workspace, session } = useWorkspace();
-  const event = getLiveEvent(session, workspace);
+  const [params] = useSearchParams();
+  const event = getLiveEvent(session, workspace, params.get("shift") ?? undefined);
   if (!event) {
     return (
       <main className={styles.kiosk}>
@@ -56,7 +57,7 @@ export function KioskPage() {
       </main>
     );
   }
-  return <KioskBody event={event} />;
+  return <KioskBody key={event.shift.id} event={event} />;
 }
 
 function KioskBody({ event }: { event: LiveEvent }) {
@@ -65,6 +66,7 @@ function KioskBody({ event }: { event: LiveEvent }) {
   const [selected, setSelected] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [busy, setBusy] = useState(false);
   const [eventCode, setEventCode] = useState<string | null>(null);
   const [scannedToken, setScannedToken] = useState<string | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -100,6 +102,7 @@ function KioskBody({ event }: { event: LiveEvent }) {
 
   function submit(event_: FormEvent) {
     event_.preventDefault();
+    if (busy) return;
     setSuccess("");
     if (checkinWindow && !checkinWindow.canSelfCheckIn) {
       setError(
@@ -121,6 +124,7 @@ function KioskBody({ event }: { event: LiveEvent }) {
       setError(`${publicName(selectedRow.volunteer.name)} is already checked in.`);
       return;
     }
+    setBusy(true);
     actions
       .checkIn(event.shift.id, selectedRow.volunteer.id, scannedToken ?? code)
       .then(() => {
@@ -133,7 +137,8 @@ function KioskBody({ event }: { event: LiveEvent }) {
       .catch((caught: unknown) => {
         setScannedToken(null);
         setError(messageOf(caught));
-      });
+      })
+      .finally(() => setBusy(false));
   }
 
   function handleScan(payload: string) {
@@ -160,7 +165,10 @@ function KioskBody({ event }: { event: LiveEvent }) {
         <img className={styles.kioskPhoto} src="/media/hero-community.jpg" alt="" />
         <div className={styles.kioskScrim} aria-hidden="true" />
         <div className={styles.kioskTop}>
-          <Link className={styles.kioskBrand} to="/coordinator/attendance">
+          <Link
+            className={styles.kioskBrand}
+            to={`/coordinator/attendance?shift=${encodeURIComponent(event.shift.id)}`}
+          >
             <span className={styles.kioskMark} aria-hidden="true">
               <svg viewBox="0 0 24 24" width="25" height="25" focusable="false">
                 <path
@@ -282,7 +290,7 @@ function KioskBody({ event }: { event: LiveEvent }) {
             ) : null}
 
             <div className={styles.kioskActions}>
-              <button type="submit" className={styles.kioskPrimary}>
+              <button type="submit" className={styles.kioskPrimary} disabled={busy}>
                 Check in <ArrowRight size={16} aria-hidden="true" />
               </button>
             </div>
@@ -292,8 +300,10 @@ function KioskBody({ event }: { event: LiveEvent }) {
             <span>
               <ShieldCheck size={13} aria-hidden="true" /> Names are shortened on this public screen
             </span>
-            <Link to="/coordinator/attendance">Coordinator view</Link>
-            <Link to="/coordinator/attendance">
+            <Link to={`/coordinator/attendance?shift=${encodeURIComponent(event.shift.id)}`}>
+              Coordinator view
+            </Link>
+            <Link to={`/coordinator/attendance?shift=${encodeURIComponent(event.shift.id)}`}>
               <ArrowLeft size={12} aria-hidden="true" /> Exit kiosk
             </Link>
           </div>

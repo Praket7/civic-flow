@@ -19,10 +19,10 @@ export function WelcomePage() {
   const [demoError, setDemoError] = useState<string | null>(null);
   const demoOnly = import.meta.env.PROD && !isTauri();
 
-  async function exploreDemo() {
+  async function exploreDemo(role: "coordinator" | "volunteer" = "coordinator") {
     setDemoError(null);
     try {
-      const session = await openDemo(true);
+      const session = await openDemo(true, role);
       navigate(accountHome(session.user));
     } catch (caught) {
       setDemoError(messageOf(caught));
@@ -104,6 +104,17 @@ export function WelcomePage() {
                 <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
               </Link>
             )}
+            {demoOnly ? (
+              <button
+                type="button"
+                className={styles.secondaryAction}
+                onClick={() =>
+                  void exploreDemo(user?.role === "volunteer" ? "coordinator" : "volunteer")
+                }
+              >
+                {user?.role === "volunteer" ? "Explore as coordinator" : "Explore as volunteer"}
+              </button>
+            ) : null}
             {user || demoOnly ? null : (
               <>
                 <Link className={styles.secondaryAction} to="/create-account">

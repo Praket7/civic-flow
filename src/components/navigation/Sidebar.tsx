@@ -27,6 +27,7 @@ import { selectOrganization } from "../../lib/organizations/store";
 import { useOrganizationWorkspace } from "../../lib/organizations/useOrganizationWorkspace";
 import { useWorkspace } from "../../lib/workspace/session";
 import { Avatar } from "../ui/Avatar";
+import { isTauri } from "../../lib/platform";
 import styles from "./Sidebar.module.css";
 
 interface NavItem {
@@ -394,6 +395,11 @@ export function Sidebar({
                     </Link>
                   ) : null}
                 </>
+              ) : null}
+              {import.meta.env.PROD && !isTauri() ? (
+                <Link to="/welcome" className={styles.menuItem} onClick={dismissOnNavigate}>
+                  Switch sample role
+                </Link>
               ) : null}
               <Link to="/help" className={styles.menuItem} onClick={dismissOnNavigate}>
                 Help

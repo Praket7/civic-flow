@@ -239,7 +239,14 @@ export function getOpportunities(
   session: SessionOverrides = {},
   workspace: DemoWorkspace,
 ): Opportunity[] {
-  return [...workspace.opportunities, ...(session.createdOpportunities ?? [])];
+  return [
+    ...new Map(
+      [...workspace.opportunities, ...(session.createdOpportunities ?? [])].map((row) => [
+        row.id,
+        row,
+      ]),
+    ).values(),
+  ];
 }
 
 export function getShiftRows(workspace: DemoWorkspace): ShiftRow[] {
@@ -377,8 +384,14 @@ export function getWaitlist(
 /* ------------------------------- attendance ------------------------------- */
 
 /** The shift the check-in desk is working, or null when nothing is scheduled. */
-export function getLiveEvent(session: SessionOverrides = {}, workspace: DemoWorkspace) {
-  const shift = shiftById(DEMO_EVENT_SHIFT_ID, workspace) ?? workspace.shifts[1];
+export function getLiveEvent(
+  session: SessionOverrides = {},
+  workspace: DemoWorkspace,
+  shiftId?: string,
+) {
+  const shift = shiftId
+    ? shiftById(shiftId, workspace)
+    : (shiftById(DEMO_EVENT_SHIFT_ID, workspace) ?? workspace.shifts[1]);
   if (!shift) return null;
   const opportunity = opportunityById(shift.opportunityId, workspace);
   // Whether self check-in is open is not this selector's to decide. The
@@ -414,34 +427,41 @@ export function getHourRows(session: SessionOverrides = {}, workspace: DemoWorks
   const entries = [
     ...workspace.hourEntries.filter((entry) => entry.volunteerId !== workspace.currentVolunteerId),
     ...workspace.mayaEntries,
+    ...(session.submittedHours ?? []),
   ];
-  return entries.map((entry) => {
-    const volunteer = volunteerById(entry.volunteerId, workspace) ?? currentVolunteer(workspace);
-    const opportunity =
-      opportunityById(entry.opportunityId, workspace) ?? workspace.opportunities[0];
-    const decision = session.hoursDecisions?.[entry.id];
-    const shift = workspace.shifts.find(
-      (row) => row.opportunityId === opportunity.id && row.startsAt.slice(0, 10) === entry.date,
+  return [...new Map(entries.map((entry) => [entry.id, entry])).values()].flatMap((entry) => {
+    const volunteer = volunteerById(entry.volunteerId, workspace);
+    const opportunity = getOpportunities(session, workspace).find(
+      (row) => row.id === entry.opportunityId,
     );
-    return {
-      id: entry.id,
-      entryId: entry.id,
-      volunteer,
-      opportunity,
-      date: entry.date,
-      requestedMinutes: entry.minutes,
-      // A rejected or pending record must never contribute approved minutes,
-      // even when an older decision retains a non-null amount.
-      approvedMinutes:
-        (decision?.status ?? entry.status) === "verified"
-          ? (decision?.approvedMinutes ?? entry.minutes)
-          : null,
-      status: decision?.status ?? entry.status,
-      verificationId: entry.verificationId,
-      reason: decision?.reason ?? "",
-      calculatedMinutes: shift ? shiftMinutes(shift) : Math.min(entry.minutes, 240),
-      shiftId: shift?.id ?? null,
-    };
+    if (!volunteer || !opportunity) return [];
+    const decision = session.hoursDecisions?.[entry.id];
+    const shift = entry.shiftId
+      ? workspace.shifts.find((row) => row.id === entry.shiftId)
+      : workspace.shifts.find(
+          (row) => row.opportunityId === opportunity.id && row.startsAt.slice(0, 10) === entry.date,
+        );
+    return [
+      {
+        id: entry.id,
+        entryId: entry.id,
+        volunteer,
+        opportunity,
+        date: entry.date,
+        requestedMinutes: entry.minutes,
+        // A rejected or pending record must never contribute approved minutes,
+        // even when an older decision retains a non-null amount.
+        approvedMinutes:
+          (decision?.status ?? entry.status) === "verified"
+            ? (decision?.approvedMinutes ?? entry.minutes)
+            : null,
+        status: decision?.status ?? entry.status,
+        verificationId: entry.verificationId,
+        reason: decision?.reason ?? "",
+        calculatedMinutes: shift ? shiftMinutes(shift) : Math.min(entry.minutes, 240),
+        shiftId: shift?.id ?? entry.shiftId ?? null,
+      },
+    ];
   });
 }
 
@@ -470,16 +490,17 @@ export function getHoursSummary(
   const pending = rows.filter((row) => row.status === "pending");
   const thisMonth = rows.filter((row) => row.date.startsWith(workspace.now.slice(0, 7)));
   return {
-    totalMinutes: rows.reduce((sum, row) => sum + (row.approvedMinutes ?? row.requestedMinutes), 0),
+    totalMinutes: rows
+      .filter((row) => row.status !== "rejected")
+      .reduce((sum, row) => sum + (row.approvedMinutes ?? row.requestedMinutes), 0),
     verifiedMinutes: verified.reduce(
       (sum, row) => sum + (row.approvedMinutes ?? row.requestedMinutes),
       0,
     ),
     pendingMinutes: pending.reduce((sum, row) => sum + row.requestedMinutes, 0),
-    thisMonthMinutes: thisMonth.reduce(
-      (sum, row) => sum + (row.approvedMinutes ?? row.requestedMinutes),
-      0,
-    ),
+    thisMonthMinutes: thisMonth
+      .filter((row) => row.status !== "rejected")
+      .reduce((sum, row) => sum + (row.approvedMinutes ?? row.requestedMinutes), 0),
     events: new Set(rows.map((row) => row.opportunity.id)).size,
     certificates: verified.length > 0 ? 1 : 0,
   };
@@ -822,7 +843,11 @@ export function getMatches(
   extraOpportunities: Opportunity[] = [],
 ): MatchRow[] {
   const upcoming = getUpcomingShiftRows(workspace);
-  return [...workspace.opportunities, ...extraOpportunities]
+  return [
+    ...new Map(
+      [...workspace.opportunities, ...extraOpportunities].map((row) => [row.id, row]),
+    ).values(),
+  ]
     .map((opportunity) => {
       let score = 40;
       const reasons: string[] = [];

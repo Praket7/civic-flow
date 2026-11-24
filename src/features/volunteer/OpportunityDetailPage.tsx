@@ -94,12 +94,16 @@ export function OpportunityDetailPage() {
   const [selectedShiftId, setSelectedShiftId] = useState("");
   const [role, setRole] = useState("");
   const [confirmation, setConfirmation] = useState("");
+  const [problem, setProblem] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const shifts = useMemo(
     () =>
       opportunity
         ? getShiftRowsForOpportunity(opportunity.id, workspace).filter(
-            (row) => row.shift.status === "scheduled" && row.shift.startsAt > workspace.now,
+            (row) =>
+              row.shift.status === "scheduled" &&
+              new Date(row.shift.startsAt) > new Date(workspace.now),
           )
         : [],
     [opportunity, workspace],
@@ -114,10 +118,13 @@ export function OpportunityDetailPage() {
       : (activeShift?.roles.map((item) => item.name) ?? ["General support"]);
   const effectiveRole = roleOptions.includes(role) ? role : (roleOptions[0] ?? "General support");
   const spotsOpen = activeShift ? Math.max(0, activeShift.capacity - activeShift.confirmed) : 0;
-  const isFull = Boolean(activeShift && spotsOpen === 0);
+  const isFull = Boolean(activeShift && (spotsOpen === 0 || roles.length === 0));
   const registration = activeShift
     ? session.registrations.find(
-        (row) => row.shiftId === activeShift.id && row.volunteerId === volunteer.id,
+        (row) =>
+          row.shiftId === activeShift.id &&
+          row.volunteerId === volunteer.id &&
+          row.status === "registered",
       )
     : undefined;
   const isRegistered = Boolean(registration);
@@ -184,26 +191,38 @@ export function OpportunityDetailPage() {
   }
 
   async function handleSignUp() {
-    if (!opportunity || !activeShift) return;
+    if (!opportunity || !activeShift || busy) return;
+    setBusy(true);
+    setConfirmation("");
+    setProblem("");
     try {
       await actions.registerForShift(activeShift.id, volunteer.id, effectiveRole);
       setConfirmation(
         `You're signed up for ${formatDate(activeShift.startsAt)} as ${effectiveRole.toLowerCase()}.`,
       );
     } catch (caught) {
-      setConfirmation(messageOf(caught));
+      setProblem(messageOf(caught));
+    } finally {
+      setBusy(false);
     }
   }
 
-  async function handleJoinWaitlist() {
-    if (!opportunity || !activeShift) return;
+  async function handleJoinWaitlist(requestReview = false) {
+    if (!opportunity || !activeShift || busy) return;
+    setBusy(true);
+    setConfirmation("");
+    setProblem("");
     try {
-      await actions.joinWaitlist(activeShift.id, volunteer.id, effectiveRole);
+      await actions.joinWaitlist(activeShift.id, volunteer.id, effectiveRole, requestReview);
       setConfirmation(
-        `You're on the waitlist for ${formatDate(activeShift.startsAt)}. We'll notify you if a seat opens.`,
+        requestReview
+          ? `Your request for ${effectiveRole} was submitted for coordinator review. No seat is reserved yet.`
+          : `You're on the waitlist for ${formatDate(activeShift.startsAt)}. We'll notify you if a seat opens.`,
       );
     } catch (caught) {
-      setConfirmation(messageOf(caught));
+      setProblem(messageOf(caught));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -219,6 +238,7 @@ export function OpportunityDetailPage() {
     setSelectedShiftId(shiftId);
     setRole("");
     setConfirmation("");
+    setProblem("");
   }
 
   return (
@@ -718,12 +738,17 @@ export function OpportunityDetailPage() {
               </div>
             ) : null}
 
+            {problem ? (
+              <p role="alert" className={styles.spotsMeta}>
+                {problem}
+              </p>
+            ) : null}
             <Button
               size="large"
               variant="primary"
               className={styles.signupButton}
               onClick={() => void handleSignUp()}
-              disabled={!activeShift || isFull || isRegistered}
+              disabled={!activeShift || isFull || isRegistered || isWaitlisted || busy}
               icon={<ArrowRight size={15} aria-hidden="true" />}
             >
               {t(
@@ -737,24 +762,40 @@ export function OpportunityDetailPage() {
                 variant="secondary"
                 className={styles.signupButton}
                 onClick={() => void handleJoinWaitlist()}
-                disabled={isWaitlisted}
+                disabled={isWaitlisted || busy}
               >
                 {t(isWaitlisted ? "On the waitlist" : "Join the waitlist")}
               </Button>
             ) : null}
 
+            {!isFull && activeShift && !isRegistered ? (
+              <Button
+                size="large"
+                variant="secondary"
+                className={styles.signupButton}
+                onClick={() => void handleJoinWaitlist(true)}
+                disabled={isWaitlisted || busy}
+              >
+                {isWaitlisted ? "Request pending" : "Request coordinator review"}
+              </Button>
+            ) : null}
             {isRegistered ? (
               <div className={styles.registeredActions}>
                 <ButtonLink to="/volunteer/schedule" size="small">
                   My schedule
                 </ButtonLink>
-                <ButtonLink to="/volunteer/check-in" size="small" variant="ghost">
+                <ButtonLink
+                  to={`/volunteer/check-in?shift=${encodeURIComponent(activeShift?.id ?? "")}`}
+                  size="small"
+                  variant="ghost"
+                >
                   Check in
                 </ButtonLink>
               </div>
             ) : (
               <p className={styles.signupNote}>
-                Free to cancel until 12 hours before the shift. No account fees, ever.
+                A request for review does not reserve a seat. Check your schedule for confirmed
+                assignments.
               </p>
             )}
 

@@ -43,7 +43,16 @@ import {
 } from "../../lib/workspace/selectors";
 import styles from "./NotificationsPage.module.css";
 
-type FeedKind = NotificationItem["kind"];
+type FeedKind = "coverage" | "waitlist" | "hours" | "credential" | "shift";
+
+function feedKind(kind: NotificationItem["kind"]): FeedKind {
+  const normalized = kind.toLowerCase();
+  if (normalized === "coverage" || normalized.startsWith("coverage_")) return "coverage";
+  if (normalized === "waitlist" || normalized.startsWith("waitlist_")) return "waitlist";
+  if (normalized === "hours" || normalized.startsWith("hours_")) return "hours";
+  if (normalized === "credential" || normalized.startsWith("credential_")) return "credential";
+  return "shift";
+}
 type FeedSource = "seed" | "derived";
 type FilterTab = "all" | "priority" | "unread";
 
@@ -143,11 +152,12 @@ function seedEntity(
   fallback: string,
   workspace: DemoWorkspace,
 ): string {
-  if (notification.kind === "coverage" || notification.kind === "waitlist") {
+  const kind = feedKind(notification.kind);
+  if (kind === "coverage" || kind === "waitlist") {
     return opportunityById("opp-food", workspace)?.title ?? fallback;
   }
-  if (notification.kind === "hours") return t("Hours & verification");
-  if (notification.kind === "credential") return t("Credentials & skills");
+  if (kind === "hours") return t("Hours & verification");
+  if (kind === "credential") return t("Credentials & skills");
   return t("Schedule");
 }
 
@@ -173,13 +183,13 @@ export function NotificationsPage() {
     const seed: FeedItem[] = notifications.map((notification) => ({
       id: `seed-${notification.id}`,
       source: "seed",
-      kind: notification.kind,
+      kind: feedKind(notification.kind),
       title: notification.title,
       body: notification.body,
       priority: notification.priority,
       createdAt: notification.createdAt,
       href: notification.href,
-      actionLabel: seedAction(notification.kind),
+      actionLabel: seedAction(feedKind(notification.kind)),
       entity: seedEntity(notification, workspace.organization.name, workspace),
       unread: !notification.readAt,
     }));
