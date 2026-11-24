@@ -116,7 +116,10 @@ export async function verifyHostedAccess() {
         ["owner", "coordinator"].includes(w.role) &&
         w.organizationId !== coordinatorOrg?.organizationId,
     );
-    ensure(coordinatorOrg && volunteerOrg && foreignOrg, "test memberships are not properly isolated");
+    ensure(
+      coordinatorOrg && volunteerOrg && foreignOrg,
+      "test memberships are not properly isolated",
+    );
 
     ensure(
       !coordinator.workspaces.some((w) => w.organizationId === foreignOrg.organizationId),
@@ -147,7 +150,10 @@ export async function verifyHostedAccess() {
     const health = await coordinator.client.rpc("health_snapshot", {
       p_organization_id: coordinatorOrg.organizationId,
     });
-    ensure(!health.error && health.data?.status === "ok", "coordinator cannot see workspace health");
+    ensure(
+      !health.error && health.data?.status === "ok",
+      "coordinator cannot see workspace health",
+    );
     const healthVolunteer = await volunteer.client.rpc("health_snapshot", {
       p_organization_id: coordinatorOrg.organizationId,
     });

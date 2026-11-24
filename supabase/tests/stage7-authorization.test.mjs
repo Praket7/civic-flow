@@ -118,3 +118,33 @@ test("operation replay cannot cross account or tenant and rejected work remains 
     await db.close();
   }
 });
+
+test("broadcast and recipient notifications never cross tenant or revoked membership boundaries", async () => {
+  const db = await createDatabase();
+  try {
+    await seed(db);
+    await query(
+      db,
+      "insert into public.notifications (organization_id, kind, title, audience, volunteer_id) values ($1, 'reminder', 'A broadcast', 'all', null), ($2, 'reminder', 'B broadcast', 'all', null), ($1, 'reminder', 'A recipient', 'volunteer', $3)",
+      [ids.orgA, ids.orgB, ids.volunteerA],
+    );
+    const titles = async (user) => {
+      const rows = await asUser(db, user, () =>
+        query(db, "select title from public.notifications order by title"),
+      );
+      return rows.map((row) => row.title);
+    };
+    assert.deepEqual(await titles(ids.volunteerUserA), ["A broadcast", "A recipient"]);
+    assert.deepEqual(await titles(ids.volunteerUserA2), ["A broadcast"]);
+    assert.deepEqual(await titles(ids.ownerB), ["B broadcast"]);
+    await query(
+      db,
+      "update public.organization_memberships set status = 'disabled' where organization_id = $1 and user_id = $2",
+      [ids.orgA, ids.volunteerUserA],
+    );
+    assert.deepEqual(await titles(ids.volunteerUserA), []);
+    assert.deepEqual(await titles(ids.volunteerUserA2), ["A broadcast"]);
+  } finally {
+    await db.close();
+  }
+});

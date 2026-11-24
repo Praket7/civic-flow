@@ -102,9 +102,15 @@ async function main() {
     const responses = await Promise.allSettled(
       actors.map((actor, i) => command(actor, operations[i], "REGISTER_FOR_SHIFT")),
     );
-    check(responses.every((response) => response.status === "fulfilled"), "Race RPC failed");
+    check(
+      responses.every((response) => response.status === "fulfilled"),
+      "Race RPC failed",
+    );
     const results = responses.map((response) => response.value);
-    check(results.every((result) => result.status === "applied"), "Race command refused");
+    check(
+      results.every((result) => result.status === "applied"),
+      "Race command refused",
+    );
     check(
       results.filter((result) => result.data?.waitlisted === true).length === 1,
       "Expected exactly one waitlisted volunteer",

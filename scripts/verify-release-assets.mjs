@@ -16,16 +16,25 @@ export async function verifyReleaseAssets(directory, tag) {
     ["Windows", /\.(msi|exe)$/i],
     ["Linux", /\.(appimage|deb|rpm)$/i],
   ]) {
-    check(names.some((name) => pattern.test(name)), "Missing " + platform + " installer");
+    check(
+      names.some((name) => pattern.test(name)),
+      "Missing " + platform + " installer",
+    );
   }
   const manifest = JSON.parse(await readFile(path.join(directory, "latest.json"), "utf8"));
   check(manifest.version === tag.slice(1), "Updater manifest version differs from release tag");
   const platforms = Object.entries(manifest.platforms ?? {});
   for (const prefix of ["darwin", "windows", "linux"]) {
-    check(platforms.some(([platform]) => platform.startsWith(prefix + "-")), "Missing " + prefix);
+    check(
+      platforms.some(([platform]) => platform.startsWith(prefix + "-")),
+      "Missing " + prefix,
+    );
   }
   for (const [platform, entry] of platforms) {
-    check(typeof entry.signature === "string" && entry.signature.trim(), "Missing updater signature");
+    check(
+      typeof entry.signature === "string" && entry.signature.trim(),
+      "Missing updater signature",
+    );
     const url = new URL(entry.url);
     const prefix = "/Praket7/civic-flow/releases/download/" + tag + "/";
     check(
