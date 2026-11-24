@@ -47,7 +47,17 @@ describe("preview AutoRoster deterministic credential-valid plan", () => {
           .map((shift) => shift.id);
         const one = await previewRepository.evaluateRoster(ids, options);
         const onePlan = await previewRepository.autoRoster(ids, options);
-        expect(createHash("sha256").update(JSON.stringify({ one, onePlan })).digest("hex")).toBe(
+        // Reset now advances the revision to invalidate stale plans. Verify live
+        // metadata separately and normalize only that field to the original
+        // fixture revision; every assignment, score and explanation stays pinned.
+        expect(one.revision).toBe(onePlan.revision);
+        expect(one.plan.revision).toBe(onePlan.revision);
+        expect(onePlan.revision).toBeGreaterThan(1);
+        const normalized = {
+          one: { ...one, revision: 1, plan: { ...one.plan, revision: 1 } },
+          onePlan: { ...onePlan, revision: 1 },
+        };
+        expect(createHash("sha256").update(JSON.stringify(normalized)).digest("hex")).toBe(
           expected,
         );
         expect(onePlan.assignments).toHaveLength(4);

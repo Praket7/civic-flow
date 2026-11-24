@@ -175,9 +175,7 @@ describe("connected sample journey", () => {
     const released = await repository.cancelRegistration(shift.id, id, "Plans changed");
     expect(released.waitlist.find((row) => row.shiftId === shift.id)?.status).toBe("waiting");
     expect(
-      released.registrations.some(
-        (row) => row.shiftId === shift.id && row.status === "registered",
-      ),
+      released.registrations.some((row) => row.shiftId === shift.id && row.status === "registered"),
     ).toBe(false);
     await repository.promoteWaitlist(shift.id, other.id);
     const approved = await repository.getSnapshot();
