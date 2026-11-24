@@ -205,7 +205,7 @@ pub(crate) fn load_candidates(
     let mut credentials: HashMap<String, Vec<Credential>> = HashMap::new();
     {
         let mut statement = conn.prepare(
-            "SELECT vc.volunteer_id, ct.name, vc.valid_through
+            "SELECT vc.volunteer_id, ct.name, vc.valid_from, vc.valid_through, vc.verified_at
              FROM volunteer_credentials vc
              JOIN credential_types ct ON ct.id = vc.credential_type_id",
         )?;
@@ -213,13 +213,18 @@ pub(crate) fn load_candidates(
         while let Some(row) = rows.next()? {
             let volunteer: String = row.get(0)?;
             let name: String = row.get(1)?;
-            let raw: String = row.get(2)?;
-            if let Some(valid_through) = parse_date(&raw) {
-                credentials.entry(volunteer).or_default().push(Credential {
+            let start: String = row.get(2)?;
+            let end: String = row.get(3)?;
+            let verified: Option<String> = row.get(4)?;
+            credentials
+                .entry(volunteer)
+                .or_default()
+                .push(Credential::from_dates(
                     name,
-                    valid_through,
-                });
-            }
+                    Some(&start),
+                    Some(&end),
+                    verified.as_deref(),
+                ));
         }
     }
 

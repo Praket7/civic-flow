@@ -233,7 +233,9 @@ fn a_required_credential_must_be_current() {
     let mut expired = candidate("b", &["Driver"], &["sat:morning"]);
     expired.credentials = vec![Credential {
         name: "Safe driver clearance".into(),
-        valid_through: shift_date - chrono::Duration::days(1),
+        valid_from: Some(NaiveDate::MIN),
+        valid_through: Some(shift_date - chrono::Duration::days(1)),
+        verified: true,
     }];
     let lapsed = is_eligible(&expired, &restricted, &policy(), &options).unwrap_err();
     assert!(lapsed.contains("Required credential"), "{lapsed}");
@@ -242,11 +244,21 @@ fn a_required_credential_must_be_current() {
     let mut current = candidate("c", &["Driver"], &["sat:morning"]);
     current.credentials = vec![Credential {
         name: "Safe driver clearance".into(),
-        valid_through: shift_date,
+        valid_from: Some(NaiveDate::MIN),
+        valid_through: Some(shift_date),
+        verified: true,
     }];
     assert!(is_eligible(&current, &restricted, &policy(), &options).is_ok());
 
-    let plan = plan(&[unverified, expired], &[restricted], &policy(), &options);
+    let mut future = current.clone();
+    future.credentials[0].valid_from = Some(shift_date + chrono::Duration::days(1));
+    let mut pending = current.clone();
+    pending.credentials[0].verified = false;
+    for candidate in [&future, &pending] {
+        assert!(is_eligible(candidate, &restricted, &policy(), &options).is_err());
+    }
+
+    let plan = plan(&[unverified, expired, future, pending], &[restricted], &policy(), &options);
     assert!(plan.assignments.is_empty());
 }
 
@@ -594,7 +606,9 @@ fn a_missing_credential_may_be_allowed_by_policy_but_a_lapsed_one_never_is() {
     let mut expired = candidate("b", &["Driver"], &["sat:morning"]);
     expired.credentials = vec![Credential {
         name: "Safe driver clearance".into(),
-        valid_through: NaiveDate::from_ymd_opt(2026, 10, 16).unwrap(),
+        valid_from: Some(NaiveDate::MIN),
+        valid_through: Some(NaiveDate::from_ymd_opt(2026, 10, 16).unwrap()),
+        verified: true,
     }];
     assert!(is_eligible(&expired, &required, &permissive, &options()).is_err());
 }
@@ -640,7 +654,9 @@ fn every_assignment_carries_the_checks_and_components_behind_it() {
     let mut qualified = candidate("a", &["Driver"], &["sat:morning"]);
     qualified.credentials = vec![Credential {
         name: "Safe driver clearance".into(),
-        valid_through: NaiveDate::from_ymd_opt(2027, 1, 1).unwrap(),
+        valid_from: Some(NaiveDate::MIN),
+        valid_through: Some(NaiveDate::from_ymd_opt(2027, 1, 1).unwrap()),
+        verified: true,
     }];
 
     let plan = plan(&[qualified], &[required], &policy(), &options());

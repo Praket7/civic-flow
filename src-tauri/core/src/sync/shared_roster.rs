@@ -182,24 +182,24 @@ fn load_candidates(
 
     let mut credentials: HashMap<String, Vec<Credential>> = HashMap::new();
     for row in &credential_rows {
-        let (Some(volunteer), Some(type_id), Some(valid_through)) = (
+        let (Some(volunteer), Some(type_id)) = (
             text(row, "volunteer_id"),
             text(row, "credential_type_id"),
-            text(row, "valid_through"),
         ) else {
             continue;
         };
-        let (Some(name), Some(valid_through)) = (type_names.get(type_id), date(valid_through))
-        else {
+        let Some(name) = type_names.get(type_id) else {
             continue;
         };
         credentials
             .entry(volunteer.to_string())
             .or_default()
-            .push(Credential {
-                name: (*name).to_string(),
-                valid_through,
-            });
+            .push(Credential::from_dates(
+                (*name).to_string(),
+                text(row, "valid_from"),
+                text(row, "valid_through"),
+                text(row, "verified_at"),
+            ));
     }
 
     let horizon = now + Duration::days(7);

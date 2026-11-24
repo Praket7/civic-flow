@@ -412,12 +412,8 @@ fn mutation_snapshot_redaction_matches_a_fresh_scoped_read() {
     let conn = database.connection();
     let full = snapshot(conn).unwrap();
     let volunteer_id = full.roster.first().unwrap().id.clone();
-    let redacted = civicflow_core::workflows::redact_snapshot(
-        conn,
-        full,
-        Some(&volunteer_id),
-    )
-    .unwrap();
+    let redacted =
+        civicflow_core::workflows::redact_snapshot(conn, full, Some(&volunteer_id)).unwrap();
     assert_eq!(
         redacted,
         civicflow_core::workflows::snapshot_for(conn, Some(&volunteer_id)).unwrap()

@@ -83,7 +83,34 @@ fn default_true() -> bool {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Credential {
     pub name: String,
-    pub valid_through: NaiveDate,
+    pub valid_from: Option<NaiveDate>,
+    pub valid_through: Option<NaiveDate>,
+    pub verified: bool,
+}
+
+impl Credential {
+    pub(crate) fn from_dates(
+        name: String,
+        start: Option<&str>,
+        end: Option<&str>,
+        verified_at: Option<&str>,
+    ) -> Self {
+        let parse = |value: &str| {
+            NaiveDate::parse_from_str(value.get(..10).unwrap_or(value), "%Y-%m-%d").ok()
+        };
+        Self {
+            name,
+            valid_from: start.and_then(parse),
+            valid_through: end.and_then(parse),
+            verified: verified_at.is_some_and(|value| !value.trim().is_empty()),
+        }
+    }
+
+    fn valid_on(&self, on: NaiveDate) -> bool {
+        self.verified
+            && self.valid_from.is_some_and(|start| start <= on)
+            && self.valid_through.is_some_and(|end| on <= end)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -473,7 +500,7 @@ fn credential_state(candidate: &Candidate, credential: &str, on: NaiveDate) -> C
         if !value.name.eq_ignore_ascii_case(credential) {
             continue;
         }
-        if value.valid_through >= on {
+        if value.valid_on(on) {
             return CredentialState::Current;
         }
         expired = true;
@@ -694,15 +721,12 @@ fn evaluate(
         let state = credential_state(candidate, required, slot.starts_at.date_naive());
         let (passed, detail) = match state {
             CredentialState::Current => (true, format!("{required} current")),
-            CredentialState::Expired => (false, format!("{required} expired")),
+            CredentialState::Expired => (false, format!("{required} expired, unverified, or not yet valid")),
             CredentialState::Missing => (false, format!("No {required} on record")),
         };
-        // Only an organization that explicitly allows it may treat a missing or
-        // lapsed record as good enough; the default blocks.
-        let allowed = state != CredentialState::Current
-            && policy.unknown_credential_behavior
-                == crate::policy::MissingRequirementBehavior::Allow
-            && state != CredentialState::Expired;
+        // An explicit policy may allow a missing record, never a known invalid one.
+        let allowed = state == CredentialState::Missing
+            && policy.unknown_credential_behavior == crate::policy::MissingRequirementBehavior::Allow;
         checks.push(check(
             "Required credential",
             passed || allowed,

@@ -1037,7 +1037,9 @@ fn has_credential(
         .query_row(
             "SELECT 1 FROM volunteer_credentials vc
              JOIN credential_types ct ON ct.id = vc.credential_type_id
-             WHERE vc.volunteer_id = ?1 AND ct.name = ?2 AND vc.valid_through >= ?3",
+             WHERE vc.volunteer_id = ?1 AND ct.name = ?2
+               AND date(vc.valid_from) <= ?3 AND date(vc.valid_through) >= ?3
+               AND vc.verified_at IS NOT NULL AND trim(vc.verified_at) <> ''",
             params![volunteer_id, credential, on_date],
             |_| Ok(()),
         )
@@ -2085,12 +2087,7 @@ pub fn mark_no_show(
 }
 
 /// Insert a seat once and update both occupancy counters in the same transaction.
-fn reserve_seat(
-    conn: &Connection,
-    shift_id: &str,
-    volunteer_id: &str,
-    role: &str,
-) -> Result<bool> {
+fn reserve_seat(conn: &Connection, shift_id: &str, volunteer_id: &str, role: &str) -> Result<bool> {
     let created = conn.execute(
         "INSERT INTO registrations (shift_id, volunteer_id, role, created_at, status, updated_at)
          VALUES (?1, ?2, ?3, ?4, 'registered', ?4)
