@@ -286,8 +286,7 @@ const desktopRepository: WorkspaceRepository = {
   revokeOrganizationInvite: async (organizationId, inviteId) => {
     await invokeAuthed<null>("revoke_organization_invite", { organizationId, inviteId });
   },
-  redeemOrganizationInvite: (code) =>
-    invokeAuthed("redeem_organization_invite", { code }),
+  redeemOrganizationInvite: (code) => invokeAuthed("redeem_organization_invite", { code }),
   joinPublicOrganization: (organizationId) =>
     invokeAuthed("join_public_organization", { organizationId }),
   setOrganizationMemberRole: (organizationId, userId, role) =>
@@ -316,8 +315,7 @@ const desktopRepository: WorkspaceRepository = {
     invokeAuthed("check_in_volunteer", { shiftId, volunteerId, code }),
   manualCheckIn: (shiftId, volunteerId, reason) =>
     invokeAuthed("manual_check_in", { shiftId, volunteerId, reason }),
-  checkOut: (shiftId, volunteerId) =>
-    invokeAuthed("check_out_volunteer", { shiftId, volunteerId }),
+  checkOut: (shiftId, volunteerId) => invokeAuthed("check_out_volunteer", { shiftId, volunteerId }),
   markNoShow: (shiftId, volunteerId) =>
     invokeAuthed("mark_volunteer_no_show", { shiftId, volunteerId }),
   cancelRegistration: (shiftId, volunteerId, reason) =>
@@ -341,8 +339,7 @@ const desktopRepository: WorkspaceRepository = {
       assignments,
     }),
   getRosterPolicy: () => invokeAuthed("get_roster_policy"),
-  updateRosterPolicy: (policy) =>
-    invokeAuthed("update_roster_policy", { policy }),
+  updateRosterPolicy: (policy) => invokeAuthed("update_roster_policy", { policy }),
   explainRosterChoice: (shiftIds, options, candidateId, slotId) =>
     invokeAuthed("explain_roster_choice", {
       shiftIds,
@@ -353,10 +350,8 @@ const desktopRepository: WorkspaceRepository = {
   applyRoster: (shiftId, assignments) =>
     invokeAuthed("apply_roster_plan", { shiftId, assignments }),
   detectDisruptions: () => invokeAuthed("detect_disruptions"),
-  planRecovery: (shiftIds, options) =>
-    invokeAuthed("plan_recovery", { shiftIds, options }),
-  applyRecovery: (shiftId, changes) =>
-    invokeAuthed("apply_recovery", { shiftId, changes }),
+  planRecovery: (shiftIds, options) => invokeAuthed("plan_recovery", { shiftIds, options }),
+  applyRecovery: (shiftId, changes) => invokeAuthed("apply_recovery", { shiftId, changes }),
   setAssignmentLock: (shiftId, volunteerId, locked) =>
     invokeAuthed("set_assignment_lock", { shiftId, volunteerId, locked }),
   createShiftSeries: (opportunityId, rule, roles) =>
@@ -365,8 +360,7 @@ const desktopRepository: WorkspaceRepository = {
     invokeAuthed("list_shift_series", {
       opportunityId: opportunityId ?? null,
     }),
-  generateSeriesInstances: (seriesId) =>
-    invokeAuthed("generate_series_instances", { seriesId }),
+  generateSeriesInstances: (seriesId) => invokeAuthed("generate_series_instances", { seriesId }),
   retimeShiftSeries: (seriesId, startsLocalTime, durationMinutes, scope) =>
     invokeAuthed("retime_shift_series", {
       seriesId,
@@ -374,17 +368,14 @@ const desktopRepository: WorkspaceRepository = {
       durationMinutes,
       scope,
     }),
-  deleteShiftSeries: (seriesId) =>
-    invokeAuthed("delete_shift_series", { seriesId }),
-  recommendReplacement: (shiftId, role) =>
-    invokeAuthed("recommend_replacement", { shiftId, role }),
+  deleteShiftSeries: (seriesId) => invokeAuthed("delete_shift_series", { seriesId }),
+  recommendReplacement: (shiftId, role) => invokeAuthed("recommend_replacement", { shiftId, role }),
   listNotificationRules: () => invokeAuthed("list_notification_rules"),
   updateNotificationRule: (ruleId, patch) =>
     invokeAuthed("update_notification_rule", { ruleId, patch }),
   queueDueReminders: () => invokeAuthed("queue_due_reminders"),
   retentionSignals: () => invokeAuthed("retention_signals"),
-  volunteerInsight: (volunteerId) =>
-    invokeAuthed("volunteer_insight", { volunteerId }),
+  volunteerInsight: (volunteerId) => invokeAuthed("volunteer_insight", { volunteerId }),
   engagementMetrics: () => invokeAuthed("engagement_metrics"),
   credentialReadiness: () => invokeAuthed("credential_readiness"),
   promoteWaitlist: (shiftId, volunteerId) =>
@@ -397,8 +388,7 @@ const desktopRepository: WorkspaceRepository = {
       reason: decision.reason,
     }),
   updateSettings: (patch) => invokeAuthed("update_workspace_settings", { patch }),
-  createOpportunity: (input) =>
-    invokeAuthed("create_opportunity", { input }),
+  createOpportunity: (input) => invokeAuthed("create_opportunity", { input }),
   registerForShift: (shiftId, volunteerId, role) =>
     invokeAuthed("register_for_shift", { shiftId, volunteerId, role }),
   saveVolunteerProfile: (patch) =>
@@ -462,10 +452,8 @@ const desktopRepository: WorkspaceRepository = {
     if (!path) return null;
     return invokeAuthed<ExportReceipt>("export_report", { request, format, path });
   },
-  previewVolunteerImport: (text) =>
-    invokeAuthed("preview_volunteer_import", { text }),
-  applyVolunteerImport: (text) =>
-    invokeAuthed("apply_volunteer_import", { text }),
+  previewVolunteerImport: (text) => invokeAuthed("preview_volunteer_import", { text }),
+  applyVolunteerImport: (text) => invokeAuthed("apply_volunteer_import", { text }),
   exportVolunteerRoster: async () => {
     const path = await save({
       title: "Export the volunteer roster",
