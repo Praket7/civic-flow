@@ -10,9 +10,9 @@
  *   node scripts/check-release-version.mjs v0.1.1
  */
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = resolve(new URL("..", import.meta.url).pathname);
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const tag = process.argv[2] ?? process.env.GITHUB_REF_NAME ?? "";
 
 if (!tag.startsWith("v")) {
