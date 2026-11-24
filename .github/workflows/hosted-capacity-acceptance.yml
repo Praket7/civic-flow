@@ -1,0 +1,51 @@
+name: Hosted capacity acceptance (staging)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_disposable_fixture:
+        description: Confirm the isolated fixture can be mutated and retains synthetic audit history
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hosted-capacity-acceptance
+  cancel-in-progress: false
+
+jobs:
+  capacity-race:
+    if: github.ref == 'refs/heads/main' && inputs.confirm_disposable_fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: hosted-staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Race two independently authenticated volunteers
+        env:
+          CIVICFLOW_SMOKE_WRITE_CONSENT: disposable-fixture-only
+          CIVICFLOW_SMOKE_STAGING_PROJECT_REF: ${{ vars.CIVICFLOW_SMOKE_STAGING_PROJECT_REF }}
+          CIVICFLOW_SMOKE_SUPABASE_URL: ${{ vars.CIVICFLOW_SMOKE_SUPABASE_URL }}
+          CIVICFLOW_SMOKE_SUPABASE_ANON_KEY: ${{ secrets.CIVICFLOW_SMOKE_SUPABASE_ANON_KEY }}
+          CIVICFLOW_SMOKE_ORGANIZATION_ID: ${{ vars.CIVICFLOW_SMOKE_ORGANIZATION_ID }}
+          CIVICFLOW_SMOKE_SHIFT_ID: ${{ vars.CIVICFLOW_SMOKE_SHIFT_ID }}
+          CIVICFLOW_SMOKE_COORD_A_EMAIL: ${{ secrets.CIVICFLOW_SMOKE_COORD_A_EMAIL }}
+          CIVICFLOW_SMOKE_COORD_A_PASSWORD: ${{ secrets.CIVICFLOW_SMOKE_COORD_A_PASSWORD }}
+          CIVICFLOW_SMOKE_VOL_A_EMAIL: ${{ secrets.CIVICFLOW_SMOKE_VOL_A_EMAIL }}
+          CIVICFLOW_SMOKE_VOL_A_PASSWORD: ${{ secrets.CIVICFLOW_SMOKE_VOL_A_PASSWORD }}
+          CIVICFLOW_SMOKE_VOL_A2_EMAIL: ${{ secrets.CIVICFLOW_SMOKE_VOL_A2_EMAIL }}
+          CIVICFLOW_SMOKE_VOL_A2_PASSWORD: ${{ secrets.CIVICFLOW_SMOKE_VOL_A2_PASSWORD }}
+        run: node scripts/live-hosted-capacity.mjs

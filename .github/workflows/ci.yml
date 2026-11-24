@@ -31,7 +31,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
-      - run: pnpm format
+      - name: Check formatting and report exact correction on failure
+        run: |
+          if ! pnpm format; then
+            pnpm format:fix
+            git diff --
+            exit 1
+          fi
       - run: pnpm check:copy
       - run: pnpm check:demo
       - run: pnpm check:i18n

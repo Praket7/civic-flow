@@ -23,7 +23,7 @@ fi
 # The connection string is not printed; the hostname and database name are
 # checked before pg_restore ever gets access to it.
 CIVICFLOW_URL_CHECK="$CIVICFLOW_RESTORE_DATABASE_URL" python3 - <<'PY'
-import os, sys
+import os, re, sys
 from urllib.parse import urlparse
 parsed = urlparse(os.environ["CIVICFLOW_URL_CHECK"])
 db = parsed.path.removeprefix("/")
@@ -33,8 +33,7 @@ if (
     or parsed.query
     or parsed.params
     or parsed.fragment
-    or not db.startswith("civicflow_restore_")
-    or len(db) < len("civicflow_restore_") + 1
+    or not re.fullmatch(r"civicflow_restore_[a-zA-Z0-9_]+", db)
 ):
     sys.exit("Refusing restore: use a disposable localhost civicflow_restore_* database only.")
 PY
@@ -44,15 +43,22 @@ if [[ "${CIVICFLOW_ALLOW_DESTRUCTIVE_RESTORE_TEST:-}" != "isolated-only" ]]; the
   exit 2
 fi
 
+# Refuse environment-based redirection of a supposedly local connection.
+unset PGHOST PGHOSTADDR PGPORT PGSERVICE PGSERVICEFILE PGDATABASE PGOPTIONS
+if [[ "$(psql --dbname "$CIVICFLOW_RESTORE_DATABASE_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 --command="select current_database() like 'civicflow_restore_%' and inet_server_addr() in ('127.0.0.1'::inet, '::1'::inet)")" != "t" ]]; then
+  echo "Restore target connection did not prove local isolation." >&2
+  exit 2
+fi
+
 # The cleartext archive flows only through pipes; it is never copied to disk
 # or to a CI artifact. Test of the restored *schema* is a separate gate from
 # merely observing that an S3 object exists.
 aws s3 cp "$CIVICFLOW_BACKUP_OBJECT_URI" - --only-show-errors --no-progress \
   | age --decrypt --identity "$CIVICFLOW_BACKUP_AGE_IDENTITY_FILE" \
-  | PGDATABASE="$CIVICFLOW_RESTORE_DATABASE_URL" pg_restore \
-      --clean --if-exists --no-owner --no-acl --exit-on-error
+  | pg_restore --dbname "$CIVICFLOW_RESTORE_DATABASE_URL" \
+      --single-transaction --clean --if-exists --no-owner --no-acl --exit-on-error
 
-PGDATABASE="$CIVICFLOW_RESTORE_DATABASE_URL" psql --no-psqlrc \
+psql --dbname "$CIVICFLOW_RESTORE_DATABASE_URL" --no-psqlrc \
   --set ON_ERROR_STOP=1 --tuples-only --no-align \
   --command="DO \$\$ BEGIN
     IF to_regclass('public.organization_memberships') IS NULL
@@ -61,7 +67,15 @@ PGDATABASE="$CIVICFLOW_RESTORE_DATABASE_URL" psql --no-psqlrc \
        OR to_regclass('auth.users') IS NULL THEN
       RAISE EXCEPTION 'Restored CivicFlow schema is incomplete';
     END IF;
+    IF EXISTS (SELECT 1 FROM public.shifts WHERE confirmed > capacity OR confirmed < 0 OR waitlisted < 0) THEN
+      RAISE EXCEPTION 'Restored shift capacity invariant failed';
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname IN ('public', 'sync') AND c.relkind = 'r' AND NOT c.relrowsecurity) THEN
+      RAISE EXCEPTION 'Restored application table is missing RLS';
+    END IF;
   END \$\$;"
 
 echo "Encrypted archive restored and critical application tables verified in an isolated database."
+echo "Ownership and ACLs were excluded; grants must be reapplied and verified separately."
 echo "Human migration, RLS, sign-in and data-integrity review is still required before release."

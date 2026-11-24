@@ -7,9 +7,10 @@
 // to the delivery row.
 //
 // Deploy with JWT verification on. The public config action accepts any valid
-// project key; dispatch requires the service role key exactly.
+// project key; dispatch requires a separate high-entropy scheduler token.
 
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.58.0";
+import { schedulerAuthorized } from "../_shared/scheduler-auth.mjs";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -150,14 +151,15 @@ async function sendPush(client: SupabaseClient, job: DeliveryJob): Promise<Outco
       delivered += 1;
     } catch (error) {
       const status = (error as { statusCode?: number }).statusCode;
-      errors.push(`${status ?? "error"}: ${(error as Error).message ?? String(error)}`);
+      errors.push(String(status ?? "push_transport_error"));
 
       // A gone endpoint is retired once, not retried forever.
       if (status === 404 || status === 410) {
-        await client
+        const revoked = await client
           .from("push_subscriptions")
           .update({ revoked_at: new Date().toISOString() })
           .eq("endpoint", subscription.endpoint);
+        if (revoked.error) throw new Error("subscription_revocation_failed");
       }
     }
   }
@@ -192,8 +194,8 @@ async function dispatch(client: SupabaseClient, limit: number): Promise<Response
     let outcome: Outcome;
     try {
       outcome = await deliver(client, job);
-    } catch (error) {
-      outcome = { status: "failed", error: String((error as Error).message ?? error) };
+    } catch {
+      outcome = { status: "failed", error: "delivery_execution_failed" };
     }
 
     counts[outcome.status] += 1;
@@ -201,14 +203,15 @@ async function dispatch(client: SupabaseClient, limit: number): Promise<Response
       failures.push(`${job.channel} ${job.deliveryId}: ${outcome.error ?? "unknown"}`);
     }
 
-    const completed = await client.rpc("complete_delivery", {
+    const completed = await client.rpc("complete_delivery_attempt", {
       p_id: job.deliveryId,
+      p_attempt: job.attempts,
       p_status: outcome.status,
       p_error: outcome.error ?? null,
       p_provider: outcome.provider ?? "",
     });
-    if (completed.error) {
-      failures.push(`record ${job.deliveryId}: ${completed.error.message}`);
+    if (completed.error || completed.data?.status !== "ok") {
+      failures.push(`record ${job.deliveryId}: delivery_audit_failed`);
     }
   }
 
@@ -219,13 +222,15 @@ async function dispatch(client: SupabaseClient, limit: number): Promise<Response
     failures: failures.slice(0, 10),
   });
 
-  await client.rpc("record_server_job", {
+  const audit = await client.rpc("record_server_job", {
     p_job: "reminders",
     // A partially failed job is not healthy. The per-delivery outcomes remain
     // idempotent, but operators need a failed server-job status to investigate.
     p_status: failures.length > 0 ? "failed" : "succeeded",
     p_detail: detail,
   });
+
+  if (audit.error || audit.data?.status !== "ok") failures.push("server_job_audit_failed");
 
   return json({
     status: "ok",
@@ -266,21 +271,23 @@ Deno.serve(async (request: Request) => {
     return config(client, request);
   }
 
-  // Supabase clients send the key in both `apikey` and `Authorization`.
-  // Accept either so a scheduler that only sets one still authenticates, but
-  // never accept a signed-in volunteer's user token.
-  const bearer = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  const apiKey = request.headers.get("apikey") ?? "";
-  // The gateway verifies the JWT signature before this code runs, so the role
-  // claim is trustworthy here. A signed-in volunteer's token says
-  // "authenticated" and is still refused.
-  if (bearer !== serviceKey && apiKey !== serviceKey && jwtRole(bearer) !== "service_role") {
+  if (request.method !== "POST") {
+    return json({ status: "error", message: "Method not allowed." }, 405);
+  }
+  // A scheduler credential can invoke this operation, not the database API.
+  // The service-role key remains inside the Edge Function runtime.
+  if (
+    !schedulerAuthorized(
+      Deno.env.get("CIVICFLOW_REMINDER_SCHEDULER_TOKEN"),
+      request.headers.get("x-civicflow-scheduler"),
+    )
+  ) {
     return json({ status: "forbidden", message: "This endpoint is for the scheduler." }, 401);
   }
 
   const limit = Math.min(
     Math.max(Number(new URL(request.url).searchParams.get("limit") ?? 50) || 50, 1),
-    200,
+    25,
   );
 
   try {
