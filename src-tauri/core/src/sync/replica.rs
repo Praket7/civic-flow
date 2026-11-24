@@ -250,8 +250,14 @@ pub fn configure_owned(
         }
         return Ok(previous);
     }
-    configure_inner(conn, organization_id, user_id, membership_epoch, Some(local_user_id), owner.as_deref() != Some(local_user_id))
-
+    configure_inner(
+        conn,
+        organization_id,
+        user_id,
+        membership_epoch,
+        Some(local_user_id),
+        owner.as_deref() != Some(local_user_id),
+    )
 }
 
 pub fn require_outbox_owner(conn: &Connection, id: i64, local_user_id: &str) -> Result<()> {

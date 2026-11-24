@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Account, AuthSession } from "../../types/domain";
 import { isSetupPending, markSetupPending, setupRoute } from "../onboarding/store";
@@ -74,7 +74,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // the sign-in screen can say why someone landed back on it.
   const [expired, setExpired] = useState(false);
 
+  const generation = useRef(0);
+  const adoptSession = useCallback((session: AuthSession, remember: boolean) => {
+    generation.current += 1;
+    setExpired(false);
+    setRepositoryToken(session.token);
+    rememberToken(remember ? session.token : null);
+    setToken(session.token);
+    setUser(session.user);
+    setLoading(false);
+    return session;
+  }, []);
+
   const refresh = useCallback(async () => {
+    const ticket = generation.current;
     const current = token ?? storedToken();
     if (!current) {
       setRepositoryToken(null);
@@ -86,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRepositoryToken(current);
     try {
       const account = await repository.currentUser(current);
+      if (ticket !== generation.current) return;
       if (!account) {
         rememberToken(null);
         setRepositoryToken(null);
@@ -96,20 +110,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setUser(account);
     } catch {
-      setUser(null);
+      if (ticket === generation.current) setUser(null);
     } finally {
-      setLoading(false);
+      if (ticket === generation.current) setLoading(false);
     }
   }, [token]);
 
   useEffect(() => {
     let active = true;
+    const ticket = generation.current;
     const current = storedToken();
     if (!current) {
       // Defer the empty-session write so the effect body itself stays pure, and
       // re-read storage first: a sign-in can finish between mount and this tick.
       const timer = window.setTimeout(() => {
-        if (!active || storedToken()) return;
+        if (!active || ticket !== generation.current || storedToken()) return;
         setRepositoryToken(null);
         setToken(null);
         setUser(null);
@@ -124,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     repository
       .currentUser(current)
       .then((account) => {
-        if (!active) return;
+        if (!active || ticket !== generation.current) return;
         if (!account) {
           rememberToken(null);
           setRepositoryToken(null);
@@ -134,10 +149,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(account);
       })
       .catch(() => {
-        if (active) setUser(null);
+        if (active && ticket === generation.current) setUser(null);
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active && ticket === generation.current) setLoading(false);
       });
     return () => {
       active = false;
@@ -146,37 +161,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const adoptHostedIdentity = useCallback(async (identity: HostedIdentity, remember: boolean) => {
     const session = await repository.signInWithHosted(identity);
-    setExpired(false);
-    setRepositoryToken(session.token);
-    if (remember) rememberToken(session.token);
-    else rememberToken(null);
-    setToken(session.token);
-    setUser(session.user);
     clearPendingHostedIdentity();
-    return session;
-  }, []);
+    return adoptSession(session, remember);
+  }, [adoptSession]);
 
   const localSignIn = useCallback(async (email: string, password: string, remember: boolean) => {
     const session = await repository.signIn(email, password, remember);
-    setExpired(false);
-    setRepositoryToken(session.token);
-    if (remember) rememberToken(session.token);
-    else rememberToken(null);
-    setToken(session.token);
-    setUser(session.user);
-    return session;
-  }, []);
+    return adoptSession(session, remember);
+  }, [adoptSession]);
 
   const openDemo = useCallback(async (remember: boolean, role?: "coordinator" | "volunteer") => {
     const session = await repository.openDemoWorkspace(role);
-    setExpired(false);
-    setRepositoryToken(session.token);
-    if (remember) rememberToken(session.token);
-    else rememberToken(null);
-    setToken(session.token);
-    setUser(session.user);
-    return session;
-  }, []);
+    return adoptSession(session, remember);
+  }, [adoptSession]);
 
   const signIn = useCallback(
     async (email: string, password: string, remember: boolean) => {
@@ -282,18 +279,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = useCallback(
     async (name: string, email: string, password: string, remember: boolean) => {
       const session = await repository.createAccount(name, email, password);
-      setExpired(false);
-      setRepositoryToken(session.token);
-      if (remember) rememberToken(session.token);
-      else rememberToken(null);
-      setToken(session.token);
-      setUser(session.user);
-      return session;
+      return adoptSession(session, remember);
     },
-    [],
+    [adoptSession],
   );
 
   const signOut = useCallback(async () => {
+    generation.current += 1;
+    setLoading(false);
     const current = token ?? storedToken();
     // Clear the local session first so the window leaves the workspace even if
     // revoking the server-side session is slow or the database is busy.

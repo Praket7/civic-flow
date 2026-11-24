@@ -491,7 +491,9 @@ fn conflicts_can_be_listed_and_closed() {
     });
     let mut mismatched = conflict.clone();
     mismatched["operationId"] = json!("another-operation");
-    assert!(replica::mark_refused(conn, id, &json!({ "status": "conflict" }), &mismatched).is_err());
+    assert!(
+        replica::mark_refused(conn, id, &json!({ "status": "conflict" }), &mismatched).is_err()
+    );
     assert_eq!(replica::pending_count(conn, USER, ORG).unwrap(), 1);
     replica::mark_refused(
         conn,
@@ -637,5 +639,8 @@ fn claiming_a_command_is_atomic_and_preserves_queue_order() {
     assert_eq!(claimed.id, first);
     assert!(replica::claim_ready(conn, USER, ORG, 10).unwrap().is_none());
     assert_eq!(replica::recover_owned_sending(conn, ORG, USER, 11, 12).unwrap(), 1);
-    assert_eq!(replica::claim_ready(conn, USER, ORG, 12).unwrap().unwrap().id, first);
+    assert_eq!(
+        replica::claim_ready(conn, USER, ORG, 12).unwrap().unwrap().id,
+        first
+    );
 }
