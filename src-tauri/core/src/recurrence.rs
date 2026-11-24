@@ -181,7 +181,7 @@ pub fn occurrences(rule: &RecurrenceRule) -> Result<Vec<NaiveDate>> {
             let mut weekdays: Vec<u32> = rule.weekdays.clone();
             weekdays.sort_unstable();
             weekdays.dedup();
-            if weekdays.is_empty() {
+            if weekdays.is_empty() || weekdays.iter().any(|day| *day > 6) {
                 return Err(CoreError::Validation(
                     "Choose at least one weekday to repeat on".into(),
                 ));

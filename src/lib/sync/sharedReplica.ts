@@ -12,7 +12,7 @@ const SOURCES = {
 } as const;
 
 export type SharedReplicaData = { organization: SharedRow | null } & {
-  [K in keyof typeof SOURCES]: SharedRow[];
+  -readonly [K in keyof typeof SOURCES]: SharedRow[];
 };
 
 export function sharedReplicaFrom(raw: Record<string, Record<string, unknown>[]>): SharedReplicaData {

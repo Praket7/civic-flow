@@ -137,7 +137,7 @@ export function WorkspaceSessionProvider({ children }: { children: ReactNode }) 
     return {
       ...counted,
       volunteers: counted.volunteers.map((volunteer) =>
-        volunteer.id === base.currentVolunteerId
+        volunteer.id === counted.currentVolunteerId
           ? {
               ...volunteer,
               skills: profile.skills,
