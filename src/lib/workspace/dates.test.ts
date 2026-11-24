@@ -13,8 +13,12 @@ import {
 
 describe("workspace date ranges", () => {
   it("preserves organization wall time across DST and rejects ambiguous times", () => {
-    expect(zonedShiftStart("2026-10-31", "09:00", "America/New_York")).toBe("2026-10-31T13:00:00.000Z");
-    expect(zonedShiftStart("2026-11-02", "09:00", "America/New_York")).toBe("2026-11-02T14:00:00.000Z");
+    expect(zonedShiftStart("2026-10-31", "09:00", "America/New_York")).toBe(
+      "2026-10-31T13:00:00.000Z",
+    );
+    expect(zonedShiftStart("2026-11-02", "09:00", "America/New_York")).toBe(
+      "2026-11-02T14:00:00.000Z",
+    );
     expect(() => zonedShiftStart("2026-03-08", "02:30", "America/New_York")).toThrow();
     expect(() => zonedShiftStart("2026-11-01", "01:30", "America/New_York")).toThrow();
   });

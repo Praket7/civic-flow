@@ -59,7 +59,12 @@ export function useReplicaSource<T>(
     try {
       const next = await read(organizationId);
       const latest = desktopSyncSnapshot();
-      if (ticket !== request.current || latest.organizationId !== organizationId || latest.userId !== selected.userId) return;
+      if (
+        ticket !== request.current ||
+        latest.organizationId !== organizationId ||
+        latest.userId !== selected.userId
+      )
+        return;
       setData(next);
       setLoadedScope(scope);
       setError(null);
@@ -101,5 +106,12 @@ export function useReplicaSource<T>(
     await load();
   }, [load]);
 
-  return { sync, data: loadedScope === `${sync.userId}:${sync.organizationId}` ? data : empty, loading, error, reload, rebuild };
+  return {
+    sync,
+    data: loadedScope === `${sync.userId}:${sync.organizationId}` ? data : empty,
+    loading,
+    error,
+    reload,
+    rebuild,
+  };
 }

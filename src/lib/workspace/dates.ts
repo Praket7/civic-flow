@@ -100,11 +100,19 @@ export function zonedShiftStart(date: string, time: string, timeZone: string): s
   }
   const desired = Date.parse(date + "T" + time + ":00Z");
   const formatter = new Intl.DateTimeFormat("en-GB", {
-    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
   });
   const wall = (instant: number): number => {
-    const p = Object.fromEntries(formatter.formatToParts(instant).map(({ type, value }) => [type, value]));
+    const p = Object.fromEntries(
+      formatter.formatToParts(instant).map(({ type, value }) => [type, value]),
+    );
     return Date.parse(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}Z`);
   };
   const candidates = new Set<number>();

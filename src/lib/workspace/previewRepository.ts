@@ -2055,9 +2055,20 @@ function writePreviewRules(rules: NotificationRule[]): void {
 function previewOccurrences(rule: RecurrenceRule): string[] {
   const startsOn = rule.startsOn;
   if (!validIsoDate(startsOn)) throw new Error("Choose the date the series starts");
-  if (rule.endsOn && (!validIsoDate(rule.endsOn) || rule.endsOn < startsOn)) throw new Error("The series ends before it starts");
-  if (rule.occurrenceCount != null && (!Number.isInteger(rule.occurrenceCount) || rule.occurrenceCount < 1 || rule.occurrenceCount > 60)) throw new Error("A series can hold between 1 and 60 shifts");
-  if (!Number.isInteger(rule.durationMinutes) || rule.durationMinutes < 15 || rule.durationMinutes > 1440) {
+  if (rule.endsOn && (!validIsoDate(rule.endsOn) || rule.endsOn < startsOn))
+    throw new Error("The series ends before it starts");
+  if (
+    rule.occurrenceCount != null &&
+    (!Number.isInteger(rule.occurrenceCount) ||
+      rule.occurrenceCount < 1 ||
+      rule.occurrenceCount > 60)
+  )
+    throw new Error("A series can hold between 1 and 60 shifts");
+  if (
+    !Number.isInteger(rule.durationMinutes) ||
+    rule.durationMinutes < 15 ||
+    rule.durationMinutes > 1440
+  ) {
     throw new Error("A shift has to last between 15 minutes and 24 hours");
   }
   if (rule.kind === "none") return [startsOn];
@@ -2069,8 +2080,10 @@ function previewOccurrences(rule: RecurrenceRule): string[] {
     throw new Error("Give the series an end date or an occurrence count");
   }
   const interval = rule.intervalWeeks;
-  if (!Number.isInteger(interval) || interval < 1 || interval > 8) throw new Error("Repeat every 1 to 8 weeks");
-  if (rule.weekdays.some(day => !Number.isInteger(day) || day < 0 || day > 6)) throw new Error("Choose valid weekdays");
+  if (!Number.isInteger(interval) || interval < 1 || interval > 8)
+    throw new Error("Repeat every 1 to 8 weeks");
+  if (rule.weekdays.some((day) => !Number.isInteger(day) || day < 0 || day > 6))
+    throw new Error("Choose valid weekdays");
   const [year, month, day] = startsOn.split("-").map(Number);
   const anchor = new Date(Date.UTC(year, month - 1, day));
   anchor.setUTCDate(anchor.getUTCDate() - anchor.getUTCDay());

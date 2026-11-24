@@ -167,7 +167,11 @@ export function CloudProvider({ children }: { children: ReactNode }) {
     const ids = [...rows, ...sending]
       .map((row) => row.envelope.payload.shiftId)
       .filter((id): id is string => typeof id === "string");
-    if (ticket === generation.current && ownerRef.current === owner && organizationRef.current === organizationId) {
+    if (
+      ticket === generation.current &&
+      ownerRef.current === owner &&
+      organizationRef.current === organizationId
+    ) {
       setPendingShiftIds([...new Set(ids)]);
     }
   }, []);
@@ -224,7 +228,9 @@ export function CloudProvider({ children }: { children: ReactNode }) {
       setView(null);
       return;
     }
-    const rows = await readRows(replicaScope(current.organizationId, owner, current.membershipEpoch));
+    const rows = await readRows(
+      replicaScope(current.organizationId, owner, current.membershipEpoch),
+    );
     if (ticket !== generation.current || organizationRef.current !== current.organizationId) return;
     setView(
       buildVolunteerView({
@@ -385,7 +391,9 @@ export function CloudProvider({ children }: { children: ReactNode }) {
       if (next) {
         if (ownerRef.current !== next.user.id || !organizationRef.current) {
           // Supabase auth callbacks must not await further calls on the auth lock.
-          window.setTimeout(() => { if (active) void bootstrap(next); }, 0);
+          window.setTimeout(() => {
+            if (active) void bootstrap(next);
+          }, 0);
         }
         return;
       }
@@ -393,7 +401,13 @@ export function CloudProvider({ children }: { children: ReactNode }) {
       const previousOwner = ownerRef.current;
       ownerRef.current = null;
       starting.current = null;
-      void engine.stopAndWait().then(() => { if (previousOwner && ownerRef.current !== previousOwner) return clearVolunteerCache(previousOwner); }).catch(() => {});
+      void engine
+        .stopAndWait()
+        .then(() => {
+          if (previousOwner && ownerRef.current !== previousOwner)
+            return clearVolunteerCache(previousOwner);
+        })
+        .catch(() => {});
       organizationRef.current = null;
       setSession(null);
       setWorkspace(null);
@@ -429,7 +443,8 @@ export function CloudProvider({ children }: { children: ReactNode }) {
   const selectWorkspace = useCallback(
     async (organizationId: string) => {
       const chosen = workspaces.find((entry) => entry.organizationId === organizationId);
-      if (!chosen || chosen.status !== "active") throw new Error("That workspace is not available to this account.");
+      if (!chosen || chosen.status !== "active")
+        throw new Error("That workspace is not available to this account.");
       if (!userId) throw new Error("Sign in again to open a workspace.");
       await openWorkspace(chosen, userId);
       setDataVersion((value) => value + 1);
@@ -443,7 +458,13 @@ export function CloudProvider({ children }: { children: ReactNode }) {
       payload: Record<string, unknown>,
       entityVersions: Record<string, number> = {},
     ) => {
-      if (!workspace || workspace.status !== "active" || organizationRef.current !== workspace.organizationId || ownerRef.current !== userId) throw new Error("Open a workspace first.");
+      if (
+        !workspace ||
+        workspace.status !== "active" ||
+        organizationRef.current !== workspace.organizationId ||
+        ownerRef.current !== userId
+      )
+        throw new Error("Open a workspace first.");
       if (!userId) throw new Error("Sign in again to record this change.");
       await queueCommand({
         userId,
@@ -465,8 +486,15 @@ export function CloudProvider({ children }: { children: ReactNode }) {
       const db = volunteerDb();
       await db.transaction("rw", db.conflicts, async () => {
         const row = await db.conflicts.get(id);
-        if (row && row.userId === ownerRef.current && row.organizationId === organizationRef.current) {
-          await db.conflicts.update(id, { status: "resolved", resolvedAt: new Date().toISOString() });
+        if (
+          row &&
+          row.userId === ownerRef.current &&
+          row.organizationId === organizationRef.current
+        ) {
+          await db.conflicts.update(id, {
+            status: "resolved",
+            resolvedAt: new Date().toISOString(),
+          });
         }
       });
       if (workspace) await loadConflicts(workspace.organizationId);
@@ -476,7 +504,13 @@ export function CloudProvider({ children }: { children: ReactNode }) {
 
   const retryConflict = useCallback(
     async (conflict: ConflictRow) => {
-      if (!workspace || !userId || ownerRef.current !== userId || organizationRef.current !== workspace.organizationId) return;
+      if (
+        !workspace ||
+        !userId ||
+        ownerRef.current !== userId ||
+        organizationRef.current !== workspace.organizationId
+      )
+        return;
       await retryQueuedConflict(conflict.id, {
         userId,
         organizationId: workspace.organizationId,
@@ -511,7 +545,10 @@ export function CloudProvider({ children }: { children: ReactNode }) {
           setWorkspace(null);
           setPhase("error");
           setError("This device no longer has access to that organization.");
-        } else if (current.membershipEpoch !== workspace.membershipEpoch || current.role !== workspace.role) {
+        } else if (
+          current.membershipEpoch !== workspace.membershipEpoch ||
+          current.role !== workspace.role
+        ) {
           if (userId) await openWorkspace(current, userId);
         }
       } catch {

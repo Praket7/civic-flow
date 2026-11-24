@@ -1,7 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { BackupSnapshot, DemoWorkspace, SessionSnapshot, Opportunity, ShiftSeriesRecord } from "../../types/domain";
+import type {
+  BackupSnapshot,
+  DemoWorkspace,
+  SessionSnapshot,
+  Opportunity,
+  ShiftSeriesRecord,
+} from "../../types/domain";
 import { useOptionalAuth } from "../auth/session";
 import { useOrganizationWorkspace } from "../organizations/useOrganizationWorkspace";
 import { demoWorkspace } from "./dataset";
@@ -73,9 +79,15 @@ type WorkspaceActions = {
     ? (...args: Args) => Promise<Result extends SessionSnapshot ? void : Result>
     : never;
 } & {
-  createShiftSeries(...args: Parameters<WorkspaceRepository["createShiftSeries"]>): Promise<ShiftSeriesRecord>;
-  generateSeriesInstances(...args: Parameters<WorkspaceRepository["generateSeriesInstances"]>): Promise<number>;
-  createOpportunity(...args: Parameters<WorkspaceRepository["createOpportunity"]>): Promise<Opportunity>;
+  createShiftSeries(
+    ...args: Parameters<WorkspaceRepository["createShiftSeries"]>
+  ): Promise<ShiftSeriesRecord>;
+  generateSeriesInstances(
+    ...args: Parameters<WorkspaceRepository["generateSeriesInstances"]>
+  ): Promise<number>;
+  createOpportunity(
+    ...args: Parameters<WorkspaceRepository["createOpportunity"]>
+  ): Promise<Opportunity>;
 };
 
 interface WorkspaceSessionValue {

@@ -305,7 +305,10 @@ export function withCreatedPrograms(
 }
 
 /** Both the preview repository and the rendered session use the same projection. */
-export function workspaceWithSnapshot(base: DemoWorkspace, snapshot: SessionSnapshot): DemoWorkspace {
+export function workspaceWithSnapshot(
+  base: DemoWorkspace,
+  snapshot: SessionSnapshot,
+): DemoWorkspace {
   return withCreatedShifts(
     withCreatedPrograms(withRoster(base, snapshot.roster ?? []), snapshot.createdOpportunities),
     snapshot.createdSeries ?? [],
@@ -314,7 +317,10 @@ export function workspaceWithSnapshot(base: DemoWorkspace, snapshot: SessionSnap
 }
 
 /** Index the live rows once, instead of rescanning every registration per shift. */
-export function withRegistrationCounts(base: DemoWorkspace, snapshot: SessionSnapshot): DemoWorkspace {
+export function withRegistrationCounts(
+  base: DemoWorkspace,
+  snapshot: SessionSnapshot,
+): DemoWorkspace {
   const registered = new Map<string, { total: number; roles: Map<string, number> }>();
   for (const row of snapshot.registrations) {
     if (row.status !== "registered") continue;
@@ -334,7 +340,8 @@ export function withRegistrationCounts(base: DemoWorkspace, snapshot: SessionSna
       confirmed: registered.get(shift.id)?.total ?? 0,
       waitlisted: waiting.get(shift.id) ?? 0,
       roles: shift.roles.map((role) => ({
-        ...role, filled: registered.get(shift.id)?.roles.get(role.name) ?? 0,
+        ...role,
+        filled: registered.get(shift.id)?.roles.get(role.name) ?? 0,
       })),
     })),
   };
