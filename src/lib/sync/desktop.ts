@@ -68,7 +68,7 @@ type Listener = (state: DesktopSyncState) => void;
 
 let state: DesktopSyncState = INITIAL;
 let engine: SyncEngine | null = null;
-let active: { organizationId: string; userId: string } | null = null;
+let active: Pick<Target, "organizationId" | "userId" | "membershipEpoch"> | null = null;
 let starting: Promise<DesktopSyncState> | null = null;
 let unsubscribeEngine: (() => void) | null = null;
 let generation = 0;
@@ -273,19 +273,23 @@ async function runStart(forceBootstrap: boolean): Promise<DesktopSyncState> {
       (!target.online ||
         forceBootstrap ||
         active?.organizationId !== target.organizationId ||
-        active?.userId !== target.userId)
+        active?.userId !== target.userId ||
+        active?.membershipEpoch !== target.membershipEpoch)
     ) {
       unsubscribeEngine?.();
       unsubscribeEngine = null;
       await engine.stopAndWait();
+      if (ticket !== generation) return state;
       engine = null;
       active = null;
     }
+    const initialName = target.name ?? (await organizationName(target.organizationId));
+    if (ticket !== generation) return state;
     publish({
       organizationId: target.organizationId,
       userId: target.userId,
       membershipEpoch: target.membershipEpoch,
-      organizationName: target.name ?? (await organizationName(target.organizationId)),
+      organizationName: initialName,
       online: target.online,
     });
 
@@ -330,6 +334,7 @@ async function runStart(forceBootstrap: boolean): Promise<DesktopSyncState> {
       // current state rather than a cursor replay.
       // A different account is detected inside configureReplica, which clears
       // the replica, so an empty replica also covers a switched account.
+      if (ticket !== generation) return state;
       if (
         forceBootstrap ||
         authorityChanged ||
@@ -341,6 +346,7 @@ async function runStart(forceBootstrap: boolean): Promise<DesktopSyncState> {
       if (ticket !== generation) return state;
       await mergeReplica(target.organizationId);
       const name = await organizationName(target.organizationId);
+      if (ticket !== generation) return state;
       publish({ organizationName: name ?? target.name });
 
       if (
@@ -356,18 +362,23 @@ async function runStart(forceBootstrap: boolean): Promise<DesktopSyncState> {
           pollMs: 30_000,
         });
         unsubscribeEngine = engine.subscribe((event) => {
+          if (ticket !== generation) return;
           if (event.type === "status") {
             engineSnapshot(event.status);
             if (!event.status.running) void mergeReplica(target.organizationId).catch(() => {});
           }
           if (event.type === "data") void mergeReplica(target.organizationId).catch(() => {});
         });
-        active = { organizationId: target.organizationId, userId: target.userId };
+        active = {
+          organizationId: target.organizationId,
+          userId: target.userId,
+          membershipEpoch: target.membershipEpoch,
+        };
       }
       if (ticket !== generation) return state;
       const running = engine;
       if (!running) throw new Error("The shared sync engine did not start.");
-      await running.start(target.userId, target.organizationId);
+      await running.start(target.userId, target.organizationId, target.membershipEpoch);
       if (ticket !== generation) return state;
       await mergeReplica(target.organizationId);
       if (ticket !== generation) return state;
@@ -378,10 +389,12 @@ async function runStart(forceBootstrap: boolean): Promise<DesktopSyncState> {
     }
 
     await mergeReplica(target.organizationId);
+    const name = await organizationName(target.organizationId);
+    if (ticket !== generation) return state;
     publish({
       phase: "offline",
       online: false,
-      organizationName: await organizationName(target.organizationId),
+      organizationName: name,
       error:
         state.error ??
         "Showing the synced copy on this computer. Reconnect to receive changes from the organization.",

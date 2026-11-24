@@ -162,6 +162,22 @@ function engineFor(store: MemoryStore, sync: SyncTransport, now: () => number): 
 }
 
 describe("sync engine", () => {
+  it("restarts synchronization when the same account receives a new membership epoch", async () => {
+    const store = new MemoryStore();
+    let pulls = 0;
+    const sync = transport(async () => ({ status: "applied" }));
+    const pull = sync.pull;
+    sync.pull = (...args) => {
+      pulls += 1;
+      return pull(...args);
+    };
+    const engine = engineFor(store, sync, () => 0);
+    await engine.start(USER, ORG, 1);
+    await engine.start(USER, ORG, 2);
+    engine.stop();
+    expect(pulls).toBe(2);
+  });
+
   it("uploads a queued command once, including after a restart", async () => {
     const store = new MemoryStore();
     store.enqueue(ORG, "REGISTER_FOR_SHIFT", { shiftId: "shift-1" });

@@ -50,7 +50,7 @@ export function useReplicaSource<T>(
     const ticket = ++request.current;
     const selected = desktopSyncSnapshot();
     const organizationId = selected.organizationId;
-    const scope = `${selected.userId}:${organizationId}`;
+    const scope = `${selected.userId}:${organizationId}:${selected.membershipEpoch}`;
     if (!isTauri() || !organizationId) {
       setData(empty);
       setLoading(false);
@@ -62,7 +62,8 @@ export function useReplicaSource<T>(
       if (
         ticket !== request.current ||
         latest.organizationId !== organizationId ||
-        latest.userId !== selected.userId
+        latest.userId !== selected.userId ||
+        latest.membershipEpoch !== selected.membershipEpoch
       )
         return;
       setData(next);
@@ -89,7 +90,7 @@ export function useReplicaSource<T>(
       current = false;
       request.current += 1;
     };
-  }, [load, sync.organizationId, sync.userId, sync.cursor, sync.entities]);
+  }, [load, sync.organizationId, sync.userId, sync.membershipEpoch, sync.cursor, sync.entities]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -108,7 +109,7 @@ export function useReplicaSource<T>(
 
   return {
     sync,
-    data: loadedScope === `${sync.userId}:${sync.organizationId}` ? data : empty,
+    data: loadedScope === `${sync.userId}:${sync.organizationId}:${sync.membershipEpoch}` ? data : empty,
     loading,
     error,
     reload,

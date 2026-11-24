@@ -111,6 +111,7 @@ export class SyncEngine {
   private organizationId: string | null = null;
   private userId: string | null = null;
   private revision = 0;
+  private membershipEpoch = 0;
   private generation = 0;
   private timer: number | null = null;
   private unsubscribeRealtime: (() => void) | null = null;
@@ -173,7 +174,12 @@ export class SyncEngine {
   }
 
   async start(userId: string, organizationId: string, membershipEpoch = 0): Promise<void> {
-    if (this.userId === userId && this.organizationId === organizationId && this.timer !== null) {
+    if (
+      this.userId === userId &&
+      this.organizationId === organizationId &&
+      this.membershipEpoch === membershipEpoch &&
+      this.timer !== null
+    ) {
       return;
     }
     this.stop();
@@ -182,6 +188,7 @@ export class SyncEngine {
     if (generation !== this.generation) return;
     this.userId = userId;
     this.organizationId = organizationId;
+    this.membershipEpoch = membershipEpoch;
     await this.store.activate?.(userId, organizationId, membershipEpoch);
     if (generation !== this.generation) return;
     const revision = await this.store.readRevision(organizationId);
