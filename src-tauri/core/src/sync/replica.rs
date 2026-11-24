@@ -250,28 +250,8 @@ pub fn configure_owned(
         }
         return Ok(previous);
     }
-    if owner.as_deref() != Some(local_user_id)
-        || previous.user_id.as_deref() != Some(user_id)
-        || previous.membership_epoch != membership_epoch
-    {
-        let tx = conn.unchecked_transaction()?;
-        tx.execute(
-            "DELETE FROM replica_entities WHERE organization_id = ?1",
-            params![organization_id],
-        )?;
-        tx.execute(
-            "DELETE FROM sync_entity_versions WHERE organization_id = ?1",
-            params![organization_id],
-        )?;
-        tx.execute("UPDATE shared_workspaces SET cursor = 0, revision = 0, last_successful_sync_at = NULL WHERE organization_id = ?1", params![organization_id])?;
-        tx.commit()?;
-    }
-    let configured = configure(conn, organization_id, user_id, membership_epoch)?;
-    conn.execute(
-        "INSERT OR REPLACE INTO app_settings(key,value) VALUES (?1,?2)",
-        params![format!("replica_owner:{organization_id}"), local_user_id],
-    )?;
-    Ok(configured)
+    configure_inner(conn, organization_id, user_id, membership_epoch, Some(local_user_id), owner.as_deref() != Some(local_user_id))
+
 }
 
 pub fn require_outbox_owner(conn: &Connection, id: i64, local_user_id: &str) -> Result<()> {
@@ -293,6 +273,17 @@ pub fn configure(
     user_id: &str,
     membership_epoch: i64,
 ) -> Result<SyncStatus> {
+    configure_inner(conn, organization_id, user_id, membership_epoch, None, false)
+}
+
+fn configure_inner(
+    conn: &Connection,
+    organization_id: &str,
+    user_id: &str,
+    membership_epoch: i64,
+    local_owner: Option<&str>,
+    owner_changed: bool,
+) -> Result<SyncStatus> {
     validate_organization(organization_id)?;
     let user_id = user_id.trim();
     if user_id.is_empty() {
@@ -302,16 +293,18 @@ pub fn configure(
     }
     let replica_id = ensure_replica_id(conn)?;
     let transaction = conn.unchecked_transaction()?;
-    let existing: Option<(String, i64, i64)> = transaction
+    let existing: Option<(String, i64, i64, i64)> = transaction
         .query_row(
-            "SELECT user_id, cursor, revision FROM shared_workspaces WHERE organization_id = ?1",
+            "SELECT user_id, cursor, revision, membership_epoch FROM shared_workspaces WHERE organization_id = ?1",
             params![organization_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .optional()?;
 
     let (cursor, revision) = match existing {
-        Some((existing_user, _, _)) if existing_user != user_id => {
+        Some((existing_user, _, _, epoch))
+            if owner_changed || existing_user != user_id || epoch != membership_epoch =>
+        {
             transaction.execute(
                 "DELETE FROM replica_entities WHERE organization_id = ?1",
                 params![organization_id],
@@ -320,9 +313,13 @@ pub fn configure(
                 "DELETE FROM sync_entity_versions WHERE organization_id = ?1",
                 params![organization_id],
             )?;
+            transaction.execute(
+                "UPDATE shared_workspaces SET last_successful_sync_at = NULL, last_error = NULL WHERE organization_id = ?1",
+                params![organization_id],
+            )?;
             (0, 0)
         }
-        Some((_, cursor, revision)) => (cursor, revision),
+        Some((_, cursor, revision, _)) => (cursor, revision),
         None => (0, 0),
     };
 
@@ -361,6 +358,12 @@ pub fn configure(
             membership_epoch
         ],
     )?;
+    if let Some(owner) = local_owner {
+        transaction.execute(
+            "INSERT OR REPLACE INTO app_settings(key,value) VALUES (?1,?2)",
+            params![format!("replica_owner:{organization_id}"), owner],
+        )?;
+    }
     transaction.commit()?;
     status(conn, organization_id)
 }
@@ -734,18 +737,8 @@ pub fn status(conn: &Connection, organization_id: &str) -> Result<SyncStatus> {
         params![organization_id],
         |row| row.get(0),
     )?;
-    let pending: i64 = conn.query_row(
-        "SELECT count(*) FROM sync_outbox
-         WHERE organization_id = ?1 AND user_id = ?2 AND state IN ('pending', 'sending')",
-        params![organization_id, user_id],
-        |row| row.get(0),
-    )?;
-    let conflicts: i64 = conn.query_row(
-        "SELECT count(*) FROM sync_conflicts
-         WHERE organization_id = ?1 AND status = 'open' AND EXISTS (SELECT 1 FROM sync_outbox q JOIN shared_workspaces w ON w.organization_id = q.organization_id AND w.user_id = q.user_id WHERE q.organization_id = sync_conflicts.organization_id AND q.operation_id = sync_conflicts.operation_id)",
-        params![organization_id],
-        |row| row.get(0),
-    )?;
+    let pending = pending_count(conn, &user_id, organization_id)?;
+    let conflicts = open_conflict_count(conn, organization_id)?;
 
     Ok(SyncStatus {
         organization_id: Some(organization_id.to_string()),
@@ -1029,6 +1022,22 @@ pub fn next_ready(
         sending_at,
         result,
     }))
+}
+
+/// Select and claim the oldest eligible command as one durable transition.
+pub fn claim_ready(
+    conn: &Connection,
+    user_id: &str,
+    organization_id: &str,
+    now_ms: i64,
+) -> Result<Option<OutboxItem>> {
+    let tx = conn.unchecked_transaction()?;
+    let row = next_ready(&tx, user_id, organization_id, now_ms)?;
+    if let Some(ref item) = row {
+        mark_sending(&tx, item.id, now_ms)?;
+    }
+    tx.commit()?;
+    Ok(row)
 }
 
 pub fn mark_sending(conn: &Connection, id: i64, now_ms: i64) -> Result<()> {

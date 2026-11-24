@@ -33,6 +33,10 @@ export class TauriSyncStore implements SyncStore {
     return this.invoke<OutboxRow | null>("sync_next_ready", { userId, organizationId, now });
   }
 
+  async claimReady(userId: string, organizationId: string, now: number): Promise<OutboxRow | null> {
+    return this.invoke<OutboxRow | null>("sync_claim_ready", { userId, organizationId, now });
+  }
+
   async markSending(id: number): Promise<void> {
     await this.invoke("sync_mark_sending", { id, now: Date.now() });
   }

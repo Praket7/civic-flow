@@ -626,3 +626,16 @@ fn replica_owner_binding_refuses_other_local_accounts_and_preserves_unbound_outb
     assert!(replica::configure_owned(conn, org, hosted, 2, "local-a", false).is_err());
     assert!(replica::configure_owned(conn, org, hosted, 1, "local-a", false).is_ok());
 }
+
+#[test]
+fn claiming_a_command_is_atomic_and_preserves_queue_order() {
+    let database = database();
+    let conn = database.connection();
+    replica::configure(conn, ORG, USER, 3).unwrap();
+    let first = replica::enqueue(conn, USER, ORG, 1, &envelope(CommandType::UpdateShift)).unwrap();
+    let claimed = replica::claim_ready(conn, USER, ORG, 10).unwrap().unwrap();
+    assert_eq!(claimed.id, first);
+    assert!(replica::claim_ready(conn, USER, ORG, 10).unwrap().is_none());
+    assert_eq!(replica::recover_owned_sending(conn, ORG, USER, 11, 12).unwrap(), 1);
+    assert_eq!(replica::claim_ready(conn, USER, ORG, 12).unwrap().unwrap().id, first);
+}

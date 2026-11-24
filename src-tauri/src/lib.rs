@@ -1960,6 +1960,19 @@ fn sync_next_ready(
 }
 
 #[tauri::command]
+fn sync_claim_ready(
+    state: State<'_, AppState>, token: String,
+    user_id: String,
+    organization_id: String,
+    now: i64,
+) -> Result<Option<OutboxItem>, AppError> {
+    let database = state.replica(&token, &organization_id)?;
+    sync_replica::require_hosted_owner(database.connection(), &organization_id, &user_id)?;
+    sync_replica::claim_ready(database.connection(), &user_id, &organization_id, now)
+        .map_err(AppError::from)
+}
+
+#[tauri::command]
 fn sync_mark_sending(state: State<'_, AppState>, token: String, id: i64, now: i64) -> Result<(), AppError> {
     let database = state.outbox(&token, id)?;
     sync_replica::mark_sending(database.connection(), id, now).map_err(AppError::from)
@@ -2161,6 +2174,7 @@ pub fn run() {
             sync_resolve_conflict,
             sync_recover_stale_sending,
             sync_next_ready,
+            sync_claim_ready,
             sync_mark_sending,
             sync_mark_sent,
             sync_mark_retry,
