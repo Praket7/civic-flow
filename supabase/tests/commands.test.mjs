@@ -627,9 +627,11 @@ test("hosted eligibility requires verified credentials valid on the shift's loca
   assert.equal((await register()).code, "credential_missing");
 
   await asOwner(db, () =>
-    query(db, "update public.volunteer_credentials set verified_at = now() where volunteer_id = $1", [
-      ids.volunteerA,
-    ]),
+    query(
+      db,
+      "update public.volunteer_credentials set verified_at = now() where volunteer_id = $1",
+      [ids.volunteerA],
+    ),
   );
   assert.equal((await register()).status, "applied");
   await db.close();
