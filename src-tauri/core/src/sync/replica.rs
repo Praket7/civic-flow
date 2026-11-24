@@ -197,8 +197,11 @@ pub fn require_local_owner(conn: &Connection, organization_id: &str, local_user_
 }
 
 pub fn require_hosted_owner(conn: &Connection, organization_id: &str, user_id: &str) -> Result<()> {
-    let current = status(conn, organization_id)?;
-    if current.user_id.as_deref() != Some(user_id) {
+    let owner: Option<String> = conn.query_row(
+        "SELECT user_id FROM shared_workspaces WHERE organization_id = ?1",
+        [organization_id], |row| row.get(0),
+    ).optional()?;
+    if owner.as_deref() != Some(user_id) {
         return Err(CoreError::rule("FORBIDDEN", "This queued work belongs to another account.", None, None));
     }
     Ok(())

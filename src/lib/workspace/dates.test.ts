@@ -8,9 +8,16 @@ import {
   reportRange,
   yearToDate,
   validIsoDate,
+  zonedShiftStart,
 } from "./dates";
 
 describe("workspace date ranges", () => {
+  it("preserves organization wall time across DST and rejects ambiguous times", () => {
+    expect(zonedShiftStart("2026-10-31", "09:00", "America/New_York")).toBe("2026-10-31T13:00:00.000Z");
+    expect(zonedShiftStart("2026-11-02", "09:00", "America/New_York")).toBe("2026-11-02T14:00:00.000Z");
+    expect(() => zonedShiftStart("2026-03-08", "02:30", "America/New_York")).toThrow();
+    expect(() => zonedShiftStart("2026-11-01", "01:30", "America/New_York")).toThrow();
+  });
   it("rejects normalized impossible days, not just malformed syntax", () => {
     expect(validIsoDate("2028-02-29")).toBe(true);
     for (const value of ["2026-02-29", "2026-04-31", "2026-13-01", "", "2026-1-01"]) {

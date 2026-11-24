@@ -3,10 +3,12 @@ import { describeAuthError } from "../auth/errors";
 import type { BridgedSession } from "../cloud/bridge";
 import { cloudClient, type CloudWorkspace } from "../cloud/client";
 import { isTauri } from "../platform";
+import { onRepositoryTokenChange } from "../nativeSession";
 import { MissingCloudConfigError, requireCloudConfig } from "./config";
 
 let cached: SupabaseClient | null = null;
 let bridged: BridgedSession | null | undefined;
+onRepositoryTokenChange(() => { if (isTauri() && !bridged) cached = null; });
 
 /**
  * Switches this document to the session handed over by the desktop window.

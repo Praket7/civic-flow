@@ -393,7 +393,7 @@ export function CloudProvider({ children }: { children: ReactNode }) {
       const previousOwner = ownerRef.current;
       ownerRef.current = null;
       starting.current = null;
-      void engine.stopAndWait().then(() => { if (previousOwner && ownerRef.current !== previousOwner) return clearVolunteerCache(previousOwner); });
+      void engine.stopAndWait().then(() => { if (previousOwner && ownerRef.current !== previousOwner) return clearVolunteerCache(previousOwner); }).catch(() => {});
       organizationRef.current = null;
       setSession(null);
       setWorkspace(null);
@@ -465,7 +465,7 @@ export function CloudProvider({ children }: { children: ReactNode }) {
       const db = volunteerDb();
       await db.transaction("rw", db.conflicts, async () => {
         const row = await db.conflicts.get(id);
-        if (row?.userId === ownerRef.current && row.organizationId === organizationRef.current) {
+        if (row && row.userId === ownerRef.current && row.organizationId === organizationRef.current) {
           await db.conflicts.update(id, { status: "resolved", resolvedAt: new Date().toISOString() });
         }
       });

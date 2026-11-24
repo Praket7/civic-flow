@@ -1729,7 +1729,14 @@ async fn sync_configure(
     hosted_access_token: Option<String>,
     anon_key: Option<String>,
 ) -> Result<SyncStatus, AppError> {
-    { let _authorized = state.user(&token)?; }
+    {
+        let (database, account) = state.user(&token)?;
+        if let Ok(existing) = sync_replica::configure_owned(
+            database.connection(), &organization_id, &user_id, membership_epoch, &account.id, false,
+        ) {
+            return Ok(existing);
+        }
+    }
     // A client-supplied hosted identity or membership is never enough to claim
     // an existing replica. Verify against the same fixed provider as sign-in.
     let verified = if let (Some(access), Some(key)) = (hosted_access_token, anon_key) {

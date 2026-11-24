@@ -115,7 +115,9 @@ async function organizationName(organizationId: string): Promise<string | null> 
 }
 
 async function mergeReplica(organizationId: string): Promise<ReplicaStatus> {
+  const ticket = generation;
   const replica = await replicaStatus(organizationId);
+  if (ticket !== generation || state.organizationId !== organizationId) return replica;
   publish({
     configured: replica.configured,
     cursor: replica.cursor,
@@ -225,6 +227,7 @@ async function chooseTarget(): Promise<Target> {
 }
 
 async function bootstrap(target: Target): Promise<void> {
+  const ticket = generation;
   if (!target.client) return;
   const response = (await withTimeout(
     Promise.resolve(
@@ -234,6 +237,7 @@ async function bootstrap(target: Target): Promise<void> {
   )) as { data?: unknown; error?: { message?: string } | null };
   if (response.error) throw new Error(response.error.message ?? "The bootstrap request failed.");
   if (response.data == null) throw new Error("The server returned no bootstrap snapshot.");
+  if (ticket !== generation) return;
   await applyBootstrap({
     organizationId: target.organizationId,
     userId: target.userId,
@@ -264,7 +268,7 @@ async function runStart(forceBootstrap: boolean): Promise<DesktopSyncState> {
   try {
     const target = await chooseTarget();
     if (ticket !== generation) return state;
-    if (engine && (!target.online || forceBootstrap || active?.organizationId !== target.organizationId || active.userId !== target.userId)) {
+    if (engine && (!target.online || forceBootstrap || active?.organizationId !== target.organizationId || active?.userId !== target.userId)) {
       unsubscribeEngine?.();
       unsubscribeEngine = null;
       await engine.stopAndWait();
@@ -358,7 +362,9 @@ async function runStart(forceBootstrap: boolean): Promise<DesktopSyncState> {
       const running = engine;
       if (!running) throw new Error("The shared sync engine did not start.");
       await running.start(target.userId, target.organizationId);
+      if (ticket !== generation) return state;
       await mergeReplica(target.organizationId);
+      if (ticket !== generation) return state;
       // `start` resolves even when its first pull failed; the engine's own
       // status listener has already recorded that, so do not overwrite it.
       publish({ phase: "ready", organizationName: name ?? target.name });
@@ -399,8 +405,10 @@ export async function startDesktopSync(forceBootstrap = false): Promise<DesktopS
 
 export async function syncDesktopNow(): Promise<DesktopSyncState> {
   if (active && engine) {
+    const organizationId = active.organizationId;
+    const ticket = generation;
     await engine.syncNow();
-    await mergeReplica(active.organizationId);
+    if (ticket === generation) await mergeReplica(organizationId);
   }
   return state;
 }
