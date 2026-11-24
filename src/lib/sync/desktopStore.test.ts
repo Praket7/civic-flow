@@ -68,7 +68,8 @@ describe("TauriSyncStore", () => {
       },
     ];
     await store.applyPull(ORG, changes, 8);
-    expect(mock).toHaveBeenCalledWith("sync_apply_changes", { token: "",
+    expect(mock).toHaveBeenCalledWith("sync_apply_changes", {
+      token: "",
       organizationId: ORG,
       changes,
       cursor: 8,
@@ -80,14 +81,16 @@ describe("TauriSyncStore", () => {
     const row = outbox();
     mock.mockResolvedValueOnce(row);
     await expect(store.nextReady(USER, ORG, 1_000)).resolves.toBe(row);
-    expect(mock).toHaveBeenCalledWith("sync_next_ready", { token: "",
+    expect(mock).toHaveBeenCalledWith("sync_next_ready", {
+      token: "",
       userId: USER,
       organizationId: ORG,
       now: 1_000,
     });
 
     await store.markRetry(4, "offline", 2_000);
-    expect(mock).toHaveBeenCalledWith("sync_mark_retry", { token: "",
+    expect(mock).toHaveBeenCalledWith("sync_mark_retry", {
+      token: "",
       id: 4,
       error: "offline",
       nextAttemptAt: 2_000,
@@ -95,7 +98,8 @@ describe("TauriSyncStore", () => {
 
     mock.mockResolvedValueOnce(1);
     await expect(store.pendingCount(USER, ORG)).resolves.toBe(1);
-    expect(mock).toHaveBeenCalledWith("sync_pending_count", { token: "",
+    expect(mock).toHaveBeenCalledWith("sync_pending_count", {
+      token: "",
       userId: USER,
       organizationId: ORG,
     });
@@ -119,7 +123,8 @@ describe("TauriSyncStore", () => {
       resolvedAt: null,
     };
     await store.markRefused(4, { status: "conflict" }, conflict);
-    expect(mock).toHaveBeenCalledWith("sync_mark_refused", { token: "",
+    expect(mock).toHaveBeenCalledWith("sync_mark_refused", {
+      token: "",
       id: 4,
       result: { status: "conflict" },
       conflict,
@@ -129,7 +134,8 @@ describe("TauriSyncStore", () => {
   it("exposes status and bootstrap without reaching into SQLite from the page", async () => {
     mock.mockResolvedValueOnce({ configured: true, cursor: 9 });
     await configureReplica({ organizationId: ORG, userId: USER, membershipEpoch: 2 });
-    expect(mock).toHaveBeenCalledWith("sync_configure", { token: "",
+    expect(mock).toHaveBeenCalledWith("sync_configure", {
+      token: "",
       organizationId: ORG,
       userId: USER,
       membershipEpoch: 2,
@@ -138,7 +144,8 @@ describe("TauriSyncStore", () => {
     const payload = { status: "ok", cursor: 9, revision: 3, entities: {} };
     mock.mockResolvedValueOnce({ configured: true });
     await applyBootstrap({ organizationId: ORG, userId: USER, membershipEpoch: 2, payload });
-    expect(mock).toHaveBeenCalledWith("sync_apply_bootstrap", { token: "",
+    expect(mock).toHaveBeenCalledWith("sync_apply_bootstrap", {
+      token: "",
       organizationId: ORG,
       userId: USER,
       membershipEpoch: 2,
@@ -149,7 +156,8 @@ describe("TauriSyncStore", () => {
     await expect(listReplicaWorkspaces()).resolves.toEqual([ORG]);
     mock.mockResolvedValueOnce([]);
     await expect(readReplicaEntities(ORG, "shift")).resolves.toEqual([]);
-    expect(mock).toHaveBeenCalledWith("sync_entities", { token: "",
+    expect(mock).toHaveBeenCalledWith("sync_entities", {
+      token: "",
       organizationId: ORG,
       entity: "shift",
       limit: 500,

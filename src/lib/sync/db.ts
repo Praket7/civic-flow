@@ -114,12 +114,19 @@ export class VolunteerDatabase extends Dexie {
       })
       .upgrade(async (transaction) => {
         await transaction.table("entities").clear();
-        await transaction.table("meta").filter((row: MetaRow) =>
-          row.key.startsWith("cursor:") || row.key.startsWith("revision:")
-        ).delete();
+        await transaction
+          .table("meta")
+          .filter(
+            (row: MetaRow) => row.key.startsWith("cursor:") || row.key.startsWith("revision:"),
+          )
+          .delete();
         const conflicts = transaction.table("conflicts");
-        for (const row of await conflicts.toArray() as ConflictRow[]) {
-          const original = await transaction.table("outbox").where("operationId").equals(row.operationId).first() as OutboxRow | undefined;
+        for (const row of (await conflicts.toArray()) as ConflictRow[]) {
+          const original = (await transaction
+            .table("outbox")
+            .where("operationId")
+            .equals(row.operationId)
+            .first()) as OutboxRow | undefined;
           if (original?.userId && original.organizationId === row.organizationId) {
             await conflicts.update(row.id, { userId: original.userId });
           } else {
@@ -180,10 +187,12 @@ export async function clearVolunteerCache(owner?: string): Promise<void> {
     await db.entities.filter((row) => belongs(row.organizationId)).delete();
     await db.conflicts.filter((row) => !owner || row.userId === owner).delete();
     // Preserve installation identity and preference, but never cached cursors.
-    await db.meta.filter((row) => {
-      const key = row.key.replace(/^(cursor|revision):/, "");
-      return key !== row.key && belongs(key);
-    }).delete();
+    await db.meta
+      .filter((row) => {
+        const key = row.key.replace(/^(cursor|revision):/, "");
+        return key !== row.key && belongs(key);
+      })
+      .delete();
   });
 }
 
@@ -198,7 +207,9 @@ export async function applyChanges(
     const previous = Number((await db.meta.get(`cursor:${organizationId}`))?.value ?? 0);
     if (!Number.isSafeInteger(cursor) || cursor < 0) throw new Error("Invalid replica cursor.");
     if (cursor <= previous) return;
-    if (changes.some((change) => !Number.isSafeInteger(change.sequence) || change.sequence > cursor)) {
+    if (
+      changes.some((change) => !Number.isSafeInteger(change.sequence) || change.sequence > cursor)
+    ) {
       throw new Error("Invalid replica change sequence.");
     }
     for (const change of [...changes].sort((a, b) => a.sequence - b.sequence)) {

@@ -33,21 +33,21 @@ export class DexieSyncStore implements SyncStore {
 
   async recoverStaleSending(cutoff: number, now: number): Promise<number> {
     return this.db.transaction("rw", this.outbox, async () => {
-    const stale = await this.outbox
-      .where("sendingAt")
-      .below(cutoff)
-      .filter((row) => row.state === "sending")
-      .toArray();
-    for (const row of stale) {
-      if (row.id === undefined) continue;
-      await this.outbox.update(row.id, {
-        state: "pending",
-        sendingAt: null,
-        nextAttemptAt: now,
-        lastError: "Recovered an interrupted upload. It will be retried.",
-      });
-    }
-    return stale.length;
+      const stale = await this.outbox
+        .where("sendingAt")
+        .below(cutoff)
+        .filter((row) => row.state === "sending")
+        .toArray();
+      for (const row of stale) {
+        if (row.id === undefined) continue;
+        await this.outbox.update(row.id, {
+          state: "pending",
+          sendingAt: null,
+          nextAttemptAt: now,
+          lastError: "Recovered an interrupted upload. It will be retried.",
+        });
+      }
+      return stale.length;
     });
   }
 
@@ -56,7 +56,10 @@ export class DexieSyncStore implements SyncStore {
     // never uploaded by whoever signs in next, even in the same organization.
     const rows = await this.outbox
       .where("[userId+organizationId+state]")
-      .anyOf([[userId, organizationId, "pending"], [userId, organizationId, "sending"]])
+      .anyOf([
+        [userId, organizationId, "pending"],
+        [userId, organizationId, "sending"],
+      ])
       .sortBy("id");
     const earliest = rows[0];
     // A backed-off command is a barrier. Skipping it would let an UPDATE reach
@@ -84,15 +87,15 @@ export class DexieSyncStore implements SyncStore {
 
   async markRetry(id: number, error: string, nextAttemptAt: number): Promise<void> {
     await this.db.transaction("rw", this.outbox, async () => {
-    const row = await this.outbox.get(id);
-    if (!row) return;
-    await this.outbox.update(id, {
-      state: "pending",
-      attempts: row.attempts + 1,
-      lastError: error,
-      nextAttemptAt,
-      sendingAt: null,
-    });
+      const row = await this.outbox.get(id);
+      if (!row) return;
+      await this.outbox.update(id, {
+        state: "pending",
+        attempts: row.attempts + 1,
+        lastError: error,
+        nextAttemptAt,
+        sendingAt: null,
+      });
     });
   }
 
@@ -111,7 +114,10 @@ export class DexieSyncStore implements SyncStore {
   async pendingCount(userId: string, organizationId: string): Promise<number> {
     return this.outbox
       .where("[userId+organizationId+state]")
-      .anyOf([[userId, organizationId, "pending"], [userId, organizationId, "sending"]])
+      .anyOf([
+        [userId, organizationId, "pending"],
+        [userId, organizationId, "sending"],
+      ])
       .count();
   }
 
@@ -138,7 +144,10 @@ export class DexieSyncStore implements SyncStore {
   }
 
   async writeRevision(organizationId: string, revision: number): Promise<void> {
-    await this.db.meta.put({ key: `revision:${this.scope(organizationId)}`, value: String(revision) });
+    await this.db.meta.put({
+      key: `revision:${this.scope(organizationId)}`,
+      value: String(revision),
+    });
   }
 }
 
@@ -197,10 +206,22 @@ export async function retryQueuedConflict(conflictId: string, input: QueueInput)
   const db = volunteerDb();
   await db.transaction("rw", db.conflicts, db.outbox, db.meta, async () => {
     const conflict = await db.conflicts.get(conflictId);
-    if (!conflict || conflict.userId !== input.userId || conflict.organizationId !== input.organizationId || conflict.status !== "open") {
+    if (
+      !conflict ||
+      conflict.userId !== input.userId ||
+      conflict.organizationId !== input.organizationId ||
+      conflict.status !== "open"
+    ) {
       throw new Error("This conflict is no longer available.");
     }
-    await queueCommand({ ...input, command: conflict.command as CommandType, payload: conflict.localPayload });
-    await db.conflicts.update(conflictId, { status: "resolved", resolvedAt: new Date().toISOString() });
+    await queueCommand({
+      ...input,
+      command: conflict.command as CommandType,
+      payload: conflict.localPayload,
+    });
+    await db.conflicts.update(conflictId, {
+      status: "resolved",
+      resolvedAt: new Date().toISOString(),
+    });
   });
 }

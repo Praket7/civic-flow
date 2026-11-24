@@ -268,7 +268,13 @@ async function runStart(forceBootstrap: boolean): Promise<DesktopSyncState> {
   try {
     const target = await chooseTarget();
     if (ticket !== generation) return state;
-    if (engine && (!target.online || forceBootstrap || active?.organizationId !== target.organizationId || active?.userId !== target.userId)) {
+    if (
+      engine &&
+      (!target.online ||
+        forceBootstrap ||
+        active?.organizationId !== target.organizationId ||
+        active?.userId !== target.userId)
+    ) {
       unsubscribeEngine?.();
       unsubscribeEngine = null;
       await engine.stopAndWait();

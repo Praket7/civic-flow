@@ -21,7 +21,12 @@ export class TauriSyncStore implements SyncStore {
   }
 
   async recoverStaleSending(cutoff: number, now: number): Promise<number> {
-    return this.invoke<number>("sync_recover_stale_sending", { cutoff, now, organizationId: this.organizationId, userId: this.userId });
+    return this.invoke<number>("sync_recover_stale_sending", {
+      cutoff,
+      now,
+      organizationId: this.organizationId,
+      userId: this.userId,
+    });
   }
 
   async nextReady(userId: string, organizationId: string, now: number): Promise<OutboxRow | null> {
@@ -118,7 +123,11 @@ export async function readReplicaEntities(
   entity: string,
   limit = 500,
 ): Promise<Record<string, unknown>[]> {
-  return invokeAuthed<Record<string, unknown>[]>("sync_entities", { organizationId, entity, limit });
+  return invokeAuthed<Record<string, unknown>[]>("sync_entities", {
+    organizationId,
+    entity,
+    limit,
+  });
 }
 
 /**
@@ -134,6 +143,8 @@ export async function readReplicaReportEntities(
   });
 }
 
-export function readReplicaWorkspaceEntities(organizationId: string): Promise<Record<string, Record<string, unknown>[]>> {
+export function readReplicaWorkspaceEntities(
+  organizationId: string,
+): Promise<Record<string, Record<string, unknown>[]>> {
   return invokeAuthed("sync_workspace_entities", { organizationId });
 }

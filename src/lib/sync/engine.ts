@@ -147,7 +147,10 @@ export class SyncEngine {
     for (const listener of this.listeners) listener(event);
   }
 
-  private async publish(patch: Partial<SyncStatus> = {}, generation = this.generation): Promise<void> {
+  private async publish(
+    patch: Partial<SyncStatus> = {},
+    generation = this.generation,
+  ): Promise<void> {
     if (generation !== this.generation) return;
     if (!this.organizationId) {
       this.status = { ...this.status, ...patch };
@@ -184,7 +187,17 @@ export class SyncEngine {
     const revision = await this.store.readRevision(organizationId);
     if (generation !== this.generation) return;
     this.revision = revision;
-    await this.publish({ organizationId, revision, lastSyncedAt: null, lastError: null, online: false, running: false }, generation);
+    await this.publish(
+      {
+        organizationId,
+        revision,
+        lastSyncedAt: null,
+        lastError: null,
+        online: false,
+        running: false,
+      },
+      generation,
+    );
     if (generation !== this.generation) return;
     this.unsubscribeRealtime =
       this.transport.subscribe?.(organizationId, () => {
@@ -241,17 +254,23 @@ export class SyncEngine {
       await this.drain(userId, organizationId, generation);
       if (generation !== this.generation) return;
       await this.pullAll(organizationId, generation);
-      await this.publish({
-        online: true,
-        lastError: null,
-        lastSyncedAt: new Date(this.now()).toISOString(),
-        revision: this.revision,
-      }, generation);
+      await this.publish(
+        {
+          online: true,
+          lastError: null,
+          lastSyncedAt: new Date(this.now()).toISOString(),
+          revision: this.revision,
+        },
+        generation,
+      );
     } catch (error) {
-      await this.publish({
-        online: false,
-        lastError: messageOf(error),
-      }, generation);
+      await this.publish(
+        {
+          online: false,
+          lastError: messageOf(error),
+        },
+        generation,
+      );
     } finally {
       await this.publish({ running: false }, generation);
     }
@@ -260,10 +279,16 @@ export class SyncEngine {
   private async drain(userId: string, organizationId: string, generation: number): Promise<void> {
     for (let index = 0; index < MAX_COMMANDS_PER_PASS; index += 1) {
       if (generation !== this.generation) return;
-      const row = await (this.store.claimReady ?? this.store.nextReady).call(this.store, userId, organizationId, this.now());
+      const row = await (this.store.claimReady ?? this.store.nextReady).call(
+        this.store,
+        userId,
+        organizationId,
+        this.now(),
+      );
       if (!row) return;
       if (generation !== this.generation) {
-        if (this.store.claimReady && row.id !== undefined) await this.store.markRetry(row.id, "Session changed before upload.", this.now());
+        if (this.store.claimReady && row.id !== undefined)
+          await this.store.markRetry(row.id, "Session changed before upload.", this.now());
         return;
       }
       // A row from another account or organization is not this pass's work. It

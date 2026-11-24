@@ -8,7 +8,9 @@ import { MissingCloudConfigError, requireCloudConfig } from "./config";
 
 let cached: SupabaseClient | null = null;
 let bridged: BridgedSession | null | undefined;
-onRepositoryTokenChange(() => { if (isTauri() && !bridged) cached = null; });
+onRepositoryTokenChange(() => {
+  if (isTauri() && !bridged) cached = null;
+});
 
 /**
  * Switches this document to the session handed over by the desktop window.

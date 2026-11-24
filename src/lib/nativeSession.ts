@@ -14,6 +14,10 @@ export function onRepositoryTokenChange(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
-export function invokeAuthed<T>(command: string, args: Record<string, unknown> = {}, credential = repositoryToken()): Promise<T> {
+export function invokeAuthed<T>(
+  command: string,
+  args: Record<string, unknown> = {},
+  credential = repositoryToken(),
+): Promise<T> {
   return invoke<T>(command, { ...args, token: credential });
 }

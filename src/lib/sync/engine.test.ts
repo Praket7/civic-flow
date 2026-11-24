@@ -407,14 +407,20 @@ describe("sync engine", () => {
     const store = new MemoryStore();
     let release!: (result: PullResult) => void;
     let entered!: () => void;
-    const pulling = new Promise<void>((resolve) => { entered = resolve; });
+    const pulling = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
     let pulls = 0;
     const sync: SyncTransport = {
-      async push() { return { status: "applied" }; },
+      async push() {
+        return { status: "applied" };
+      },
       async pull() {
         if (++pulls === 1) {
           entered();
-          return new Promise<PullResult>((resolve) => { release = resolve; });
+          return new Promise<PullResult>((resolve) => {
+            release = resolve;
+          });
         }
         return { status: "ok", cursor: 0, hasMore: false, revision: 2, changes: [] };
       },
@@ -423,8 +429,21 @@ describe("sync engine", () => {
     const old = engine.start(USER, ORG);
     await pulling;
     const next = engine.start("user-bob", ORG);
-    release({ status: "ok", cursor: 7, hasMore: false, revision: 1,
-      changes: [{ sequence: 7, entity: "volunteer", id: "private", operation: "insert", payload: { name: "Alice" } }] });
+    release({
+      status: "ok",
+      cursor: 7,
+      hasMore: false,
+      revision: 1,
+      changes: [
+        {
+          sequence: 7,
+          entity: "volunteer",
+          id: "private",
+          operation: "insert",
+          payload: { name: "Alice" },
+        },
+      ],
+    });
     await Promise.all([old, next]);
     expect(store.applied).toEqual([]);
     expect(await store.readCursor(ORG)).toBe(0);
