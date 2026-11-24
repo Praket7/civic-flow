@@ -171,3 +171,20 @@ fn the_sealed_archive_does_not_contain_the_volunteer_names() {
     assert!(!haystack.contains("rivergate"));
     assert!(!haystack.contains("buffalo"));
 }
+
+#[test]
+fn untrusted_archive_header_cannot_request_arbitrary_kdf_resources() {
+    let header = serde_json::json!({
+        "version": 1, "kdf": "argon2id", "memoryKib": 4294967295u64,
+        "iterations": 3, "parallelism": 1,
+        "salt": "AAAAAAAAAAAAAAAAAAAAAA==", "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "createdAt": "2026-11-01T00:00:00Z", "note": ""
+    });
+    let encoded = serde_json::to_vec(&header).unwrap();
+    let mut bytes = b"CIVICFLOW-ARCHIVE-1\n".to_vec();
+    bytes.extend_from_slice(&(encoded.len() as u32).to_le_bytes());
+    bytes.extend_from_slice(&encoded);
+    bytes.extend_from_slice(&[0; 16]);
+    let error = archive::open(&bytes, PASSPHRASE).expect_err("untrusted cost");
+    assert!(error.to_string().contains("key settings"));
+}

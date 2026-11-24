@@ -12,7 +12,13 @@ export function parseScannedCode(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return "";
   const prefixed = trimmed.match(/^civicflow:\/\/checkin\/(.+)$/i);
-  if (prefixed) return decodeURIComponent(prefixed[1]);
+  if (prefixed) {
+    try {
+      return decodeURIComponent(prefixed[1]);
+    } catch {
+      return "";
+    }
+  }
   if (/^https?:\/\//i.test(trimmed)) {
     try {
       const url = new URL(trimmed);

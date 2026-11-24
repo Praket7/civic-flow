@@ -1,3 +1,4 @@
+import { validIsoDate, zonedShiftStart } from "./dates";
 /**
  * Browser fallback for the workflow store: mirrors the snapshot contract over
  * the shared seed and localStorage. Chosen by `getWorkspaceRepository()` when
@@ -75,9 +76,9 @@ import { createPreviewRosterEngine, roleRequirement } from "./preview/rosterEngi
 import { demoWorkspace } from "./dataset";
 import {
   blankWorkspaceForOrganization,
-  withCreatedPrograms,
-  withCreatedShifts,
+  workspaceWithSnapshot,
   withRoster,
+  withRegistrationCounts,
 } from "./organizationWorkspace";
 import type { OrganizationScope } from "./organizationWorkspace";
 import type { WorkspaceRepository } from "./repository";
@@ -506,37 +507,11 @@ function registeredRole(shiftId: string, volunteerId: string): string {
  * Control and Schedule must agree on these numbers.
  */
 function journeyWorkspace(snapshot = state): DemoWorkspace {
-  return withCreatedShifts(
-    withCreatedPrograms(
-      withRoster(workspace, snapshot.roster ?? []),
-      snapshot.createdOpportunities,
-    ),
-    snapshot.createdSeries ?? [],
-    snapshot.createdShifts ?? [],
-  );
+  return workspaceWithSnapshot(workspace, snapshot);
 }
 
 function countedWorkspace(): DemoWorkspace {
-  const base = journeyWorkspace();
-  return {
-    ...base,
-    shifts: base.shifts.map((shift) => {
-      const live = state.registrations.filter(
-        (row) => row.shiftId === shift.id && row.status === "registered",
-      );
-      return {
-        ...shift,
-        confirmed: live.length,
-        waitlisted: state.waitlist.filter(
-          (row) => row.shiftId === shift.id && row.status === "waiting",
-        ).length,
-        roles: shift.roles.map((role) => ({
-          ...role,
-          filled: live.filter((row) => row.role === role.name).length,
-        })),
-      };
-    }),
-  };
+  return withRegistrationCounts(journeyWorkspace(), state);
 }
 
 /// Matches the desktop core: attendance row, audit entry, and the reason together.
@@ -747,6 +722,15 @@ function applyPreviewAssignments(assignments: WeeklyAssignment[]): SessionSnapsh
   });
 }
 
+function previewSession(account: Account): AuthSession {
+  activePreviewAccount = account;
+  return {
+    token: previewToken(account),
+    user: account,
+    expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+  };
+}
+
 export const previewRepository: WorkspaceRepository = {
   source: "preview",
   async listOrganizations() {
@@ -834,12 +818,7 @@ export const previewRepository: WorkspaceRepository = {
     if (!demo) throw new Error("The browser preview has no demo workspace to open.");
     previewOrganizations.select(demo, DEMO_ORGANIZATION_ID);
     const live = withLiveRole(demo);
-    activePreviewAccount = live;
-    return {
-      token: previewToken(live),
-      user: live,
-      expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
-    };
+    return previewSession(live);
   },
   async signIn(email, password, _remember): Promise<AuthSession> {
     if (import.meta.env.PROD && !isTauri()) {
@@ -853,12 +832,7 @@ export const previewRepository: WorkspaceRepository = {
       throw new Error("That email and password do not match an account on this device.");
     }
     const live = withLiveRole(account);
-    activePreviewAccount = live;
-    return {
-      token: previewToken(live),
-      user: live,
-      expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
-    };
+    return previewSession(live);
   },
   async createAccount(name, email, password): Promise<AuthSession> {
     if (import.meta.env.PROD && !isTauri()) {
@@ -896,12 +870,7 @@ export const previewRepository: WorkspaceRepository = {
       throw new Error("The browser preview could not save the new account.");
     }
     previewAccounts.push(account);
-    activePreviewAccount = account;
-    return {
-      token: previewToken(account),
-      user: account,
-      expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
-    };
+    return previewSession(account);
   },
   async signInWithHosted({ name, email }): Promise<AuthSession> {
     if (import.meta.env.PROD && !isTauri()) {
@@ -911,12 +880,7 @@ export const previewRepository: WorkspaceRepository = {
     const existing = previewAccounts.find((row) => row.email.toLowerCase() === clean);
     if (existing) {
       const live = withLiveRole(existing);
-      activePreviewAccount = live;
-      return {
-        token: previewToken(live),
-        user: live,
-        expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
-      };
+      return previewSession(live);
     }
     const suffix = Date.now().toString(36);
     const account: Account = {
@@ -935,12 +899,7 @@ export const previewRepository: WorkspaceRepository = {
       throw new Error("The browser preview could not save the hosted account.");
     }
     previewAccounts.push(account);
-    activePreviewAccount = account;
-    return {
-      token: previewToken(account),
-      user: account,
-      expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
-    };
+    return previewSession(account);
   },
   async signOut(token) {
     void token;
@@ -2025,11 +1984,13 @@ const { readRosterPolicy, writeRosterPolicy, validateRosterPolicy } =
   createPreviewRosterPolicyStore(scoped, PREVIEW_PRIORITY_LEVELS);
 
 function previewDayKey(startsAt: string): string {
-  return ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][new Date(startsAt).getDay()];
+  return ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][
+    new Date(startsAt.slice(0, 10) + "T00:00:00Z").getUTCDay()
+  ];
 }
 
 function previewPeriod(startsAt: string): string {
-  const hour = new Date(startsAt).getHours();
+  const hour = Number(startsAt.slice(11, 13));
   if (hour < 12) return "morning";
   if (hour < 17) return "afternoon";
   return "evening";
@@ -2095,8 +2056,21 @@ function writePreviewRules(rules: NotificationRule[]): void {
 // same arithmetic over the preview's clock. */
 function previewOccurrences(rule: RecurrenceRule): string[] {
   const startsOn = rule.startsOn;
-  if (!startsOn) throw new Error("Choose the date the series starts");
-  if (rule.durationMinutes < 15 || rule.durationMinutes > 1440) {
+  if (!validIsoDate(startsOn)) throw new Error("Choose the date the series starts");
+  if (rule.endsOn && (!validIsoDate(rule.endsOn) || rule.endsOn < startsOn))
+    throw new Error("The series ends before it starts");
+  if (
+    rule.occurrenceCount != null &&
+    (!Number.isInteger(rule.occurrenceCount) ||
+      rule.occurrenceCount < 1 ||
+      rule.occurrenceCount > 60)
+  )
+    throw new Error("A series can hold between 1 and 60 shifts");
+  if (
+    !Number.isInteger(rule.durationMinutes) ||
+    rule.durationMinutes < 15 ||
+    rule.durationMinutes > 1440
+  ) {
     throw new Error("A shift has to last between 15 minutes and 24 hours");
   }
   if (rule.kind === "none") return [startsOn];
@@ -2107,7 +2081,11 @@ function previewOccurrences(rule: RecurrenceRule): string[] {
   if (!rule.endsOn && !rule.occurrenceCount) {
     throw new Error("Give the series an end date or an occurrence count");
   }
-  const interval = Math.min(Math.max(rule.intervalWeeks, 1), 8);
+  const interval = rule.intervalWeeks;
+  if (!Number.isInteger(interval) || interval < 1 || interval > 8)
+    throw new Error("Repeat every 1 to 8 weeks");
+  if (rule.weekdays.some((day) => !Number.isInteger(day) || day < 0 || day > 6))
+    throw new Error("Choose valid weekdays");
   const [year, month, day] = startsOn.split("-").map(Number);
   const anchor = new Date(Date.UTC(year, month - 1, day));
   anchor.setUTCDate(anchor.getUTCDate() - anchor.getUTCDay());
@@ -2140,9 +2118,7 @@ function previewOccurrences(rule: RecurrenceRule): string[] {
 }
 
 function previewShiftStart(date: string, startsLocalTime: string): string {
-  const [hours, minutes] = startsLocalTime.split(":").map(Number);
-  const [year, month, day] = date.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day, hours + 4, minutes)).toISOString();
+  return zonedShiftStart(date, startsLocalTime, workspace.organization.timezone);
 }
 
 function previewRuleOf(series: ShiftSeriesRecord): RecurrenceRule {

@@ -1,100 +1,45 @@
 import type { DesktopSyncState } from "./desktop";
-import { readReplicaEntities } from "./desktopStore";
+import { readReplicaWorkspaceEntities } from "./desktopStore";
 import type { SharedRow } from "./sharedRows";
 import { useReplicaSource } from "./useReplicaSource";
 
-export interface SharedReplicaData {
-  organization: SharedRow | null;
-  opportunities: SharedRow[];
-  shifts: SharedRow[];
-  shiftRoles: SharedRow[];
-  roleRequirements: SharedRow[];
-  volunteers: SharedRow[];
-  volunteerSkills: SharedRow[];
-  availabilityRules: SharedRow[];
-  credentialTypes: SharedRow[];
-  credentials: SharedRow[];
-  registrations: SharedRow[];
-  waitlists: SharedRow[];
-  attendance: SharedRow[];
-  hourEntries: SharedRow[];
-  series: SharedRow[];
-  seriesRoles: SharedRow[];
-}
+const SOURCES = {
+  opportunities: "opportunity",
+  shifts: "shift",
+  shiftRoles: "shift_role",
+  roleRequirements: "role_requirement",
+  volunteers: "volunteer",
+  volunteerSkills: "volunteer_skill",
+  availabilityRules: "availability_rule",
+  credentialTypes: "credential_type",
+  credentials: "credential",
+  registrations: "registration",
+  waitlists: "waitlist_entry",
+  attendance: "attendance",
+  hourEntries: "hour_entry",
+  series: "shift_series",
+  seriesRoles: "shift_series_role",
+} as const;
 
-const EMPTY: SharedReplicaData = {
-  organization: null,
-  opportunities: [],
-  shifts: [],
-  shiftRoles: [],
-  roleRequirements: [],
-  volunteers: [],
-  volunteerSkills: [],
-  availabilityRules: [],
-  credentialTypes: [],
-  credentials: [],
-  registrations: [],
-  waitlists: [],
-  attendance: [],
-  hourEntries: [],
-  series: [],
-  seriesRoles: [],
+export type SharedReplicaData = { organization: SharedRow | null } & {
+  -readonly [K in keyof typeof SOURCES]: SharedRow[];
 };
 
-async function readAll(organizationId: string): Promise<SharedReplicaData> {
-  const [
-    organization,
-    opportunities,
-    shifts,
-    shiftRoles,
-    roleRequirements,
-    volunteers,
-    volunteerSkills,
-    availabilityRules,
-    credentialTypes,
-    credentials,
-    registrations,
-    waitlists,
-    attendance,
-    hourEntries,
-    series,
-    seriesRoles,
-  ] = await Promise.all([
-    readReplicaEntities(organizationId, "organization", 1),
-    readReplicaEntities(organizationId, "opportunity", 500),
-    readReplicaEntities(organizationId, "shift", 500),
-    readReplicaEntities(organizationId, "shift_role", 1000),
-    readReplicaEntities(organizationId, "role_requirement", 1000),
-    readReplicaEntities(organizationId, "volunteer", 500),
-    readReplicaEntities(organizationId, "volunteer_skill", 1000),
-    readReplicaEntities(organizationId, "availability_rule", 1000),
-    readReplicaEntities(organizationId, "credential_type", 200),
-    readReplicaEntities(organizationId, "credential", 1000),
-    readReplicaEntities(organizationId, "registration", 1000),
-    readReplicaEntities(organizationId, "waitlist_entry", 1000),
-    readReplicaEntities(organizationId, "attendance", 1000),
-    readReplicaEntities(organizationId, "hour_entry", 500),
-    readReplicaEntities(organizationId, "shift_series", 200),
-    readReplicaEntities(organizationId, "shift_series_role", 500),
-  ]);
-  return {
-    organization: (organization[0] as SharedRow | undefined) ?? null,
-    opportunities: opportunities as SharedRow[],
-    shifts: shifts as SharedRow[],
-    shiftRoles: shiftRoles as SharedRow[],
-    roleRequirements: roleRequirements as SharedRow[],
-    volunteers: volunteers as SharedRow[],
-    volunteerSkills: volunteerSkills as SharedRow[],
-    availabilityRules: availabilityRules as SharedRow[],
-    credentialTypes: credentialTypes as SharedRow[],
-    credentials: credentials as SharedRow[],
-    registrations: registrations as SharedRow[],
-    waitlists: waitlists as SharedRow[],
-    attendance: attendance as SharedRow[],
-    hourEntries: hourEntries as SharedRow[],
-    series: series as SharedRow[],
-    seriesRoles: seriesRoles as SharedRow[],
-  };
+export function sharedReplicaFrom(
+  raw: Record<string, Record<string, unknown>[]>,
+): SharedReplicaData {
+  const data = {
+    organization: (raw.organization?.[0] as SharedRow | undefined) ?? null,
+  } as SharedReplicaData;
+  for (const key of Object.keys(SOURCES) as (keyof typeof SOURCES)[]) {
+    data[key] = (raw[SOURCES[key]] ?? []) as SharedRow[];
+  }
+  return data;
+}
+
+const EMPTY = sharedReplicaFrom({});
+function readAll(organizationId: string): Promise<SharedReplicaData> {
+  return readReplicaWorkspaceEntities(organizationId).then(sharedReplicaFrom);
 }
 
 export interface SharedReplica {

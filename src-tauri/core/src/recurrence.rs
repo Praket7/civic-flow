@@ -13,7 +13,8 @@
 
 use std::collections::HashSet;
 
-use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDate, NaiveTime};
+use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDate, NaiveTime, TimeZone};
+use chrono_tz::Tz;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
@@ -181,7 +182,7 @@ pub fn occurrences(rule: &RecurrenceRule) -> Result<Vec<NaiveDate>> {
             let mut weekdays: Vec<u32> = rule.weekdays.clone();
             weekdays.sort_unstable();
             weekdays.dedup();
-            if weekdays.is_empty() {
+            if weekdays.is_empty() || weekdays.iter().any(|day| *day > 6) {
                 return Err(CoreError::Validation(
                     "Choose at least one weekday to repeat on".into(),
                 ));
@@ -245,20 +246,25 @@ pub fn occurrences(rule: &RecurrenceRule) -> Result<Vec<NaiveDate>> {
     }
 }
 
-/// Builds the timestamp an occurrence starts at, using the workspace clock's own
-/// offset so a generated shift looks exactly like a seeded one.
+/// Resolve each wall-clock occurrence in its own timezone, including DST.
 pub fn instance_window(
     date: NaiveDate,
     rule: &RecurrenceRule,
-    offset: FixedOffset,
+    zone: impl TimeZone,
 ) -> Result<(DateTime<FixedOffset>, DateTime<FixedOffset>)> {
     let time = local_time(&rule.starts_local_time)?;
     let naive = date.and_time(time);
-    let starts = naive
-        .and_local_timezone(offset)
-        .single()
-        .ok_or_else(|| CoreError::Validation("That start time is not usable".into()))?;
-    Ok((starts, starts + Duration::minutes(rule.duration_minutes)))
+    let starts = naive.and_local_timezone(zone).single().ok_or_else(|| {
+        CoreError::Validation("That local start time is ambiguous or does not exist".into())
+    })?;
+    let ends = starts.clone() + Duration::minutes(rule.duration_minutes);
+    Ok((starts.fixed_offset(), ends.fixed_offset()))
+}
+
+fn parse_zone(value: &str) -> Result<Tz> {
+    value
+        .parse()
+        .map_err(|_| CoreError::Validation("Choose a valid organization timezone".into()))
 }
 
 fn parse_date(value: &str, label: &str) -> Result<NaiveDate> {
@@ -321,7 +327,12 @@ pub fn create_series(
     }
 
     let dates = occurrences(rule)?;
-    let offset = *now.offset();
+    let timezone: String = conn.query_row(
+        "SELECT timezone FROM organizations WHERE id = ?1",
+        params![organization_id],
+        |row| row.get(0),
+    )?;
+    let zone = parse_zone(&timezone)?;
     let series_id = format!("series-{}", uuid::Uuid::new_v4());
     let transaction = conn.unchecked_transaction()?;
     transaction.execute(
@@ -334,11 +345,7 @@ pub fn create_series(
             series_id,
             organization_id,
             opportunity_id,
-            conn.query_row(
-                "SELECT timezone FROM organizations WHERE id = ?1",
-                params![organization_id],
-                |row| row.get::<_, String>(0)
-            )?,
+            timezone,
             rule.kind.as_str(),
             rule.interval_weeks,
             serde_json::to_string(&rule.weekdays)?,
@@ -357,39 +364,20 @@ pub fn create_series(
         )?;
     }
 
-    let mut shifts: Vec<SeriesShift> = Vec::new();
-    for date in &dates {
-        let (starts_at, ends_at) = instance_window(*date, rule, offset)?;
-        let id = format!("sh-series-{}", uuid::Uuid::new_v4());
-        transaction.execute(
-            "INSERT INTO shifts
-             (id, opportunity_id, starts_at, ends_at, capacity, confirmed, waitlisted, status,
-              series_id, occurrence_date)
-             VALUES (?1, ?2, ?3, ?4, ?5, 0, 0, 'scheduled', ?6, ?7)",
-            params![
-                id,
+    let shifts = dates
+        .into_iter()
+        .map(|date| {
+            insert_instance(
+                &transaction,
+                &series_id,
                 opportunity_id,
-                starts_at.to_rfc3339(),
-                ends_at.to_rfc3339(),
-                needed,
-                series_id,
-                date.to_string()
-            ],
-        )?;
-        for role in roles {
-            transaction.execute(
-                "INSERT INTO shift_roles (shift_id, name, required, filled)
-                 VALUES (?1, ?2, ?3, 0)",
-                params![id, role.name.trim(), role.required],
-            )?;
-        }
-        shifts.push(SeriesShift {
-            id,
-            occurrence_date: date.to_string(),
-            starts_at: starts_at.to_rfc3339(),
-            ends_at: ends_at.to_rfc3339(),
-        });
-    }
+                date,
+                rule,
+                zone,
+                roles,
+            )
+        })
+        .collect::<Result<Vec<_>>>()?;
 
     append_actor_audit(
         &transaction,
@@ -417,6 +405,46 @@ pub fn create_series(
     })
 }
 
+fn insert_instance(
+    conn: &Connection,
+    series_id: &str,
+    opportunity_id: &str,
+    date: NaiveDate,
+    rule: &RecurrenceRule,
+    zone: Tz,
+    roles: &[SeriesRole],
+) -> Result<SeriesShift> {
+    let (starts_at, ends_at) = instance_window(date, rule, zone)?;
+    let shift = SeriesShift {
+        id: format!("sh-series-{}", uuid::Uuid::new_v4()),
+        occurrence_date: date.to_string(),
+        starts_at: starts_at.to_rfc3339(),
+        ends_at: ends_at.to_rfc3339(),
+    };
+    conn.execute(
+        "INSERT INTO shifts
+         (id, opportunity_id, starts_at, ends_at, capacity, confirmed, waitlisted, status,
+          series_id, occurrence_date)
+         VALUES (?1, ?2, ?3, ?4, ?5, 0, 0, 'scheduled', ?6, ?7)",
+        params![
+            shift.id,
+            opportunity_id,
+            shift.starts_at,
+            shift.ends_at,
+            roles.iter().map(|role| role.required).sum::<i64>(),
+            series_id,
+            shift.occurrence_date
+        ],
+    )?;
+    for role in roles {
+        conn.execute(
+            "INSERT INTO shift_roles (shift_id, name, required, filled) VALUES (?1, ?2, ?3, 0)",
+            params![shift.id, role.name.trim(), role.required],
+        )?;
+    }
+    Ok(shift)
+}
+
 /// Adds the occurrences the rule asks for that the series has not produced yet.
 /// Idempotent: running it twice writes nothing the second time.
 pub fn generate_instances(
@@ -428,8 +456,7 @@ pub fn generate_instances(
         load_series(conn, series_id)?.ok_or_else(|| CoreError::NotFound("that series".into()))?;
     let rule = rule_of(&record);
     let dates = occurrences(&rule)?;
-    let now = now(conn)?;
-    let offset = *now.offset();
+    let zone = parse_zone(&record.timezone)?;
     let existing: HashSet<String> = {
         let mut statement = conn.prepare(
             "SELECT occurrence_date FROM shifts WHERE series_id = ?1 AND occurrence_date IS NOT NULL",
@@ -439,42 +466,19 @@ pub fn generate_instances(
     };
 
     let transaction = conn.unchecked_transaction()?;
-    let mut added: Vec<SeriesShift> = Vec::new();
-    for date in &dates {
-        let key = date.to_string();
-        if existing.contains(&key) {
-            continue;
-        }
-        let (starts_at, ends_at) = instance_window(*date, &rule, offset)?;
-        let id = format!("sh-series-{}", uuid::Uuid::new_v4());
-        transaction.execute(
-            "INSERT INTO shifts
-             (id, opportunity_id, starts_at, ends_at, capacity, confirmed, waitlisted, status,
-              series_id, occurrence_date)
-             VALUES (?1, ?2, ?3, ?4, ?5, 0, 0, 'scheduled', ?6, ?7)",
-            params![
-                id,
-                record.opportunity_id,
-                starts_at.to_rfc3339(),
-                ends_at.to_rfc3339(),
-                record.roles.iter().map(|role| role.required).sum::<i64>(),
+    let mut added = Vec::new();
+    for date in dates {
+        if !existing.contains(&date.to_string()) {
+            added.push(insert_instance(
+                &transaction,
                 series_id,
-                key
-            ],
-        )?;
-        for role in &record.roles {
-            transaction.execute(
-                "INSERT INTO shift_roles (shift_id, name, required, filled)
-                 VALUES (?1, ?2, ?3, 0)",
-                params![id, role.name, role.required],
-            )?;
+                &record.opportunity_id,
+                date,
+                &rule,
+                zone,
+                &record.roles,
+            )?);
         }
-        added.push(SeriesShift {
-            id,
-            occurrence_date: key,
-            starts_at: starts_at.to_rfc3339(),
-            ends_at: ends_at.to_rfc3339(),
-        });
     }
     if !added.is_empty() {
         append_actor_audit(
@@ -529,7 +533,7 @@ pub fn retime(
         ));
     }
     let now = now(conn)?;
-    let offset = *now.offset();
+    let zone = parse_zone(&record.timezone)?;
 
     let transaction = conn.unchecked_transaction()?;
     let mut statement = transaction.prepare(
@@ -546,11 +550,11 @@ pub fn retime(
 
     let mut changed = 0i64;
     for (id, occurrence_date) in rows {
-        if occurrence_date < now.date_naive().to_string() {
+        if occurrence_date < now.with_timezone(&zone).date_naive().to_string() {
             continue;
         }
         let date = parse_date(&occurrence_date, "occurrence date")?;
-        let (starts_at, ends_at) = instance_window(date, &rule, offset)?;
+        let (starts_at, ends_at) = instance_window(date, &rule, zone)?;
         transaction.execute(
             "UPDATE shifts SET starts_at = ?1, ends_at = ?2 WHERE id = ?3",
             params![starts_at.to_rfc3339(), ends_at.to_rfc3339(), id],

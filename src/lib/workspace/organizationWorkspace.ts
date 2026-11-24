@@ -8,6 +8,7 @@ import type {
   Organization,
   PeriodKey,
   RosterVolunteer,
+  SessionSnapshot,
   SeriesShift,
   Shift,
   ShiftSeriesRecord,
@@ -301,4 +302,47 @@ export function withCreatedPrograms(
   const opportunities = new Map(workspace.opportunities.map((row) => [row.id, row]));
   for (const row of created) opportunities.set(row.id, row);
   return { ...workspace, opportunities: [...opportunities.values()] };
+}
+
+/** Both the preview repository and the rendered session use the same projection. */
+export function workspaceWithSnapshot(
+  base: DemoWorkspace,
+  snapshot: SessionSnapshot,
+): DemoWorkspace {
+  return withCreatedShifts(
+    withCreatedPrograms(withRoster(base, snapshot.roster ?? []), snapshot.createdOpportunities),
+    snapshot.createdSeries ?? [],
+    snapshot.createdShifts ?? [],
+  );
+}
+
+/** Index the live rows once, instead of rescanning every registration per shift. */
+export function withRegistrationCounts(
+  base: DemoWorkspace,
+  snapshot: SessionSnapshot,
+): DemoWorkspace {
+  const registered = new Map<string, { total: number; roles: Map<string, number> }>();
+  for (const row of snapshot.registrations) {
+    if (row.status !== "registered") continue;
+    const counts = registered.get(row.shiftId) ?? { total: 0, roles: new Map<string, number>() };
+    counts.total += 1;
+    counts.roles.set(row.role, (counts.roles.get(row.role) ?? 0) + 1);
+    registered.set(row.shiftId, counts);
+  }
+  const waiting = new Map<string, number>();
+  for (const row of snapshot.waitlist) {
+    if (row.status === "waiting") waiting.set(row.shiftId, (waiting.get(row.shiftId) ?? 0) + 1);
+  }
+  return {
+    ...base,
+    shifts: base.shifts.map((shift) => ({
+      ...shift,
+      confirmed: registered.get(shift.id)?.total ?? 0,
+      waitlisted: waiting.get(shift.id) ?? 0,
+      roles: shift.roles.map((role) => ({
+        ...role,
+        filled: registered.get(shift.id)?.roles.get(role.name) ?? 0,
+      })),
+    })),
+  };
 }

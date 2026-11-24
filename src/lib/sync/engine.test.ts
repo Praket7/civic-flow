@@ -162,6 +162,22 @@ function engineFor(store: MemoryStore, sync: SyncTransport, now: () => number): 
 }
 
 describe("sync engine", () => {
+  it("restarts synchronization when the same account receives a new membership epoch", async () => {
+    const store = new MemoryStore();
+    let pulls = 0;
+    const sync = transport(async () => ({ status: "applied" }));
+    const pull = sync.pull;
+    sync.pull = (...args) => {
+      pulls += 1;
+      return pull(...args);
+    };
+    const engine = engineFor(store, sync, () => 0);
+    await engine.start(USER, ORG, 1);
+    await engine.start(USER, ORG, 2);
+    engine.stop();
+    expect(pulls).toBe(2);
+  });
+
   it("uploads a queued command once, including after a restart", async () => {
     const store = new MemoryStore();
     store.enqueue(ORG, "REGISTER_FOR_SHIFT", { shiftId: "shift-1" });
@@ -401,6 +417,54 @@ describe("sync engine", () => {
     // Without this the next poll re-reads the same invisible changes forever.
     expect(await store.readCursor(ORG)).toBe(7);
     expect(await store.readRevision(ORG)).toBe(2);
+  });
+
+  it("ignores a delayed pull after stopping and starts the next account cleanly", async () => {
+    const store = new MemoryStore();
+    let release!: (result: PullResult) => void;
+    let entered!: () => void;
+    const pulling = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let pulls = 0;
+    const sync: SyncTransport = {
+      async push() {
+        return { status: "applied" };
+      },
+      async pull() {
+        if (++pulls === 1) {
+          entered();
+          return new Promise<PullResult>((resolve) => {
+            release = resolve;
+          });
+        }
+        return { status: "ok", cursor: 0, hasMore: false, revision: 2, changes: [] };
+      },
+    };
+    const engine = engineFor(store, sync, () => 0);
+    const old = engine.start(USER, ORG);
+    await pulling;
+    const next = engine.start("user-bob", ORG);
+    release({
+      status: "ok",
+      cursor: 7,
+      hasMore: false,
+      revision: 1,
+      changes: [
+        {
+          sequence: 7,
+          entity: "volunteer",
+          id: "private",
+          operation: "insert",
+          payload: { name: "Alice" },
+        },
+      ],
+    });
+    await Promise.all([old, next]);
+    expect(store.applied).toEqual([]);
+    expect(await store.readCursor(ORG)).toBe(0);
+    expect(engine.snapshot().revision).toBe(2);
+    engine.stop();
   });
 
   it("recovers a sending row left behind by a crash", async () => {

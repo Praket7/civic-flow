@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
+import { setRepositoryToken } from "../../lib/nativeSession";
 import { SharedConflictsPage } from "./SharedConflictsPage";
 import type { SharedConflict } from "../../lib/sync/writes";
 
@@ -91,6 +92,7 @@ function openConflict(): SharedConflict {
 }
 
 beforeEach(() => {
+  setRepositoryToken("test-local-session");
   resolved.length = 0;
   conflicts = [openConflict()];
   (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
@@ -146,6 +148,7 @@ describe("two devices, one shift", () => {
       organizationId: ORG,
       conflictId: "conflict-1",
       resolution: "resolved",
+      token: "test-local-session",
     });
     expect(await screen.findByText("Closed (1)")).toBeInTheDocument();
   });

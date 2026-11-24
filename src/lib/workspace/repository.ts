@@ -59,6 +59,7 @@ import type {
   PendingInvite,
 } from "../organizations/types";
 import { isTauri } from "../platform";
+import { invokeAuthed } from "../nativeSession";
 import { previewRepository } from "./previewRepository";
 
 /**
@@ -241,16 +242,7 @@ function encryptedBackupName(): string {
   return `civicflow-backup-${new Date().toISOString().slice(0, 10)}.civicflow`;
 }
 
-// The only credential the IPC bridge accepts.
-let activeToken: string | null = null;
-
-export function setRepositoryToken(token: string | null): void {
-  activeToken = token;
-}
-
-function invokeAuthed<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
-  return invoke<T>(command, { ...args, token: activeToken ?? "" });
-}
+export { setRepositoryToken } from "../nativeSession";
 
 const desktopRepository: WorkspaceRepository = {
   source: "desktop",

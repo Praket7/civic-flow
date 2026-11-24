@@ -700,6 +700,12 @@
       "direct": false
     },
     {
+      "name": "chrono-tz",
+      "version": "0.10.4",
+      "license": "MIT OR Apache-2.0",
+      "direct": false
+    },
+    {
       "name": "cipher",
       "version": "0.4.4",
       "license": "MIT OR Apache-2.0",
@@ -2087,6 +2093,12 @@
     },
     {
       "name": "phf",
+      "version": "0.12.1",
+      "license": "MIT",
+      "direct": false
+    },
+    {
+      "name": "phf",
       "version": "0.13.1",
       "license": "MIT",
       "direct": false
@@ -2130,6 +2142,12 @@
     {
       "name": "phf_macros",
       "version": "0.14.0",
+      "license": "MIT",
+      "direct": false
+    },
+    {
+      "name": "phf_shared",
+      "version": "0.12.1",
       "license": "MIT",
       "direct": false
     },

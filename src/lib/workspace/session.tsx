@@ -2,59 +2,93 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type {
-  BackupRestoreResult,
   BackupSnapshot,
-  CandidateAnswer,
-  CheckinCode,
-  CheckinWindow,
-  CredentialReadiness,
   DemoWorkspace,
-  DisruptionReport,
-  EncryptedBackupReceipt,
-  EngagementMetrics,
-  HoursDecision,
-  NewOpportunityInput,
-  NotificationRule,
-  NotificationRulePatch,
-  Opportunity,
-  RecoveryChangeRequest,
-  RecoveryPlan,
-  RecurrenceRule,
-  ReplacementRecommendation,
-  RetentionSignal,
-  RosterApplyAssignment,
-  RosterEvaluation,
-  RosterOptions,
-  RosterPlan,
-  RosterPolicy,
-  RosterPolicyView,
-  SeriesRole,
   SessionSnapshot,
-  WeeklyAssignment,
+  Opportunity,
   ShiftSeriesRecord,
-  VolunteerInsight,
-  ExportReceipt,
-  VolunteerImportPreview,
-  VolunteerImportSummary,
-  WorkspaceSettings,
 } from "../../types/domain";
 import { useOptionalAuth } from "../auth/session";
 import { useOrganizationWorkspace } from "../organizations/useOrganizationWorkspace";
 import { demoWorkspace } from "./dataset";
 import {
   DEMO_ORGANIZATION,
-  withCreatedShifts,
-  withCreatedPrograms,
-  withRoster,
+  workspaceWithSnapshot,
+  withRegistrationCounts,
   workspaceForOrganization,
 } from "./organizationWorkspace";
 import { workspaceReadKeys } from "./queries";
-import { getWorkspaceRepository } from "./repository";
+import { getWorkspaceRepository, type WorkspaceRepository } from "./repository";
 import { WorkspaceScopeProvider } from "./scope";
 import { setDisplayTimeZone } from "./selectors";
 import { messageOf } from "../errors";
 
 const localRepository = getWorkspaceRepository();
+
+// Derive action parameters from the repository contract. Snapshot mutations
+// publish the new snapshot internally rather than returning it to the screen.
+type ActionName =
+  | "setSaved"
+  | "setApplicationStage"
+  | "checkIn"
+  | "manualCheckIn"
+  | "checkOut"
+  | "markNoShow"
+  | "cancelRegistration"
+  | "joinWaitlist"
+  | "getCheckinCode"
+  | "checkinWindow"
+  | "autoRoster"
+  | "evaluateRoster"
+  | "applyRosterWeek"
+  | "getRosterPolicy"
+  | "updateRosterPolicy"
+  | "explainRosterChoice"
+  | "applyRoster"
+  | "detectDisruptions"
+  | "planRecovery"
+  | "applyRecovery"
+  | "setAssignmentLock"
+  | "listShiftSeries"
+  | "retimeShiftSeries"
+  | "deleteShiftSeries"
+  | "recommendReplacement"
+  | "listNotificationRules"
+  | "updateNotificationRule"
+  | "queueDueReminders"
+  | "retentionSignals"
+  | "volunteerInsight"
+  | "engagementMetrics"
+  | "credentialReadiness"
+  | "saveReportView"
+  | "promoteWaitlist"
+  | "reviewHours"
+  | "updateSettings"
+  | "registerForShift"
+  | "saveVolunteerProfile"
+  | "resetDemo"
+  | "createBackup"
+  | "restoreBackup"
+  | "exportEncryptedBackup"
+  | "importEncryptedBackup"
+  | "previewVolunteerImport"
+  | "applyVolunteerImport"
+  | "exportVolunteerRoster";
+type WorkspaceActions = {
+  [K in ActionName]: WorkspaceRepository[K] extends (...args: infer Args) => Promise<infer Result>
+    ? (...args: Args) => Promise<Result extends SessionSnapshot ? void : Result>
+    : never;
+} & {
+  createShiftSeries(
+    ...args: Parameters<WorkspaceRepository["createShiftSeries"]>
+  ): Promise<ShiftSeriesRecord>;
+  generateSeriesInstances(
+    ...args: Parameters<WorkspaceRepository["generateSeriesInstances"]>
+  ): Promise<number>;
+  createOpportunity(
+    ...args: Parameters<WorkspaceRepository["createOpportunity"]>
+  ): Promise<Opportunity>;
+};
 
 interface WorkspaceSessionValue {
   workspace: DemoWorkspace;
@@ -62,100 +96,7 @@ interface WorkspaceSessionValue {
   backups: BackupSnapshot[];
   /** Null while the capability is being read. */
   installationSteward: boolean | null;
-  actions: {
-    setSaved(opportunityId: string, saved: boolean): Promise<void>;
-    setApplicationStage(applicationId: string, stage: string): Promise<void>;
-    checkIn(shiftId: string, volunteerId: string, code: string): Promise<void>;
-    /** A coordinator override, which carries the reason into the audit trail. */
-    manualCheckIn(shiftId: string, volunteerId: string, reason: string): Promise<void>;
-    checkOut(shiftId: string, volunteerId: string): Promise<void>;
-    markNoShow(shiftId: string, volunteerId: string): Promise<void>;
-    cancelRegistration(shiftId: string, volunteerId: string, reason?: string): Promise<void>;
-    joinWaitlist(
-      shiftId: string,
-      volunteerId: string,
-      role: string,
-      requestReview?: boolean,
-    ): Promise<void>;
-    getCheckinCode(shiftId: string): Promise<CheckinCode>;
-    checkinWindow(shiftId: string): Promise<CheckinWindow>;
-    autoRoster(shiftIds: string[], options: RosterOptions): Promise<RosterPlan>;
-    /** The plan and the authoritative evaluation behind every displayed value. */
-    evaluateRoster(shiftIds: string[], options: RosterOptions): Promise<RosterEvaluation>;
-    /** Applies a reviewed plan across its shifts in one transaction. */
-    applyRosterWeek(
-      expectedRevision: number | null,
-      expectedPolicyVersion: number | null,
-      assignments: WeeklyAssignment[],
-    ): Promise<void>;
-    getRosterPolicy(): Promise<RosterPolicyView>;
-    updateRosterPolicy(policy: RosterPolicy): Promise<RosterPolicyView>;
-    explainRosterChoice(
-      shiftIds: string[],
-      options: RosterOptions,
-      candidateId: string,
-      slotId: string,
-    ): Promise<CandidateAnswer>;
-    applyRoster(shiftId: string, assignments: RosterApplyAssignment[]): Promise<void>;
-    /** What is wrong with the roster now: open required seats and lapsed credentials. */
-    detectDisruptions(): Promise<DisruptionReport>;
-    /** A minimal repair for the chosen shifts, judged on what it disturbs. */
-    planRecovery(shiftIds: string[], options: RosterOptions): Promise<RecoveryPlan>;
-    /** Applies the seat changes a coordinator approved. */
-    applyRecovery(shiftId: string, changes: RecoveryChangeRequest[]): Promise<void>;
-    /** Holds an assignment still against replanning, or releases it. */
-    setAssignmentLock(shiftId: string, volunteerId: string, locked: boolean): Promise<void>;
-    /** Schedules a repeating series and returns the rule that now owns it. */
-    createShiftSeries(
-      opportunityId: string,
-      rule: RecurrenceRule,
-      roles: SeriesRole[],
-    ): Promise<ShiftSeriesRecord>;
-    listShiftSeries(opportunityId?: string): Promise<ShiftSeriesRecord[]>;
-    generateSeriesInstances(seriesId: string): Promise<number>;
-    retimeShiftSeries(
-      seriesId: string,
-      startsLocalTime: string,
-      durationMinutes: number,
-      scope: "instance" | "series",
-    ): Promise<void>;
-    deleteShiftSeries(seriesId: string): Promise<void>;
-    /** Who should take an opened seat, and why the people ahead were skipped. */
-    recommendReplacement(shiftId: string, role: string): Promise<ReplacementRecommendation>;
-    listNotificationRules(): Promise<NotificationRule[]>;
-    updateNotificationRule(
-      ruleId: string,
-      patch: NotificationRulePatch,
-    ): Promise<NotificationRule[]>;
-    /** Queues every reminder that is due, and returns how many it wrote. */
-    queueDueReminders(): Promise<number>;
-    /** The transparent rules behind who might need attention. */
-    retentionSignals(): Promise<RetentionSignal[]>;
-    /** One volunteer's verified hours, completed shifts, and milestones. */
-    volunteerInsight(volunteerId: string): Promise<VolunteerInsight>;
-    engagementMetrics(): Promise<EngagementMetrics>;
-    credentialReadiness(): Promise<CredentialReadiness>;
-    saveReportView(name: string, scope: string, filtersJson: string): Promise<void>;
-    promoteWaitlist(shiftId: string, volunteerId: string): Promise<void>;
-    reviewHours(entryId: string, decision: HoursDecision): Promise<void>;
-    updateSettings(patch: Partial<WorkspaceSettings>): Promise<void>;
-    createOpportunity(input: NewOpportunityInput): Promise<Opportunity>;
-    registerForShift(shiftId: string, volunteerId: string, role: string): Promise<void>;
-    saveVolunteerProfile(patch: Partial<SessionSnapshot["volunteerProfile"]>): Promise<void>;
-    resetDemo(): Promise<void>;
-    createBackup(note?: string): Promise<BackupSnapshot[]>;
-    restoreBackup(id: string): Promise<BackupRestoreResult>;
-    /** Writes a sealed copy the coordinator decides where to keep. */
-    exportEncryptedBackup(passphrase: string): Promise<EncryptedBackupReceipt | null>;
-    /** Restores from a sealed file; null means the dialog was dismissed. */
-    importEncryptedBackup(passphrase: string): Promise<BackupRestoreResult | null>;
-    /** Checks a volunteer spreadsheet without writing anything. */
-    previewVolunteerImport(text: string): Promise<VolunteerImportPreview>;
-    /** Adds the file as one transaction, then refreshes the roster screens. */
-    applyVolunteerImport(text: string): Promise<VolunteerImportSummary>;
-    /** Writes the roster in the shape the import reads. */
-    exportVolunteerRoster(): Promise<ExportReceipt | null>;
-  };
+  actions: WorkspaceActions;
 }
 
 const WorkspaceSessionContext = createContext<WorkspaceSessionValue | null>(null);
@@ -202,43 +143,13 @@ export function WorkspaceSessionProvider({ children }: { children: ReactNode }) 
 
   // What setup saves is what the roster and profile screens read back.
   const visibleWorkspace = useMemo(() => {
-    // The seed's roster plus everyone added or imported since.
-    const base = withCreatedShifts(
-      withCreatedPrograms(
-        withRoster(workspace, session?.roster ?? []),
-        session?.createdOpportunities ?? [],
-      ),
-      session?.createdSeries ?? [],
-      session?.createdShifts ?? [],
-    );
-    if (!session) return base;
-    // Shift totals are a projection of the registration rows; the preview keeps
-    // only the rows, so derive them here.
-    const registrations = session.registrations;
-    const waitlist = session.waitlist;
-    const counted = {
-      ...base,
-      shifts: base.shifts.map((shift) => {
-        const live = registrations.filter(
-          (row) => row.shiftId === shift.id && row.status === "registered",
-        );
-        return {
-          ...shift,
-          confirmed: live.length,
-          waitlisted: waitlist.filter((row) => row.shiftId === shift.id && row.status === "waiting")
-            .length,
-          roles: shift.roles.map((role) => ({
-            ...role,
-            filled: live.filter((row) => row.role === role.name).length,
-          })),
-        };
-      }),
-    };
+    if (!session) return workspace;
+    const counted = withRegistrationCounts(workspaceWithSnapshot(workspace, session), session);
     const profile = session.volunteerProfile;
     return {
       ...counted,
       volunteers: counted.volunteers.map((volunteer) =>
-        volunteer.id === base.currentVolunteerId
+        volunteer.id === counted.currentVolunteerId
           ? {
               ...volunteer,
               skills: profile.skills,

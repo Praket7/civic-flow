@@ -179,6 +179,97 @@ fn ensure_replica_id(conn: &Connection) -> Result<String> {
     Ok(created)
 }
 
+/// Local account binding is separate from the hosted account ID. Legacy
+/// replicas without a binding must be reconnected before any data is exposed.
+pub fn local_owner(conn: &Connection, organization_id: &str) -> Result<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT value FROM app_settings WHERE key = ?1",
+            params![format!("replica_owner:{organization_id}")],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
+pub fn require_local_owner(
+    conn: &Connection,
+    organization_id: &str,
+    local_user_id: &str,
+) -> Result<()> {
+    if local_owner(conn, organization_id)?.as_deref() != Some(local_user_id) {
+        return Err(CoreError::rule(
+            "FORBIDDEN",
+            "Reconnect this shared workspace with your own account.",
+            None,
+            Some("CONNECT_SHARED".into()),
+        ));
+    }
+    Ok(())
+}
+
+pub fn require_hosted_owner(conn: &Connection, organization_id: &str, user_id: &str) -> Result<()> {
+    let owner: Option<String> = conn
+        .query_row(
+            "SELECT user_id FROM shared_workspaces WHERE organization_id = ?1",
+            [organization_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if owner.as_deref() != Some(user_id) {
+        return Err(CoreError::rule(
+            "FORBIDDEN",
+            "This queued work belongs to another account.",
+            None,
+            None,
+        ));
+    }
+    Ok(())
+}
+
+pub fn configure_owned(
+    conn: &Connection,
+    organization_id: &str,
+    user_id: &str,
+    membership_epoch: i64,
+    local_user_id: &str,
+    verified_online: bool,
+) -> Result<SyncStatus> {
+    validate_organization(organization_id)?;
+    let owner = local_owner(conn, organization_id)?;
+    let previous = status(conn, organization_id)?;
+    if !verified_online {
+        require_local_owner(conn, organization_id, local_user_id)?;
+        require_hosted_owner(conn, organization_id, user_id)?;
+        if previous.membership_epoch != membership_epoch {
+            return Err(CoreError::rule(
+                "FORBIDDEN",
+                "Reconnect to refresh workspace access.",
+                None,
+                None,
+            ));
+        }
+        return Ok(previous);
+    }
+    configure_inner(
+        conn,
+        organization_id,
+        user_id,
+        membership_epoch,
+        Some(local_user_id),
+        owner.as_deref() != Some(local_user_id),
+    )
+}
+
+pub fn require_outbox_owner(conn: &Connection, id: i64, local_user_id: &str) -> Result<()> {
+    let (organization_id, user_id): (String, String) = conn.query_row(
+        "SELECT organization_id,user_id FROM sync_outbox WHERE id = ?1",
+        params![id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    require_local_owner(conn, &organization_id, local_user_id)?;
+    require_hosted_owner(conn, &organization_id, &user_id)
+}
+
 /// Points this device at one hosted organization. A different account sees a
 /// different row set, so switching accounts clears the replica instead of
 /// showing one person rows another person was allowed to read.
@@ -187,6 +278,24 @@ pub fn configure(
     organization_id: &str,
     user_id: &str,
     membership_epoch: i64,
+) -> Result<SyncStatus> {
+    configure_inner(
+        conn,
+        organization_id,
+        user_id,
+        membership_epoch,
+        None,
+        false,
+    )
+}
+
+fn configure_inner(
+    conn: &Connection,
+    organization_id: &str,
+    user_id: &str,
+    membership_epoch: i64,
+    local_owner: Option<&str>,
+    owner_changed: bool,
 ) -> Result<SyncStatus> {
     validate_organization(organization_id)?;
     let user_id = user_id.trim();
@@ -197,16 +306,18 @@ pub fn configure(
     }
     let replica_id = ensure_replica_id(conn)?;
     let transaction = conn.unchecked_transaction()?;
-    let existing: Option<(String, i64, i64)> = transaction
+    let existing: Option<(String, i64, i64, i64)> = transaction
         .query_row(
-            "SELECT user_id, cursor, revision FROM shared_workspaces WHERE organization_id = ?1",
+            "SELECT user_id, cursor, revision, membership_epoch FROM shared_workspaces WHERE organization_id = ?1",
             params![organization_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .optional()?;
 
     let (cursor, revision) = match existing {
-        Some((existing_user, _, _)) if existing_user != user_id => {
+        Some((existing_user, _, _, epoch))
+            if owner_changed || existing_user != user_id || epoch != membership_epoch =>
+        {
             transaction.execute(
                 "DELETE FROM replica_entities WHERE organization_id = ?1",
                 params![organization_id],
@@ -215,9 +326,13 @@ pub fn configure(
                 "DELETE FROM sync_entity_versions WHERE organization_id = ?1",
                 params![organization_id],
             )?;
+            transaction.execute(
+                "UPDATE shared_workspaces SET last_successful_sync_at = NULL, last_error = NULL WHERE organization_id = ?1",
+                params![organization_id],
+            )?;
             (0, 0)
         }
-        Some((_, cursor, revision)) => (cursor, revision),
+        Some((_, cursor, revision, _)) => (cursor, revision),
         None => (0, 0),
     };
 
@@ -256,6 +371,12 @@ pub fn configure(
             membership_epoch
         ],
     )?;
+    if let Some(owner) = local_owner {
+        transaction.execute(
+            "INSERT OR REPLACE INTO app_settings(key,value) VALUES (?1,?2)",
+            params![format!("replica_owner:{organization_id}"), owner],
+        )?;
+    }
     transaction.commit()?;
     status(conn, organization_id)
 }
@@ -629,18 +750,8 @@ pub fn status(conn: &Connection, organization_id: &str) -> Result<SyncStatus> {
         params![organization_id],
         |row| row.get(0),
     )?;
-    let pending: i64 = conn.query_row(
-        "SELECT count(*) FROM sync_outbox
-         WHERE organization_id = ?1 AND user_id = ?2 AND state IN ('pending', 'sending')",
-        params![organization_id, user_id],
-        |row| row.get(0),
-    )?;
-    let conflicts: i64 = conn.query_row(
-        "SELECT count(*) FROM sync_conflicts
-         WHERE organization_id = ?1 AND status = 'open'",
-        params![organization_id],
-        |row| row.get(0),
-    )?;
+    let pending = pending_count(conn, &user_id, organization_id)?;
+    let conflicts = open_conflict_count(conn, organization_id)?;
 
     Ok(SyncStatus {
         organization_id: Some(organization_id.to_string()),
@@ -698,21 +809,55 @@ pub fn read_entities(
 /// table view pages would silently drop the oldest hours from a year-to-date
 /// total. The query is local, indexed and bounded by the replica itself.
 pub fn read_report_entities(conn: &Connection, organization_id: &str) -> Result<Value> {
-    validate_organization(organization_id)?;
-    let mut statement = conn.prepare(
-        "SELECT entity_type, payload FROM replica_entities
-         WHERE organization_id = ?1 AND deleted = 0
-           AND entity_type IN ('attendance', 'credential', 'credential_type', 'hour_entry',
-                               'opportunity', 'registration', 'shift', 'volunteer')
-         ORDER BY entity_type, entity_id",
-    )?;
-    let rows = statement.query_map(params![organization_id], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
-    })?;
+    read_grouped_entities(conn, organization_id, &REPORT_ENTITY_TYPES)
+}
 
+/// One consistent local read for coordinator screens, with no silent row cap.
+pub fn read_workspace_entities(conn: &Connection, organization_id: &str) -> Result<Value> {
+    read_grouped_entities(
+        conn,
+        organization_id,
+        &[
+            "organization",
+            "opportunity",
+            "shift",
+            "shift_role",
+            "role_requirement",
+            "volunteer",
+            "volunteer_skill",
+            "availability_rule",
+            "credential_type",
+            "credential",
+            "registration",
+            "waitlist_entry",
+            "attendance",
+            "hour_entry",
+            "shift_series",
+            "shift_series_role",
+        ],
+    )
+}
+
+fn read_grouped_entities(
+    conn: &Connection,
+    organization_id: &str,
+    kinds: &[&str],
+) -> Result<Value> {
+    validate_organization(organization_id)?;
+    let parameters = vec!["?"; kinds.len()].join(",");
+    let query = format!(
+        "SELECT entity_type, payload FROM replica_entities
+         WHERE organization_id = ? AND deleted = 0 AND entity_type IN ({parameters})
+         ORDER BY entity_type, entity_id"
+    );
+    let mut statement = conn.prepare(&query)?;
+    let rows = statement.query_map(
+        rusqlite::params_from_iter(std::iter::once(organization_id).chain(kinds.iter().copied())),
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?)),
+    )?;
     let mut grouped = Map::new();
-    for kind in REPORT_ENTITY_TYPES {
-        grouped.insert(kind.to_string(), Value::Array(Vec::new()));
+    for kind in kinds {
+        grouped.insert((*kind).to_string(), Value::Array(Vec::new()));
     }
     for row in rows {
         let (kind, payload) = row?;
@@ -809,7 +954,7 @@ pub fn next_ready(
             "SELECT id, operation_id, organization_id, user_id, command, envelope, created_at,
                     state, attempts, last_error, next_attempt_at, sending_at, result
              FROM sync_outbox
-             WHERE user_id = ?1 AND organization_id = ?2 AND state = 'pending'
+             WHERE user_id = ?1 AND organization_id = ?2 AND state IN ('pending', 'sending')
              ORDER BY coalesce(sequence_number, 0), id
              LIMIT 1",
             params![user_id, organization_id],
@@ -852,7 +997,7 @@ pub fn next_ready(
     };
     // A backed-off command is a barrier. Looking past it for another ready row
     // would let a dependent command overtake the one that must land first.
-    if next_attempt_at > now_ms {
+    if state != "pending" || next_attempt_at > now_ms {
         return Ok(None);
     }
     validate_command(&command)?;
@@ -892,6 +1037,22 @@ pub fn next_ready(
     }))
 }
 
+/// Select and claim the oldest eligible command as one durable transition.
+pub fn claim_ready(
+    conn: &Connection,
+    user_id: &str,
+    organization_id: &str,
+    now_ms: i64,
+) -> Result<Option<OutboxItem>> {
+    let tx = conn.unchecked_transaction()?;
+    let row = next_ready(&tx, user_id, organization_id, now_ms)?;
+    if let Some(ref item) = row {
+        mark_sending(&tx, item.id, now_ms)?;
+    }
+    tx.commit()?;
+    Ok(row)
+}
+
 pub fn mark_sending(conn: &Connection, id: i64, now_ms: i64) -> Result<()> {
     conn.execute(
         "UPDATE sync_outbox SET state = 'sending', sending_at = ?2, updated_at = ?3
@@ -928,14 +1089,23 @@ pub fn mark_refused(conn: &Connection, id: i64, result: &Value, conflict: &Value
         .and_then(Value::as_str)
         .map(str::to_string)
         .unwrap_or_else(|| Uuid::new_v4().to_string());
-    let organization_id = conflict
-        .get("organizationId")
-        .and_then(Value::as_str)
-        .ok_or_else(|| CoreError::Data("conflict has no organization".into()))?;
-    let operation_id = conflict
-        .get("operationId")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
+    // Ownership comes from the queued operation, not the caller's conflict JSON.
+    let envelope: String = conn.query_row(
+        "SELECT envelope FROM sync_outbox WHERE id = ?1",
+        [id],
+        |row| row.get(0),
+    )?;
+    let queued: CommandEnvelope = serde_json::from_str(&envelope)?;
+    let organization_id = queued.organization_id.as_str();
+    let operation_id = queued.operation_id.as_str();
+    let replica_id = queued.replica_id.as_str();
+    if conflict.get("organizationId").and_then(Value::as_str) != Some(organization_id)
+        || conflict.get("operationId").and_then(Value::as_str) != Some(operation_id)
+    {
+        return Err(CoreError::Validation(
+            "Conflict does not match the queued operation.".into(),
+        ));
+    }
     let command = conflict
         .get("command")
         .and_then(Value::as_str)
@@ -966,14 +1136,6 @@ pub fn mark_refused(conn: &Connection, id: i64, result: &Value, conflict: &Value
         .get("authoritative")
         .cloned()
         .unwrap_or(Value::Null);
-    let replica_id: Option<String> = conn
-        .query_row(
-            "SELECT replica_id FROM shared_workspaces WHERE organization_id = ?1",
-            params![organization_id],
-            |row| row.get(0),
-        )
-        .optional()?;
-
     let transaction = conn.unchecked_transaction()?;
     transaction.execute(
         "UPDATE sync_outbox
@@ -1023,7 +1185,7 @@ pub fn pending_count(conn: &Connection, user_id: &str, organization_id: &str) ->
 pub fn open_conflict_count(conn: &Connection, organization_id: &str) -> Result<i64> {
     Ok(conn.query_row(
         "SELECT count(*) FROM sync_conflicts
-         WHERE organization_id = ?1 AND status = 'open'",
+         WHERE organization_id = ?1 AND status = 'open' AND EXISTS (SELECT 1 FROM sync_outbox q JOIN shared_workspaces w ON w.organization_id = q.organization_id AND w.user_id = q.user_id WHERE q.organization_id = sync_conflicts.organization_id AND q.operation_id = sync_conflicts.operation_id)",
         params![organization_id],
         |row| row.get(0),
     )?)
@@ -1039,7 +1201,7 @@ pub fn list_conflicts(conn: &Connection, organization_id: &str) -> Result<Vec<Va
                 local_payload, authoritative_payload, classification, status,
                 created_at, resolved_at
          FROM sync_conflicts
-         WHERE organization_id = ?1
+         WHERE organization_id = ?1 AND EXISTS (SELECT 1 FROM sync_outbox q JOIN shared_workspaces w ON w.organization_id = q.organization_id AND w.user_id = q.user_id WHERE q.organization_id = sync_conflicts.organization_id AND q.operation_id = sync_conflicts.operation_id)
          ORDER BY status = 'open' DESC, created_at DESC",
     )?;
     let rows = statement.query_map(params![organization_id], |row| {
@@ -1118,7 +1280,7 @@ pub fn resolve_conflict(
     let changed = conn.execute(
         "UPDATE sync_conflicts
          SET status = ?3, resolved_at = ?4
-         WHERE organization_id = ?1 AND id = ?2 AND status = 'open'",
+         WHERE organization_id = ?1 AND id = ?2 AND status = 'open' AND EXISTS (SELECT 1 FROM sync_outbox q JOIN shared_workspaces w ON w.organization_id = q.organization_id AND w.user_id = q.user_id WHERE q.organization_id = sync_conflicts.organization_id AND q.operation_id = sync_conflicts.operation_id)",
         params![organization_id, conflict_id, resolution, now()],
     )?;
     if changed == 0 {
@@ -1240,4 +1402,14 @@ pub fn enqueue(
         ],
     )?;
     Ok(conn.last_insert_rowid())
+}
+
+pub fn recover_owned_sending(
+    conn: &Connection,
+    organization_id: &str,
+    user_id: &str,
+    cutoff: i64,
+    now_ms: i64,
+) -> Result<usize> {
+    Ok(conn.execute("UPDATE sync_outbox SET state = 'pending', sending_at = NULL, next_attempt_at = ?4, last_error = 'Recovered an interrupted upload. It will be retried.' WHERE organization_id = ?1 AND user_id = ?2 AND state = 'sending' AND sending_at < ?3", params![organization_id, user_id, cutoff, now_ms])?)
 }

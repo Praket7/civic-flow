@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invokeAuthed as invoke } from "../nativeSession";
 import type { CommandType } from "./protocol";
 import { desktopSyncSnapshot, startDesktopSync, syncDesktopNow } from "./desktop";
 

@@ -91,3 +91,35 @@ export function inRange(date: string, range: DateRange | null): boolean {
   if (!range) return true;
   return date >= range.start && date <= range.end;
 }
+
+/** Resolve an organization wall-clock time without assuming the device timezone.
+ * Refuse nonexistent or ambiguous times instead of silently moving a shift. */
+export function zonedShiftStart(date: string, time: string, timeZone: string): string {
+  if (!validIsoDate(date) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    throw new Error("Choose a valid date and start time.");
+  }
+  const desired = Date.parse(date + "T" + time + ":00Z");
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+  const wall = (instant: number): number => {
+    const p = Object.fromEntries(
+      formatter.formatToParts(instant).map(({ type, value }) => [type, value]),
+    );
+    return Date.parse(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}Z`);
+  };
+  const candidates = new Set<number>();
+  for (const probe of [desired - 86400000, desired, desired + 86400000]) {
+    const instant = desired - (wall(probe) - probe);
+    if (wall(instant) === desired) candidates.add(instant);
+  }
+  if (candidates.size !== 1) throw new Error("That local time is ambiguous or does not exist.");
+  return new Date([...candidates][0]).toISOString();
+}

@@ -473,10 +473,13 @@ fn conflicts_can_be_listed_and_closed() {
         None,
     )
     .expect("enqueue");
+    let ready = replica::next_ready(conn, USER, ORG, 0)
+        .unwrap()
+        .expect("queued");
     let conflict = json!({
         "id": "30000000-0000-4000-8000-000000000001",
         "organizationId": ORG,
-        "operationId": "10000000-0000-4000-8000-000000000001",
+        "operationId": ready.operation_id,
         "command": "UPDATE_SHIFT",
         "entity": SHIFT,
         "code": "version_conflict",
@@ -486,6 +489,12 @@ fn conflicts_can_be_listed_and_closed() {
         "authoritative": { "capacity": 5 },
         "createdAt": "2026-11-01T09:05:00.000Z"
     });
+    let mut mismatched = conflict.clone();
+    mismatched["operationId"] = json!("another-operation");
+    assert!(
+        replica::mark_refused(conn, id, &json!({ "status": "conflict" }), &mismatched).is_err()
+    );
+    assert_eq!(replica::pending_count(conn, USER, ORG).unwrap(), 1);
     replica::mark_refused(
         conn,
         id,
@@ -602,4 +611,42 @@ fn a_command_is_never_queued_for_another_account() {
     let error = replica::enqueue(conn, USER, ORG, 1, &wrong).unwrap_err();
     assert!(matches!(error, CoreError::Validation(_)));
     assert_eq!(replica::pending_count(conn, USER, ORG).unwrap(), 0);
+}
+
+#[test]
+fn replica_owner_binding_refuses_other_local_accounts_and_preserves_unbound_outbox() {
+    use civicflow_core::sync::replica;
+    let database = civicflow_core::Database::in_memory().unwrap();
+    let conn = database.connection();
+    let org = "11111111-1111-4111-8111-111111111111";
+    let hosted = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
+    assert!(replica::configure_owned(conn, org, hosted, 1, "local-a", false).is_err());
+    replica::configure_owned(conn, org, hosted, 1, "local-a", true).unwrap();
+    assert!(replica::require_local_owner(conn, org, "local-a").is_ok());
+    assert!(replica::require_local_owner(conn, org, "local-b").is_err());
+    assert!(replica::configure_owned(conn, org, hosted, 1, "local-b", false).is_err());
+    assert!(replica::configure_owned(conn, org, hosted, 2, "local-a", false).is_err());
+    assert!(replica::configure_owned(conn, org, hosted, 1, "local-a", false).is_ok());
+}
+
+#[test]
+fn claiming_a_command_is_atomic_and_preserves_queue_order() {
+    let database = database();
+    let conn = database.connection();
+    replica::configure(conn, ORG, USER, 3).unwrap();
+    let first = replica::enqueue(conn, USER, ORG, 1, &envelope(CommandType::UpdateShift)).unwrap();
+    let claimed = replica::claim_ready(conn, USER, ORG, 10).unwrap().unwrap();
+    assert_eq!(claimed.id, first);
+    assert!(replica::claim_ready(conn, USER, ORG, 10).unwrap().is_none());
+    assert_eq!(
+        replica::recover_owned_sending(conn, ORG, USER, 11, 12).unwrap(),
+        1
+    );
+    assert_eq!(
+        replica::claim_ready(conn, USER, ORG, 12)
+            .unwrap()
+            .unwrap()
+            .id,
+        first
+    );
 }

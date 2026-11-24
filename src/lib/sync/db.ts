@@ -48,6 +48,7 @@ export type ConflictClass = "field" | "invariant" | "append";
 
 export interface ConflictRow {
   id: string;
+  userId?: string;
   organizationId: string;
   operationId: string;
   command: string;
@@ -105,6 +106,34 @@ export class VolunteerDatabase extends Dexie {
             }
           });
       });
+    // Old replicas were not account-scoped. Discard only downloaded rows;
+    // the outbox remains durable, including work that has not reached the server.
+    this.version(3)
+      .stores({
+        conflicts: "id, organizationId, [userId+organizationId], status, createdAt",
+      })
+      .upgrade(async (transaction) => {
+        await transaction.table("entities").clear();
+        await transaction
+          .table("meta")
+          .filter(
+            (row: MetaRow) => row.key.startsWith("cursor:") || row.key.startsWith("revision:"),
+          )
+          .delete();
+        const conflicts = transaction.table("conflicts");
+        for (const row of (await conflicts.toArray()) as ConflictRow[]) {
+          const original = (await transaction
+            .table("outbox")
+            .where("operationId")
+            .equals(row.operationId)
+            .first()) as OutboxRow | undefined;
+          if (original?.userId && original.organizationId === row.organizationId) {
+            await conflicts.update(row.id, { userId: original.userId });
+          } else {
+            await conflicts.delete(row.id);
+          }
+        }
+      });
   }
 }
 
@@ -117,14 +146,21 @@ export function volunteerDb(): VolunteerDatabase {
 
 const REPLICA_KEY = "replicaId";
 
+/** Private replica partition. Outbox envelopes retain the actual organization ID. */
+export function replicaScope(organizationId: string, owner?: string, epoch = 0): string {
+  return owner ? JSON.stringify([owner, organizationId, epoch]) : organizationId;
+}
+
 /** One id per installed copy; commands from a reinstalled app are new work. */
 export async function replicaId(): Promise<string> {
   const db = volunteerDb();
-  const existing = await db.meta.get(REPLICA_KEY);
-  if (existing) return existing.value;
-  const created = crypto.randomUUID();
-  await db.meta.put({ key: REPLICA_KEY, value: created });
-  return created;
+  return db.transaction("rw", db.meta, async () => {
+    const existing = await db.meta.get(REPLICA_KEY);
+    if (existing) return existing.value;
+    const created = crypto.randomUUID();
+    await db.meta.put({ key: REPLICA_KEY, value: created });
+    return created;
+  });
 }
 
 export async function readCursor(organizationId: string): Promise<number> {
@@ -141,19 +177,22 @@ export async function readWorkspace(): Promise<string | null> {
   return row?.value ?? null;
 }
 
-export async function clearVolunteerCache(): Promise<void> {
+export async function clearVolunteerCache(owner?: string): Promise<void> {
   const db = volunteerDb();
   // Signing out removes the volunteer's replica, but keeps an outbox that has
   // not been sent: it is work the volunteer performed, and losing it silently
   // would be worse than showing it after the next sign-in.
   await db.transaction("rw", db.entities, db.meta, db.conflicts, async () => {
-    await db.entities.clear();
-    await db.conflicts.clear();
-    const pending = await db.meta.get("workspace");
-    await db.meta.clear();
-    if (pending) await db.meta.put(pending);
-    const replica = await db.meta.get(REPLICA_KEY);
-    if (!replica) await db.meta.put({ key: REPLICA_KEY, value: crypto.randomUUID() });
+    const belongs = (scope: string) => !owner || scope.startsWith(`[${JSON.stringify(owner)},`);
+    await db.entities.filter((row) => belongs(row.organizationId)).delete();
+    await db.conflicts.filter((row) => !owner || row.userId === owner).delete();
+    // Preserve installation identity and preference, but never cached cursors.
+    await db.meta
+      .filter((row) => {
+        const key = row.key.replace(/^(cursor|revision):/, "");
+        return key !== row.key && belongs(key);
+      })
+      .delete();
   });
 }
 
@@ -165,7 +204,16 @@ export async function applyChanges(
 ): Promise<void> {
   const db = volunteerDb();
   await db.transaction("rw", db.entities, db.meta, async () => {
-    for (const change of changes) {
+    const previous = Number((await db.meta.get(`cursor:${organizationId}`))?.value ?? 0);
+    if (!Number.isSafeInteger(cursor) || cursor < 0) throw new Error("Invalid replica cursor.");
+    if (cursor <= previous) return;
+    if (
+      changes.some((change) => !Number.isSafeInteger(change.sequence) || change.sequence > cursor)
+    ) {
+      throw new Error("Invalid replica change sequence.");
+    }
+    for (const change of [...changes].sort((a, b) => a.sequence - b.sequence)) {
+      if (change.sequence <= previous) continue;
       if (change.operation === "delete" || !change.payload) {
         await db.entities.delete([organizationId, change.entity, change.id]);
         continue;
