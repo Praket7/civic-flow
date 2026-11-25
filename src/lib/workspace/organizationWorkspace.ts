@@ -67,16 +67,9 @@ function emptyImpact(): DemoWorkspace["impact"] {
  * A new volunteer takes the authored volunteer's place, with their own name and
  * an empty history.
  */
-function workspaceForAccount(account: Account | null): DemoWorkspace {
-  if (!account || account.role !== "volunteer" || !account.volunteerId) return demoWorkspace;
-  const volunteerId = account.volunteerId;
-  if (demoWorkspace.volunteers.some((volunteer) => volunteer.id === volunteerId)) {
-    return volunteerId === demoWorkspace.currentVolunteerId
-      ? demoWorkspace
-      : { ...demoWorkspace, currentVolunteerId: volunteerId };
-  }
-  const volunteer: Volunteer = {
-    id: volunteerId,
+function newVolunteer(account: Account, now: string): Volunteer {
+  return {
+    id: account.volunteerId ?? account.id,
     name: account.name,
     firstName: firstNameFor(account.name),
     initials: initialsOf(account.name),
@@ -84,7 +77,7 @@ function workspaceForAccount(account: Account | null): DemoWorkspace {
     tone: "violet",
     email: account.email,
     phone: "",
-    joinedAt: new Date().toISOString(),
+    joinedAt: now,
     status: "onboarding",
     skills: [],
     languages: [],
@@ -95,6 +88,17 @@ function workspaceForAccount(account: Account | null): DemoWorkspace {
     interests: "",
     availability: [],
   };
+}
+
+function workspaceForAccount(account: Account | null): DemoWorkspace {
+  if (!account || account.role !== "volunteer" || !account.volunteerId) return demoWorkspace;
+  const volunteerId = account.volunteerId;
+  if (demoWorkspace.volunteers.some((volunteer) => volunteer.id === volunteerId)) {
+    return volunteerId === demoWorkspace.currentVolunteerId
+      ? demoWorkspace
+      : { ...demoWorkspace, currentVolunteerId: volunteerId };
+  }
+  const volunteer = newVolunteer(account, new Date().toISOString());
   return {
     ...demoWorkspace,
     currentVolunteerId: volunteerId,
@@ -132,29 +136,7 @@ function blankWorkspace(org: OrganizationScope | null, account: Account | null):
   };
   // The signed-in volunteer is here before a roster row exists; the account id
   // keeps the record stable.
-  const volunteer: Volunteer | null =
-    account?.role === "volunteer"
-      ? {
-          id: account.volunteerId ?? account.id,
-          name: account.name,
-          firstName: firstNameFor(account.name),
-          initials: initialsOf(account.name),
-          role: "Volunteer",
-          tone: "violet",
-          email: account.email,
-          phone: "",
-          joinedAt: now,
-          status: "onboarding",
-          skills: [],
-          languages: [],
-          causes: [],
-          hoursVerified: 0,
-          attendanceRate: 0,
-          eventsCompleted: 0,
-          interests: "",
-          availability: [],
-        }
-      : null;
+  const volunteer = account?.role === "volunteer" ? newVolunteer(account, now) : null;
   return {
     schemaVersion: demoWorkspace.schemaVersion,
     now: now,

@@ -76,45 +76,31 @@ pub fn rank(conn: &Connection, shift_id: &str, role: &str) -> Result<Replacement
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
     let waiting = rows.len();
-    let mut checked: Vec<WaitlistCandidate> = Vec::with_capacity(waiting);
+    let mut ranked = Vec::with_capacity(waiting);
+    let mut first_eligible = None;
     for (volunteer_id, name, initials, position, joined_at, attendance_rate) in rows {
-        let eligible = validate_registration(conn, shift_id, &volunteer_id, role).is_ok();
-        checked.push(WaitlistCandidate {
+        let (eligible, reason) = match validate_registration(conn, shift_id, &volunteer_id, role) {
+            Ok(_) => {
+                let reason = if first_eligible.is_none() {
+                    first_eligible = Some(ranked.len());
+                    "First eligible volunteer on the waitlist, and still meets every requirement for this role."
+                } else {
+                    "Eligible, but behind someone who is also eligible."
+                };
+                (true, reason.to_string())
+            }
+            Err(error) => (false, error.to_string()),
+        };
+        ranked.push(WaitlistCandidate {
             volunteer_id,
             name,
             initials,
             position,
             eligible,
-            reason: String::new(),
+            reason,
             attendance_rate,
             joined_at,
         });
-    }
-
-    // The first person who can take the seat, and the people in front of them
-    // who could not. Whoever comes after the recommendation is not this seat's
-    // business, so their reasons are recorded but not read out.
-    let first_eligible = checked.iter().position(|row| row.eligible);
-    let mut ranked: Vec<WaitlistCandidate> = Vec::with_capacity(waiting);
-    for (index, mut row) in checked.into_iter().enumerate() {
-        if row.eligible {
-            row.reason = if Some(index) == first_eligible {
-                "First eligible volunteer on the waitlist, and still meets every requirement for this role."
-                    .to_string()
-            } else {
-                "Eligible, but behind someone who is also eligible.".to_string()
-            };
-        } else {
-            // The eligibility gate already writes the sentence a person would
-            // say: "This role needs a valid Food safety handler on the shift
-            // date." Asking again and keeping the answer is what makes the skip
-            // reasons honest.
-            row.reason = validate_registration(conn, shift_id, &row.volunteer_id, role)
-                .err()
-                .map(|error| error.to_string())
-                .unwrap_or_else(|| "Not eligible for this role".into());
-        }
-        ranked.push(row);
     }
 
     let recommended = first_eligible.map(|index| ranked[index].clone());

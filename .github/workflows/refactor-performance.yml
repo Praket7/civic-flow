@@ -1,0 +1,88 @@
+name: Refactor performance comparison
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    if: github.head_ref == 'competition-source-consolidation'
+    name: Same-runner source and performance comparison
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      VITE_SUPABASE_URL: https://imzdblvljdcbnxtwbmbw.supabase.co
+      VITE_SUPABASE_ANON_KEY: sb_publishable_ci_only_dummy_key
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: baseline
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: candidate/.node-version
+          cache: pnpm
+          cache-dependency-path: candidate/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Record comparable builds and hardware
+        run: |
+          set -euo pipefail
+          mkdir comparison
+          {
+            uname -a
+            lscpu
+            node --version
+            rustc --version
+            google-chrome --version
+          } > comparison/hardware.txt
+          for variant in baseline candidate; do
+            (
+              cd "$variant"
+              git rev-parse HEAD > "../comparison/$variant.sha"
+              git ls-tree -r -l HEAD > "../comparison/$variant.tree"
+              pnpm install --frozen-lockfile
+              pnpm build:hosted
+              node scripts/check-bundle-budget.mjs
+              cp dist/bundle-budget-report.json "../comparison/$variant.bundle.json"
+              node scripts/check-judge-build.mjs
+              cargo test --locked --manifest-path src-tauri/core/Cargo.toml --test roster_performance --no-run
+            )
+          done
+      - name: Interleave native and browser workloads
+        run: |
+          set -euo pipefail
+          # Both versions execute the identical fixtures on this runner.
+          # Each browser journey starts a fresh Chromium profile.
+          for variant in baseline candidate candidate baseline baseline candidate; do
+            (
+              cd "$variant"
+              cargo test --locked --manifest-path src-tauri/core/Cargo.toml --test roster_performance -- --ignored --nocapture --test-threads=1 2>&1 | tee -a "../comparison/$variant.native.txt"
+              /usr/bin/time -f '%e' -a -o "../comparison/$variant.browser-seconds.txt" node scripts/audit-judge-flow.mjs
+            )
+          done
+      - name: Compare measured source size, coverage, and timing
+        run: |
+          python3 candidate/scripts/compare-refactor-performance.py comparison
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: same-runner-performance-comparison
+          path: comparison/
+          if-no-files-found: error

@@ -1,4 +1,4 @@
-import { validIsoDate, zonedShiftStart } from "./dates";
+import { previewDayKey, previewPeriod, validIsoDate, zonedShiftStart } from "./dates";
 /**
  * Browser fallback for the workflow store: mirrors the snapshot contract over
  * the shared seed and localStorage. Chosen by `getWorkspaceRepository()` when
@@ -72,7 +72,13 @@ import { IMPORT_COLUMNS, previewVolunteerCsv } from "./preview/volunteerImport";
 import { createPreviewRosterStorage } from "./preview/rosterStorage";
 import { createPreviewRosterPolicyStore } from "./preview/rosterPolicyStore";
 import { createPreviewBackupStore } from "./preview/backupStore";
-import { createPreviewRosterEngine, roleRequirement } from "./preview/rosterEngine";
+import {
+  createPreviewRosterEngine,
+  hasRosterSkill,
+  roleRequirement,
+  rosterAgeOn,
+  validRosterCredential,
+} from "./preview/rosterEngine";
 import { demoWorkspace } from "./dataset";
 import {
   blankWorkspaceForOrganization,
@@ -555,10 +561,7 @@ function validateJourneySeat(
   )
     throw new Error("This shift overlaps an existing registration.");
   const requirement = roleRequirement(role);
-  if (
-    requirement.skill &&
-    !volunteer.skills.some((skill) => skill.toLowerCase().includes(requirement.skill.toLowerCase()))
-  )
+  if (requirement.skill && !hasRosterSkill(volunteer, requirement.skill))
     throw new Error(`Required skill: ${requirement.skill}.`);
   if (
     requirement.credential &&
@@ -566,12 +569,15 @@ function validateJourneySeat(
       (row) =>
         row.volunteerId === volunteerId &&
         row.name.toLowerCase() === requirement.credential?.toLowerCase() &&
-        row.verifiedAt &&
-        row.validFrom.slice(0, 10) <= shift.startsAt.slice(0, 10) &&
-        row.validThrough.slice(0, 10) >= shift.startsAt.slice(0, 10),
+        validRosterCredential(row, shift.startsAt.slice(0, 10)),
     )
   )
     throw new Error(`A verified ${requirement.credential} credential is required.`);
+  if (
+    requirement.minimumAge !== undefined &&
+    (rosterAgeOn(volunteer.birthdate, shift.startsAt.slice(0, 10)) ?? -1) < requirement.minimumAge
+  )
+    throw new Error(`This role requires a verified age of at least ${requirement.minimumAge}.`);
 }
 
 function journeyNotice(
@@ -731,6 +737,22 @@ function previewSession(account: Account): AuthSession {
   };
 }
 
+function openOrganizationScope(
+  access: Awaited<ReturnType<WorkspaceRepository["createOrganization"]>>,
+  showCoordinator: boolean,
+): void {
+  const org = access.organization;
+  const role = access.membership.role;
+  applyScope({
+    id: org.id,
+    name: org.name,
+    coordinatorName:
+      showCoordinator || role === "owner" || role === "coordinator" ? org.name : undefined,
+    image: org.image ?? undefined,
+    imageAlt: org.imageAlt ?? undefined,
+  });
+}
+
 export const previewRepository: WorkspaceRepository = {
   source: "preview",
   async listOrganizations() {
@@ -745,26 +767,11 @@ export const previewRepository: WorkspaceRepository = {
       return;
     }
     const access = previewOrganizations.select(requirePreviewAccount(), organizationId);
-    applyScope({
-      id: access.organization.id,
-      name: access.organization.name,
-      coordinatorName:
-        access.membership.role === "owner" || access.membership.role === "coordinator"
-          ? access.organization.name
-          : undefined,
-      image: access.organization.image ?? undefined,
-      imageAlt: access.organization.imageAlt ?? undefined,
-    });
+    openOrganizationScope(access, false);
   },
   async createOrganization(input) {
     const access = previewOrganizations.create(requirePreviewAccount(), input);
-    applyScope({
-      id: access.organization.id,
-      name: access.organization.name,
-      coordinatorName: access.organization.name,
-      image: access.organization.image ?? undefined,
-      imageAlt: access.organization.imageAlt ?? undefined,
-    });
+    openOrganizationScope(access, true);
     return access;
   },
   async updateOrganization(organizationId, patch) {
@@ -784,24 +791,12 @@ export const previewRepository: WorkspaceRepository = {
   },
   async redeemOrganizationInvite(code) {
     const access = previewOrganizations.redeem(requirePreviewAccount(), code);
-    applyScope({
-      id: access.organization.id,
-      name: access.organization.name,
-      coordinatorName: access.organization.name,
-      image: access.organization.image ?? undefined,
-      imageAlt: access.organization.imageAlt ?? undefined,
-    });
+    openOrganizationScope(access, true);
     return access;
   },
   async joinPublicOrganization(organizationId) {
     const access = previewOrganizations.join(requirePreviewAccount(), organizationId);
-    applyScope({
-      id: access.organization.id,
-      name: access.organization.name,
-      coordinatorName: access.organization.name,
-      image: access.organization.image ?? undefined,
-      imageAlt: access.organization.imageAlt ?? undefined,
-    });
+    openOrganizationScope(access, true);
     return access;
   },
   async setOrganizationMemberRole(organizationId, userId, role) {
@@ -1982,19 +1977,6 @@ const PREVIEW_PRIORITY_LEVELS: PriorityLevel[] = [
 
 const { readRosterPolicy, writeRosterPolicy, validateRosterPolicy } =
   createPreviewRosterPolicyStore(scoped, PREVIEW_PRIORITY_LEVELS);
-
-function previewDayKey(startsAt: string): string {
-  return ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][
-    new Date(startsAt.slice(0, 10) + "T00:00:00Z").getUTCDay()
-  ];
-}
-
-function previewPeriod(startsAt: string): string {
-  const hour = Number(startsAt.slice(11, 13));
-  if (hour < 12) return "morning";
-  if (hour < 17) return "afternoon";
-  return "evening";
-}
 
 /// Coordinator locks are a property of a live assignment. The preview keeps them
 // for the session; the desktop stores them on the registration row.

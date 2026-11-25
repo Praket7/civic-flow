@@ -243,13 +243,26 @@ fn require_self_or_coordinator(account: &Account, volunteer_id: &str) -> Result<
 }
 
 /// The snapshot is redacted for volunteers before it crosses the IPC bridge.
+fn snapshot_volunteer(account: &Account) -> Result<Option<&str>, AppError> {
+    if account.role == "coordinator" {
+        return Ok(None);
+    }
+    account.volunteer_id.as_deref().map(Some).ok_or_else(|| {
+        AppError::from(CoreError::rule("FORBIDDEN", "Volunteer profile is required.", None, None))
+    })
+}
+
 fn snapshot_for(database: &Database, account: &Account) -> Result<WorkspaceSnapshot, AppError> {
-    let volunteer_id = if account.role == "volunteer" {
-        account.volunteer_id.as_deref()
-    } else {
-        None
-    };
-    workflows::snapshot_for(database.connection(), volunteer_id).map_err(AppError::from)
+    workflows::snapshot_for(database.connection(), snapshot_volunteer(account)?).map_err(AppError::from)
+}
+
+fn mutation_snapshot(
+    database: &Database,
+    account: &Account,
+    snapshot: WorkspaceSnapshot,
+) -> Result<WorkspaceSnapshot, AppError> {
+    workflows::redact_snapshot(database.connection(), snapshot, snapshot_volunteer(account)?)
+        .map_err(AppError::from)
 }
 
 fn volunteer_audience(account: &Account) -> (&str, Option<&str>) {
@@ -874,9 +887,7 @@ fn update_roster_policy(
     policy: RosterPolicy,
 ) -> Result<RosterPolicyView, AppError> {
     let (database, account) = state.coordinator(&token)?;
-    let organization_id = roster::workspace_organization_id(database.connection())
-        .map_err(AppError::from)?
-        .ok_or_else(|| AppError::from(CoreError::NotFound("the workspace organization".into())))?;
+    let organization_id = workspace_organization(&database)?;
     policy::save_policy(database.connection(), &account, &organization_id, &policy)
         .map_err(AppError::from)?;
     policy_view(&database)
@@ -909,10 +920,9 @@ fn apply_roster_plan(
     shift_id: String,
     assignments: Vec<roster::RosterApplyAssignment>,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let (database, account) = state.coordinator(&token)?;
+    let (database, _) = state.coordinator(&token)?;
     roster::apply_roster_plan(database.connection(), &shift_id, &assignments)
-        .map_err(AppError::from)?;
-    snapshot_for(&database, &account)
+        .map_err(AppError::from)
 }
 
 /// Applies every assignment of a reviewed week in one transaction. A plan that
@@ -925,15 +935,14 @@ fn apply_roster_week(
     expected_policy_version: Option<i64>,
     assignments: Vec<roster::WeeklyAssignment>,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let (database, account) = state.coordinator(&token)?;
+    let (database, _) = state.coordinator(&token)?;
     roster::apply_roster_week(
         database.connection(),
         expected_revision,
         expected_policy_version,
         &assignments,
     )
-    .map_err(AppError::from)?;
-    snapshot_for(&database, &account)
+    .map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -1144,10 +1153,9 @@ fn save_report_view(
     scope: String,
     filters_json: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let (database, account) = state.coordinator(&token)?;
+    let (database, _) = state.coordinator(&token)?;
     workflows::save_report_view(database.connection(), &name, &scope, &filters_json)
-        .map_err(AppError::from)?;
-    snapshot_for(&database, &account)
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -1158,9 +1166,9 @@ fn set_saved_opportunity(
     saved: bool,
 ) -> Result<WorkspaceSnapshot, AppError> {
     let (database, account) = state.member(&token)?;
-    workflows::set_saved_opportunity(database.connection(), &opportunity_id, saved)
+    let result = workflows::set_saved_opportunity(database.connection(), &opportunity_id, saved)
         .map_err(AppError::from)?;
-    snapshot_for(&database, &account)
+    mutation_snapshot(&database, &account, result)
 }
 
 #[tauri::command]
@@ -1170,10 +1178,9 @@ fn set_application_stage(
     application_id: String,
     stage: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let (database, account) = state.coordinator(&token)?;
+    let (database, _) = state.coordinator(&token)?;
     workflows::set_application_stage(database.connection(), &application_id, &stage)
-        .map_err(AppError::from)?;
-    snapshot_for(&database, &account)
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -1233,9 +1240,9 @@ fn check_in_volunteer(
             Some("ASK_SHIFT_LEAD".into()),
         )));
     }
-    workflows::check_in(database.connection(), &shift_id, &volunteer_id, &code)
+    let result = workflows::check_in(database.connection(), &shift_id, &volunteer_id, &code)
         .map_err(AppError::from)?;
-    snapshot_for(&database, &account)
+    mutation_snapshot(&database, &account, result)
 }
 
 /// A coordinator recording an arrival themselves. Separate from self check-in
@@ -1248,10 +1255,9 @@ fn manual_check_in(
     volunteer_id: String,
     reason: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let (database, account) = state.coordinator(&token)?;
+    let (database, _) = state.coordinator(&token)?;
     workflows::manual_check_in(database.connection(), &shift_id, &volunteer_id, &reason)
-        .map_err(AppError::from)?;
-    snapshot_for(&database, &account)
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -1263,9 +1269,9 @@ fn check_out_volunteer(
 ) -> Result<WorkspaceSnapshot, AppError> {
     let (database, account) = state.member(&token)?;
     require_self_or_coordinator(&account, &volunteer_id)?;
-    workflows::check_out(database.connection(), &shift_id, &volunteer_id)
+    let result = workflows::check_out(database.connection(), &shift_id, &volunteer_id)
         .map_err(AppError::from)?;
-    snapshot_for(&database, &account)
+    mutation_snapshot(&database, &account, result)
 }
 
 #[tauri::command]
@@ -1275,10 +1281,9 @@ fn mark_volunteer_no_show(
     shift_id: String,
     volunteer_id: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let (database, account) = state.coordinator(&token)?;
+    let (database, _) = state.coordinator(&token)?;
     workflows::mark_no_show(database.connection(), &shift_id, &volunteer_id)
-        .map_err(AppError::from)?;
-    snapshot_for(&database, &account)
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -1291,14 +1296,14 @@ fn cancel_registration(
 ) -> Result<WorkspaceSnapshot, AppError> {
     let (database, account) = state.member(&token)?;
     require_self_or_coordinator(&account, &volunteer_id)?;
-    workflows::cancel_registration(
+    let result = workflows::cancel_registration(
         database.connection(),
         &shift_id,
         &volunteer_id,
         reason.as_deref().unwrap_or_default(),
     )
     .map_err(AppError::from)?;
-    snapshot_for(&database, &account)
+    mutation_snapshot(&database, &account, result)
 }
 
 #[tauri::command]
@@ -1311,9 +1316,9 @@ fn join_waitlist(
 ) -> Result<WorkspaceSnapshot, AppError> {
     let (database, account) = state.member(&token)?;
     require_self_or_coordinator(&account, &volunteer_id)?;
-    workflows::join_waitlist(database.connection(), &shift_id, &volunteer_id, &role)
+    let result = workflows::join_waitlist(database.connection(), &shift_id, &volunteer_id, &role)
         .map_err(AppError::from)?;
-    snapshot_for(&database, &account)
+    mutation_snapshot(&database, &account, result)
 }
 
 #[tauri::command]
@@ -1323,10 +1328,9 @@ fn promote_waitlist(
     shift_id: String,
     volunteer_id: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let (database, account) = state.coordinator(&token)?;
+    let (database, _) = state.coordinator(&token)?;
     workflows::promote_waitlist(database.connection(), &shift_id, &volunteer_id)
-        .map_err(AppError::from)?;
-    snapshot_for(&database, &account)
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -1338,7 +1342,7 @@ fn review_hours(
     approved_minutes: Option<i64>,
     reason: String,
 ) -> Result<WorkspaceSnapshot, AppError> {
-    let (database, account) = state.coordinator(&token)?;
+    let (database, _) = state.coordinator(&token)?;
     workflows::review_hours(
         database.connection(),
         &entry_id,
@@ -1346,8 +1350,7 @@ fn review_hours(
         approved_minutes,
         &reason,
     )
-    .map_err(AppError::from)?;
-    snapshot_for(&database, &account)
+    .map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -1365,8 +1368,8 @@ fn update_workspace_settings(
             Some("RETURN_TO_VOLUNTEER_HOME".into()),
         )));
     }
-    workflows::update_settings(database.connection(), patch).map_err(AppError::from)?;
-    snapshot_for(&database, &account)
+    let result = workflows::update_settings(database.connection(), patch).map_err(AppError::from)?;
+    mutation_snapshot(&database, &account, result)
 }
 
 #[tauri::command]
@@ -1389,9 +1392,9 @@ fn register_for_shift(
 ) -> Result<WorkspaceSnapshot, AppError> {
     let (database, account) = state.member(&token)?;
     require_self_or_coordinator(&account, &volunteer_id)?;
-    workflows::register_for_shift(database.connection(), &shift_id, &volunteer_id, &role)
+    let result = workflows::register_for_shift(database.connection(), &shift_id, &volunteer_id, &role)
         .map_err(AppError::from)?;
-    snapshot_for(&database, &account)
+    mutation_snapshot(&database, &account, result)
 }
 
 // The IPC surface is deliberately flat: the WebView sends one patch object's
@@ -1419,7 +1422,7 @@ fn save_volunteer_profile(
             None,
         )));
     }
-    workflows::save_volunteer_profile(
+    let result = workflows::save_volunteer_profile(
         database.connection(),
         civicflow_core::models::VolunteerProfilePatch {
             skills,
@@ -1432,7 +1435,7 @@ fn save_volunteer_profile(
         },
     )
     .map_err(AppError::from)?;
-    snapshot_for(&database, &account)
+    mutation_snapshot(&database, &account, result)
 }
 
 /// The only path that seeds fixture records. The session is short-lived.

@@ -782,7 +782,15 @@ fn load_roster(conn: &Connection) -> Result<Vec<crate::models::RosterVolunteer>>
 /// report views) are removed, and every volunteer-owned row is limited to the
 /// signed-in person. A coordinator gets the unredacted snapshot.
 pub fn snapshot_for(conn: &Connection, volunteer_id: Option<&str>) -> Result<WorkspaceSnapshot> {
-    let mut snapshot = snapshot(conn)?;
+    redact_snapshot(conn, snapshot(conn)?, volunteer_id)
+}
+
+/// Reuse an already-loaded mutation result instead of re-reading the entire workspace.
+pub fn redact_snapshot(
+    conn: &Connection,
+    mut snapshot: WorkspaceSnapshot,
+    volunteer_id: Option<&str>,
+) -> Result<WorkspaceSnapshot> {
     let Some(volunteer_id) = volunteer_id else {
         return Ok(snapshot);
     };
@@ -1029,7 +1037,9 @@ fn has_credential(
         .query_row(
             "SELECT 1 FROM volunteer_credentials vc
              JOIN credential_types ct ON ct.id = vc.credential_type_id
-             WHERE vc.volunteer_id = ?1 AND ct.name = ?2 AND vc.valid_through >= ?3",
+             WHERE vc.volunteer_id = ?1 AND ct.name = ?2
+               AND date(vc.valid_from) <= ?3 AND date(vc.valid_through) >= ?3
+               AND vc.verified_at IS NOT NULL AND trim(vc.verified_at) <> ''",
             params![volunteer_id, credential, on_date],
             |_| Ok(()),
         )
@@ -1134,6 +1144,16 @@ pub(crate) fn validate_registration(
     volunteer_id: &str,
     role: &str,
 ) -> Result<ShiftRules> {
+    validate_seat_request(conn, shift_id, volunteer_id, role, false)
+}
+
+fn validate_seat_request(
+    conn: &Connection,
+    shift_id: &str,
+    volunteer_id: &str,
+    role: &str,
+    waiting: bool,
+) -> Result<ShiftRules> {
     let shift = shift_rules(conn, shift_id)?;
     if shift.status != "scheduled" {
         return Err(CoreError::rule(
@@ -1175,7 +1195,7 @@ pub(crate) fn validate_registration(
             Some("CHOOSE_ROLE".into()),
         ));
     };
-    if filled >= required {
+    if !waiting && filled >= required {
         return Err(CoreError::rule(
             "ROLE_FULL",
             "That role is already filled.",
@@ -1228,6 +1248,9 @@ pub(crate) fn validate_registration(
                 ))
             }
         }
+    }
+    if waiting {
+        return Ok(shift);
     }
     ensure_available(conn, volunteer_id, shift_id)?;
     ensure_no_overlap(conn, volunteer_id, shift_id)?;
@@ -2076,6 +2099,35 @@ pub fn mark_no_show(
     snapshot(conn)
 }
 
+/// Insert a seat once and update both occupancy counters in the same transaction.
+pub(crate) fn reserve_seat(
+    conn: &Connection,
+    shift_id: &str,
+    volunteer_id: &str,
+    role: &str,
+) -> Result<bool> {
+    let created = conn.execute(
+        "INSERT INTO registrations (shift_id, volunteer_id, role, created_at, status, updated_at)
+         VALUES (?1, ?2, ?3, ?4, 'registered', ?4)
+         ON CONFLICT(shift_id, volunteer_id) DO UPDATE SET
+           role = excluded.role, status = 'registered', updated_at = excluded.updated_at
+         WHERE registrations.status <> 'registered'",
+        params![shift_id, volunteer_id, role, now(conn)?],
+    )?;
+    if created != 0 {
+        conn.execute(
+            "UPDATE shifts SET confirmed = confirmed + 1 WHERE id = ?1",
+            params![shift_id],
+        )?;
+        conn.execute(
+            "UPDATE shift_roles SET filled = filled + 1
+             WHERE shift_id = ?1 AND name = ?2 AND filled < required",
+            params![shift_id, role],
+        )?;
+    }
+    Ok(created != 0)
+}
+
 pub fn promote_waitlist(
     conn: &Connection,
     shift_id: &str,
@@ -2101,15 +2153,8 @@ pub fn promote_waitlist(
     }
     validate_registration(conn, shift_id, volunteer_id, &role)?;
     let transaction = conn.unchecked_transaction()?;
-    let created = transaction.execute(
-        "INSERT INTO registrations (shift_id, volunteer_id, role, created_at, status, updated_at)
-         VALUES (?1, ?2, ?3, ?4, 'registered', ?4)
-         ON CONFLICT(shift_id, volunteer_id) DO UPDATE SET
-           role = excluded.role, status = 'registered', updated_at = excluded.updated_at
-         WHERE registrations.status <> 'registered'",
-        params![shift_id, volunteer_id, role, now(conn)?],
-    )?;
-    if created == 0 {
+    let created = reserve_seat(&transaction, shift_id, volunteer_id, &role)?;
+    if !created {
         // The seat was already held. The promotion still clears the waitlist
         // entry, but the counters have already counted this person.
         transaction.execute(
@@ -2122,15 +2167,6 @@ pub fn promote_waitlist(
     transaction.execute(
         "UPDATE waitlist_entries SET status = 'promoted' WHERE id = ?1",
         params![entry_id],
-    )?;
-    transaction.execute(
-        "UPDATE shifts SET confirmed = confirmed + 1 WHERE id = ?1",
-        params![shift_id],
-    )?;
-    transaction.execute(
-        "UPDATE shift_roles SET filled = filled + 1
-         WHERE shift_id = ?1 AND name = ?2 AND filled < required",
-        params![shift_id, role],
     )?;
     append_audit(
         &transaction,
@@ -2590,26 +2626,10 @@ pub fn register_for_shift(
     // Only a genuinely new seat may move the counters. The conditional update
     // makes a repeated or crafted call do nothing instead of counting the same
     // volunteer twice.
-    let created = transaction.execute(
-        "INSERT INTO registrations (shift_id, volunteer_id, role, created_at, status, updated_at)
-         VALUES (?1, ?2, ?3, ?4, 'registered', ?4)
-         ON CONFLICT(shift_id, volunteer_id) DO UPDATE SET
-           role = excluded.role, status = 'registered', updated_at = excluded.updated_at
-         WHERE registrations.status <> 'registered'",
-        params![shift_id, volunteer_id, role, now(conn)?],
-    )?;
-    if created == 0 {
+    let created = reserve_seat(&transaction, shift_id, volunteer_id, &role)?;
+    if !created {
         return snapshot(conn);
     }
-    transaction.execute(
-        "UPDATE shifts SET confirmed = confirmed + 1 WHERE id = ?1",
-        params![shift_id],
-    )?;
-    transaction.execute(
-        "UPDATE shift_roles SET filled = filled + 1
-         WHERE shift_id = ?1 AND name = ?2 AND filled < required",
-        params![shift_id, role],
-    )?;
     append_audit(
         &transaction,
         "shift.register",
@@ -2634,49 +2654,7 @@ pub fn join_waitlist(
     } else {
         role.trim().to_string()
     };
-    let shift = shift_rules(conn, shift_id)?;
-    if shift.starts_at <= now_datetime(conn)? {
-        return Err(CoreError::rule(
-            "REGISTRATION_CLOSED",
-            "This shift has already started.",
-            Some("shiftId".into()),
-            None,
-        ));
-    }
-    let (skill, credential, minimum_age) = role_requirement(conn, shift_id, &role)?;
-    if let Some(skill) = &skill {
-        if !has_skill(conn, volunteer_id, skill)? {
-            return Err(CoreError::rule(
-                "MISSING_SKILL",
-                format!("This role requires the {skill} skill."),
-                Some("role".into()),
-                None,
-            ));
-        }
-    }
-    if let Some(credential) = &credential {
-        let valid_through = shift.starts_at.format("%Y-%m-%d").to_string();
-        if !has_credential(conn, volunteer_id, credential, &valid_through)? {
-            return Err(CoreError::rule(
-                "CREDENTIAL_EXPIRED",
-                format!("This role needs a valid {credential} on the shift date."),
-                Some("credentials".into()),
-                Some("RENEW_CREDENTIAL".into()),
-            ));
-        }
-    }
-    if let Some(minimum_age) = minimum_age {
-        if volunteer_age(conn, volunteer_id, shift.starts_at.date_naive())?.unwrap_or(0)
-            < minimum_age
-        {
-            return Err(CoreError::rule(
-                "AGE_REQUIREMENT",
-                format!("This role requires volunteers to be {minimum_age} or older."),
-                Some("birthdate".into()),
-                None,
-            ));
-        }
-    }
+    ensure_shift(conn, shift_id)?;
     // Joining twice keeps the place already held. Only a new waitlist entry
     // takes the back of the queue, so a refresh never demotes somebody.
     let waiting: Option<i64> = conn
@@ -2690,12 +2668,28 @@ pub fn join_waitlist(
     if waiting.is_some() {
         return snapshot(conn);
     }
-    let position: i64 = conn.query_row(
+    let registered: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM registrations
+         WHERE shift_id = ?1 AND volunteer_id = ?2 AND status = 'registered')",
+        params![shift_id, volunteer_id],
+        |row| row.get(0),
+    )?;
+    if registered {
+        return Err(CoreError::rule(
+            "ALREADY_REGISTERED",
+            "This volunteer already holds a seat.",
+            Some("shiftId".into()),
+            None,
+        ));
+    }
+    let shift = validate_seat_request(conn, shift_id, volunteer_id, &role, true)?;
+    let transaction = conn.unchecked_transaction()?;
+    let position: i64 = transaction.query_row(
         "SELECT COALESCE(MAX(position), 0) + 1 FROM waitlist_entries WHERE shift_id = ?1",
         params![shift_id],
         |row| row.get(0),
     )?;
-    conn.execute(
+    transaction.execute(
         "INSERT INTO waitlist_entries
          (id, shift_id, volunteer_id, created_at, status, position, eligible_role)
          VALUES (?1, ?2, ?3, ?4, 'waiting', ?5, ?6)
@@ -2711,7 +2705,7 @@ pub fn join_waitlist(
         ],
     )?;
     append_audit(
-        conn,
+        &transaction,
         "waitlist.join",
         "shift",
         shift_id,
@@ -2719,7 +2713,7 @@ pub fn join_waitlist(
         Some(format!("Position {position}")),
     )?;
     append_notification(
-        conn,
+        &transaction,
         "COVERAGE_REQUEST",
         "Waitlist joined",
         &format!("{name} is waiting for a {} seat.", shift.title),
@@ -2730,6 +2724,7 @@ pub fn join_waitlist(
             volunteer_id: None,
         },
     )?;
+    transaction.commit()?;
     snapshot(conn)
 }
 

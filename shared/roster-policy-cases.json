@@ -1,0 +1,251 @@
+{
+  "credentials": {
+    "current": {
+      "validFrom": "2026-01-01",
+      "validThrough": "2027-01-01",
+      "verifiedAt": "2026-01-01"
+    },
+    "future": {
+      "validFrom": "2026-10-18",
+      "validThrough": "2027-01-01",
+      "verifiedAt": "2026-01-01"
+    },
+    "expired": {
+      "validFrom": "2026-01-01",
+      "validThrough": "2026-10-16",
+      "verifiedAt": "2026-01-01"
+    },
+    "unverified": {
+      "validFrom": "2026-01-01",
+      "validThrough": "2027-01-01",
+      "verifiedAt": " "
+    },
+    "malformed": {
+      "validFrom": "2026-02-30",
+      "validThrough": "2027-01-01",
+      "verifiedAt": "2026-01-01"
+    },
+    "boundary": {
+      "validFrom": "2026-10-17",
+      "validThrough": "2026-10-17",
+      "verifiedAt": "2026-10-16"
+    }
+  },
+  "bookings": {
+    "adjacent": [
+      {
+        "shiftId": "earlier",
+        "startsAt": "2026-10-17T08:00:00-04:00",
+        "endsAt": "2026-10-17T09:00:00-04:00"
+      }
+    ],
+    "overlap": [
+      {
+        "shiftId": "overlap",
+        "startsAt": "2026-10-17T10:00:00-04:00",
+        "endsAt": "2026-10-17T11:00:00-04:00"
+      }
+    ],
+    "prior": [
+      {
+        "shiftId": "prior",
+        "startsAt": "2026-10-16T09:00:00-04:00",
+        "endsAt": "2026-10-16T11:00:00-04:00"
+      }
+    ],
+    "two": [
+      {
+        "shiftId": "first",
+        "startsAt": "2026-10-15T09:00:00-04:00",
+        "endsAt": "2026-10-15T11:00:00-04:00"
+      },
+      {
+        "shiftId": "second",
+        "startsAt": "2026-10-16T09:00:00-04:00",
+        "endsAt": "2026-10-16T11:00:00-04:00"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "qualified driver",
+      "score": 96
+    },
+    {
+      "name": "exact skill not substring",
+      "skills": ["Driver assistant"],
+      "score": null
+    },
+    {
+      "name": "missing credential",
+      "credential": "missing",
+      "score": null
+    },
+    {
+      "name": "missing credential explicitly allowed",
+      "credential": "missing",
+      "policy": {
+        "unknownCredentialBehavior": "allow"
+      },
+      "score": 96
+    },
+    {
+      "name": "future credential remains blocked",
+      "credential": "future",
+      "policy": {
+        "unknownCredentialBehavior": "allow"
+      },
+      "score": null
+    },
+    {
+      "name": "expired credential remains blocked",
+      "credential": "expired",
+      "policy": {
+        "unknownCredentialBehavior": "allow"
+      },
+      "score": null
+    },
+    {
+      "name": "blank verification remains blocked",
+      "credential": "unverified",
+      "policy": {
+        "unknownCredentialBehavior": "allow"
+      },
+      "score": null
+    },
+    {
+      "name": "impossible credential date",
+      "credential": "malformed",
+      "score": null
+    },
+    {
+      "name": "inclusive credential dates",
+      "credential": "boundary",
+      "score": 96
+    },
+    {
+      "name": "underage",
+      "birthdate": "2010-01-01",
+      "score": null
+    },
+    {
+      "name": "birthday on shift day",
+      "birthdate": "2008-10-17",
+      "score": 96
+    },
+    {
+      "name": "birthday next day",
+      "birthdate": "2008-10-18",
+      "score": null
+    },
+    {
+      "name": "missing age",
+      "birthdate": "",
+      "score": null
+    },
+    {
+      "name": "missing age allowed",
+      "birthdate": "",
+      "policy": {
+        "unknownAgeBehavior": "allow"
+      },
+      "score": 96
+    },
+    {
+      "name": "invalid age date",
+      "birthdate": "1990-02-30",
+      "score": null
+    },
+    {
+      "name": "unknown availability",
+      "availability": "none",
+      "score": null
+    },
+    {
+      "name": "partial availability",
+      "availability": "partial",
+      "score": null
+    },
+    {
+      "name": "overlap blocked",
+      "booking": "overlap",
+      "score": null
+    },
+    {
+      "name": "overlap explicitly allowed",
+      "booking": "overlap",
+      "options": {
+        "blockConflicts": false
+      },
+      "score": 94
+    },
+    {
+      "name": "adjacent allowed",
+      "booking": "adjacent",
+      "score": 94
+    },
+    {
+      "name": "minimum rest enforced",
+      "booking": "adjacent",
+      "policy": {
+        "minimumGapMinutes": 30
+      },
+      "score": null
+    },
+    {
+      "name": "daily shift cap",
+      "booking": "adjacent",
+      "policy": {
+        "maxShiftsPerDay": 1
+      },
+      "score": null
+    },
+    {
+      "name": "daily minutes cap",
+      "booking": "adjacent",
+      "policy": {
+        "maxMinutesPerDay": 180
+      },
+      "score": null
+    },
+    {
+      "name": "weekly shift cap",
+      "booking": "prior",
+      "policy": {
+        "maxShiftsPerWeek": 1
+      },
+      "score": null
+    },
+    {
+      "name": "weekly minutes cap",
+      "booking": "prior",
+      "policy": {
+        "maxMinutesPerWeek": 240
+      },
+      "score": null
+    },
+    {
+      "name": "weekly option cap",
+      "booking": "two",
+      "options": {
+        "capWeekly": true
+      },
+      "score": null
+    },
+    {
+      "name": "Spanish skill contributes to preference",
+      "skills": ["Driver", "Spanish"],
+      "options": {
+        "preferSpanish": true
+      },
+      "score": 98
+    },
+    {
+      "name": "custom skill weighting",
+      "policy": {
+        "skillWeight": 15
+      },
+      "score": 76
+    }
+  ]
+}
