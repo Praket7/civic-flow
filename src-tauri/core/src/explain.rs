@@ -363,8 +363,7 @@ mod tests {
 
     #[test]
     fn counterfactuals_distinguish_two_seats_for_the_same_role() {
-        let candidates =
-            ["a", "b", "c"].map(|id| candidate(id, &["Packing"], &["sat:morning"]));
+        let candidates = ["a", "b", "c"].map(|id| candidate(id, &["Packing"], &["sat:morning"]));
         let slots = [
             slot("seat-1", "Packing", "Packing", "2026-10-17T09:00:00-04:00"),
             slot("seat-2", "Packing", "Packing", "2026-10-17T09:00:00-04:00"),

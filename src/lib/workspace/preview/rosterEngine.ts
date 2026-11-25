@@ -533,8 +533,7 @@ export function createPreviewRosterEngine(context: {
   }
 
   function previewRequiredFilled(shape: PreviewPlanShape): number {
-    return shape.choices.filter(({ seat }) => seat.requiredSkill || seat.requiredCredential)
-      .length;
+    return shape.choices.filter(({ seat }) => seat.requiredSkill || seat.requiredCredential).length;
   }
 
   function previewComparison(
