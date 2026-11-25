@@ -1,4 +1,4 @@
-import { validIsoDate, zonedShiftStart } from "./dates";
+import { previewDayKey, previewPeriod, validIsoDate, zonedShiftStart } from "./dates";
 /**
  * Browser fallback for the workflow store: mirrors the snapshot contract over
  * the shared seed and localStorage. Chosen by `getWorkspaceRepository()` when
@@ -72,7 +72,13 @@ import { IMPORT_COLUMNS, previewVolunteerCsv } from "./preview/volunteerImport";
 import { createPreviewRosterStorage } from "./preview/rosterStorage";
 import { createPreviewRosterPolicyStore } from "./preview/rosterPolicyStore";
 import { createPreviewBackupStore } from "./preview/backupStore";
-import { createPreviewRosterEngine, roleRequirement } from "./preview/rosterEngine";
+import {
+  createPreviewRosterEngine,
+  hasRosterSkill,
+  roleRequirement,
+  rosterAgeOn,
+  validRosterCredential,
+} from "./preview/rosterEngine";
 import { demoWorkspace } from "./dataset";
 import {
   blankWorkspaceForOrganization,
@@ -557,7 +563,7 @@ function validateJourneySeat(
   const requirement = roleRequirement(role);
   if (
     requirement.skill &&
-    !volunteer.skills.some((skill) => skill.toLowerCase().includes(requirement.skill.toLowerCase()))
+    !hasRosterSkill(volunteer, requirement.skill)
   )
     throw new Error(`Required skill: ${requirement.skill}.`);
   if (
@@ -566,12 +572,15 @@ function validateJourneySeat(
       (row) =>
         row.volunteerId === volunteerId &&
         row.name.toLowerCase() === requirement.credential?.toLowerCase() &&
-        row.verifiedAt &&
-        row.validFrom.slice(0, 10) <= shift.startsAt.slice(0, 10) &&
-        row.validThrough.slice(0, 10) >= shift.startsAt.slice(0, 10),
+        validRosterCredential(row, shift.startsAt.slice(0, 10)),
     )
   )
     throw new Error(`A verified ${requirement.credential} credential is required.`);
+  if (
+    requirement.minimumAge !== undefined &&
+    (rosterAgeOn(volunteer.birthdate, shift.startsAt.slice(0, 10)) ?? -1) < requirement.minimumAge
+  )
+    throw new Error(`This role requires a verified age of at least ${requirement.minimumAge}.`);
 }
 
 function journeyNotice(
@@ -1971,19 +1980,6 @@ const PREVIEW_PRIORITY_LEVELS: PriorityLevel[] = [
 
 const { readRosterPolicy, writeRosterPolicy, validateRosterPolicy } =
   createPreviewRosterPolicyStore(scoped, PREVIEW_PRIORITY_LEVELS);
-
-function previewDayKey(startsAt: string): string {
-  return ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][
-    new Date(startsAt.slice(0, 10) + "T00:00:00Z").getUTCDay()
-  ];
-}
-
-function previewPeriod(startsAt: string): string {
-  const hour = Number(startsAt.slice(11, 13));
-  if (hour < 12) return "morning";
-  if (hour < 17) return "afternoon";
-  return "evening";
-}
 
 /// Coordinator locks are a property of a live assignment. The preview keeps them
 // for the session; the desktop stores them on the registration row.

@@ -123,3 +123,16 @@ export function zonedShiftStart(date: string, time: string, timeZone: string): s
   if (candidates.size !== 1) throw new Error("That local time is ambiguous or does not exist.");
   return new Date([...candidates][0]).toISOString();
 }
+
+export function previewDayKey(startsAt: string): string {
+  return ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][
+    new Date(startsAt.slice(0, 10) + "T00:00:00Z").getUTCDay()
+  ];
+}
+
+export function previewPeriod(startsAt: string): string {
+  const hour = Number(startsAt.slice(11, 13));
+  if (hour < 12) return "morning";
+  if (hour < 17) return "afternoon";
+  return "evening";
+}

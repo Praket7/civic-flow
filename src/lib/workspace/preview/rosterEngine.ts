@@ -1,5 +1,6 @@
 import type {
   CandidateAnswer,
+  Credential,
   CandidateEvaluation,
   ConstraintCheck,
   DemoWorkspace,
@@ -15,6 +16,8 @@ import type {
   SessionSnapshot,
   Volunteer,
 } from "../../../types/domain";
+import { validIsoDate } from "../dates";
+
 export function roleRequirement(role: string): {
   skill: string;
   credential: string | null;
@@ -34,6 +37,31 @@ export function roleRequirement(role: string): {
     return { skill: "Gardening", credential: "Garden tool safety" };
   }
   return { skill: "", credential: null };
+}
+
+export function hasRosterSkill(volunteer: Volunteer, skill: string): boolean {
+  return volunteer.skills.some((value) => value.toLowerCase() === skill.toLowerCase());
+}
+
+export function validRosterCredential(credential: Credential, on: string): boolean {
+  const from = credential.validFrom.slice(0, 10);
+  const through = credential.validThrough.slice(0, 10);
+  return Boolean(
+    credential.verifiedAt?.trim() &&
+      validIsoDate(from) &&
+      validIsoDate(through) &&
+      from <= on &&
+      through >= on,
+  );
+}
+
+export function rosterAgeOn(birthday: string | null | undefined, on: string): number | null {
+  if (!birthday || !validIsoDate(birthday)) return null;
+  return (
+    Number(on.slice(0, 4)) -
+    Number(birthday.slice(0, 4)) -
+    Number(on.slice(5) < birthday.slice(5))
+  );
 }
 
 /** Demo-only matching implementation; native Rust remains the production authority. */
@@ -98,7 +126,10 @@ export function createPreviewRosterEngine(context: {
   function previewSeats(shiftIds: string[]): PreviewSeat[] {
     const seats: PreviewSeat[] = [];
     for (const shift of workspace.shifts.filter(
-      (row) => shiftIds.includes(row.id) && row.status === "scheduled",
+      (row) =>
+        (!shiftIds.length || shiftIds.includes(row.id)) &&
+        row.status === "scheduled" &&
+        Date.parse(row.startsAt) > Date.parse(workspace.now),
     )) {
       const opportunity = workspace.opportunities.find((row) => row.id === shift.opportunityId);
       const live = state.registrations.filter(
@@ -149,9 +180,10 @@ export function createPreviewRosterEngine(context: {
     const load = emptyLoad();
     const now = new Date(workspace.now).getTime();
     const horizon = now + 7 * 86_400_000;
+    const shifts = new Map(workspace.shifts.map((shift) => [shift.id, shift]));
     for (const registration of state.registrations) {
       if (registration.status !== "registered") continue;
-      const shift = workspace.shifts.find((row) => row.id === registration.shiftId);
+      const shift = shifts.get(registration.shiftId);
       if (!shift) continue;
       const start = new Date(shift.startsAt).getTime();
       const blocks = load.blocks.get(registration.volunteerId) ?? [];
@@ -171,12 +203,10 @@ export function createPreviewRosterEngine(context: {
     return load;
   }
 
+  const baseLoad = previewBaseLoad();
+
   function previewAvailability(volunteer: Volunteer, seat: PreviewSeat): boolean {
-    if (volunteer.availability.length === 0) return false;
-    const period = previewPeriod(seat.startsAt);
-    return volunteer.availability.some(
-      (slot) => slot.day === seat.dayKey && slot.period === period,
-    );
+    return previewAvailabilityState(volunteer, seat) === "available";
   }
 
   function previewChecks(
@@ -197,9 +227,7 @@ export function createPreviewRosterEngine(context: {
         : "Not registered yet",
     });
     if (seat.requiredSkill) {
-      const skillMatch = volunteer.skills.some(
-        (skill) => skill.toLowerCase() === seat.requiredSkill.toLowerCase(),
-      );
+      const skillMatch = hasRosterSkill(volunteer, seat.requiredSkill);
       checks.push({
         name: "Required skill",
         passed: skillMatch,
@@ -214,10 +242,7 @@ export function createPreviewRosterEngine(context: {
           row.volunteerId === volunteer.id &&
           row.name.toLowerCase() === seat.requiredCredential!.toLowerCase(),
       );
-      const current = held.some(
-        (row) =>
-          row.verifiedAt && row.validFrom.slice(0, 10) <= on && row.validThrough.slice(0, 10) >= on,
-      );
+      const current = held.some((row) => validRosterCredential(row, on));
       const expired = !current && held.length > 0;
       checks.push({
         name: "Required credential",
@@ -231,13 +256,7 @@ export function createPreviewRosterEngine(context: {
     }
 
     if (seat.minimumAge !== undefined) {
-      const birthday = volunteer.birthdate;
-      const on = seat.startsAt.slice(0, 10);
-      const age = birthday
-        ? Number(on.slice(0, 4)) -
-          Number(birthday.slice(0, 4)) -
-          Number(on.slice(5) < birthday.slice(5, 10))
-        : null;
+      const age = rosterAgeOn(volunteer.birthdate, seat.startsAt.slice(0, 10));
       checks.push({
         name: "Minimum age",
         passed: age === null ? policy.unknownAgeBehavior === "allow" : age >= seat.minimumAge,
@@ -309,11 +328,10 @@ export function createPreviewRosterEngine(context: {
     seat: PreviewSeat,
     options: RosterOptions,
     policy: RosterPolicy,
-    load: PreviewLoad,
   ): { components: ScoreComponent[]; total: number } {
     const skillMatches =
       !seat.requiredSkill ||
-      volunteer.skills.some((skill) => skill.toLowerCase() === seat.requiredSkill.toLowerCase());
+      hasRosterSkill(volunteer, seat.requiredSkill);
     // A role with no requirement fits anyone eligible, slightly less precisely
     // than a matched requirement, which is how the solver scores it too.
     const skill = seat.requiredSkill
@@ -325,14 +343,14 @@ export function createPreviewRosterEngine(context: {
     const interest = volunteer.causes.includes(seat.cause as Volunteer["causes"][number])
       ? policy.interestWeight
       : 0;
-    const spanish = volunteer.languages.includes("Spanish");
+    const spanish = volunteer.languages.includes("Spanish") || hasRosterSkill(volunteer, "Spanish");
     const preference =
       seat.role.toLowerCase().includes("spanish") && spanish
         ? policy.languageWeight
         : options.preferSpanish && spanish
           ? previewShare(policy.languageWeight, 8, 10)
           : previewShare(policy.languageWeight, 6, 10);
-    const weekShifts = load.weekCount.get(volunteer.id) ?? 0;
+    const weekShifts = baseLoad.weekCount.get(volunteer.id) ?? 0;
     const fairness = previewShare(policy.fairnessWeight, 10 - Math.min(weekShifts, 4) * 2, 10);
     const reliability =
       volunteer.eventsCompleted === 0
@@ -396,14 +414,12 @@ export function createPreviewRosterEngine(context: {
   /**
    * One pass over open seats. `forced` pins a volunteer, as the Rust planner does.
    */
-  function requestedReview(volunteerId: string, seat: PreviewSeat): boolean {
+  function waitlisted(volunteerId: string, seat: PreviewSeat): boolean {
     return state.waitlist.some(
       (row) =>
-        row.requestReview &&
         row.status === "waiting" &&
         row.shiftId === seat.shiftId &&
-        row.volunteerId === volunteerId &&
-        row.eligibleRole === seat.role,
+        row.volunteerId === volunteerId,
     );
   }
 
@@ -426,7 +442,7 @@ export function createPreviewRosterEngine(context: {
   ): PreviewPlanShape {
     const seats = previewSeats(shiftIds);
     const pool = candidates(options);
-    const load = previewBaseLoad();
+    const load = cloneLoad(baseLoad);
     const choices: PreviewChoice[] = [];
     const unfilled: { seat: PreviewSeat; reason: string }[] = [];
     const beforeSeat = new Map<string, PreviewLoad>();
@@ -442,16 +458,16 @@ export function createPreviewRosterEngine(context: {
       for (const volunteer of considered) {
         const checks = previewChecks(volunteer, seat, options, policy, load);
         if (checks.some((check) => !check.passed)) continue;
-        const { components, total } = previewScore(volunteer, seat, options, policy, load);
+        const { components, total } = previewScore(volunteer, seat, options, policy);
         const requested =
           policy.waitlistPreference &&
           options.includeWaitlist &&
-          requestedReview(volunteer.id, seat);
+          waitlisted(volunteer.id, seat);
         const bestRequested =
           best &&
           policy.waitlistPreference &&
           options.includeWaitlist &&
-          requestedReview(best.volunteer.id, seat);
+          waitlisted(best.volunteer.id, seat);
         if (
           !best ||
           (requested && !bestRequested) ||
@@ -501,7 +517,7 @@ export function createPreviewRosterEngine(context: {
   ): MatchExplanation {
     const checks = previewChecks(volunteer, seat, options, policy, load);
     const eligible = checks.every((check) => check.passed);
-    const { components, total } = previewScore(volunteer, seat, options, policy, load);
+    const { components, total } = previewScore(volunteer, seat, options, policy);
     const choice: PreviewChoice = { seat, volunteer, checks, components, score: total };
     return {
       candidateId: volunteer.id,
@@ -619,17 +635,16 @@ export function createPreviewRosterEngine(context: {
       reasons: [
         `Skill match: ${choice.seat.role}`,
         `${options.preferSpanish && choice.volunteer.languages.includes("Spanish") ? "Spanish-speaking" : "Available"} for ${choice.seat.shiftId}`,
-        options.includeWaitlist && requestedReview(choice.volunteer.id, choice.seat)
-          ? "Eligible applicant requested this role"
+        options.includeWaitlist && waitlisted(choice.volunteer.id, choice.seat)
+          ? "Eligible applicant is on the shift waitlist"
           : "Highest score among the eligible volunteers",
       ],
-      promoteWaitlist: requestedReview(choice.volunteer.id, choice.seat),
+      promoteWaitlist: waitlisted(choice.volunteer.id, choice.seat),
       eligibleRoles: seats
         .filter((row) => row.shiftId === choice.seat.shiftId)
         .filter((row) =>
-          choice.volunteer.skills.some(
-            (skill) =>
-              !row.requiredSkill || skill.toLowerCase() === row.requiredSkill.toLowerCase(),
+          previewChecks(choice.volunteer, row, options, policy, baseLoad).every(
+            (check) => check.passed,
           ),
         )
         .map((row) => row.role),
@@ -681,8 +696,6 @@ export function createPreviewRosterEngine(context: {
     const policy = readRosterPolicy();
     const plan = previewRosterPlan(shiftIds, options, policy);
     const seats = previewSeats(shiftIds);
-    const baseLoad = previewBaseLoad();
-
     const evaluations: CandidateEvaluation[] = candidates(options).map((volunteer) => {
       const slots: EvaluatedSlot[] = seats.map((seat) => {
         const explanation = previewExplanation(volunteer, seat, options, policy, baseLoad, false);
