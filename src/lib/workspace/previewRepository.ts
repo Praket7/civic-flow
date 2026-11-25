@@ -561,10 +561,7 @@ function validateJourneySeat(
   )
     throw new Error("This shift overlaps an existing registration.");
   const requirement = roleRequirement(role);
-  if (
-    requirement.skill &&
-    !hasRosterSkill(volunteer, requirement.skill)
-  )
+  if (requirement.skill && !hasRosterSkill(volunteer, requirement.skill))
     throw new Error(`Required skill: ${requirement.skill}.`);
   if (
     requirement.credential &&

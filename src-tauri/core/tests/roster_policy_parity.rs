@@ -111,7 +111,9 @@ fn shared_native_browser_roster_policy_cases() {
         assert_eq!(explanation.eligible, expected.is_some(), "{name}");
         assert_eq!(explanation.total_score, expected, "{name}");
         assert_eq!(
-            plan(&[candidate], &[slot], &policy, &options).assignments.len(),
+            plan(&[candidate], &[slot], &policy, &options)
+                .assignments
+                .len(),
             usize::from(expected.is_some()),
             "{name}"
         );

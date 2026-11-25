@@ -48,19 +48,17 @@ export function validRosterCredential(credential: Credential, on: string): boole
   const through = credential.validThrough.slice(0, 10);
   return Boolean(
     credential.verifiedAt?.trim() &&
-      validIsoDate(from) &&
-      validIsoDate(through) &&
-      from <= on &&
-      through >= on,
+    validIsoDate(from) &&
+    validIsoDate(through) &&
+    from <= on &&
+    through >= on,
   );
 }
 
 export function rosterAgeOn(birthday: string | null | undefined, on: string): number | null {
   if (!birthday || !validIsoDate(birthday)) return null;
   return (
-    Number(on.slice(0, 4)) -
-    Number(birthday.slice(0, 4)) -
-    Number(on.slice(5) < birthday.slice(5))
+    Number(on.slice(0, 4)) - Number(birthday.slice(0, 4)) - Number(on.slice(5) < birthday.slice(5))
   );
 }
 
@@ -329,9 +327,7 @@ export function createPreviewRosterEngine(context: {
     options: RosterOptions,
     policy: RosterPolicy,
   ): { components: ScoreComponent[]; total: number } {
-    const skillMatches =
-      !seat.requiredSkill ||
-      hasRosterSkill(volunteer, seat.requiredSkill);
+    const skillMatches = !seat.requiredSkill || hasRosterSkill(volunteer, seat.requiredSkill);
     // A role with no requirement fits anyone eligible, slightly less precisely
     // than a matched requirement, which is how the solver scores it too.
     const skill = seat.requiredSkill
@@ -417,9 +413,7 @@ export function createPreviewRosterEngine(context: {
   function waitlisted(volunteerId: string, seat: PreviewSeat): boolean {
     return state.waitlist.some(
       (row) =>
-        row.status === "waiting" &&
-        row.shiftId === seat.shiftId &&
-        row.volunteerId === volunteerId,
+        row.status === "waiting" && row.shiftId === seat.shiftId && row.volunteerId === volunteerId,
     );
   }
 
@@ -460,9 +454,7 @@ export function createPreviewRosterEngine(context: {
         if (checks.some((check) => !check.passed)) continue;
         const { components, total } = previewScore(volunteer, seat, options, policy);
         const requested =
-          policy.waitlistPreference &&
-          options.includeWaitlist &&
-          waitlisted(volunteer.id, seat);
+          policy.waitlistPreference && options.includeWaitlist && waitlisted(volunteer.id, seat);
         const bestRequested =
           best &&
           policy.waitlistPreference &&

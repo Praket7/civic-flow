@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import fixture from "../../../../shared/roster-policy-cases.json";
-import type { Credential, RosterOptions, RosterPolicy, Shift, Volunteer } from "../../../types/domain";
+import type {
+  Credential,
+  RosterOptions,
+  RosterPolicy,
+  Shift,
+  Volunteer,
+} from "../../../types/domain";
 import { demoWorkspace } from "../dataset";
 import { previewDayKey, previewPeriod } from "../dates";
 import { createDefaultSnapshot } from "../previewRepository";
