@@ -177,6 +177,24 @@ fn marking_a_no_show_reopens_the_seat_exactly_once() {
     assert!(mark_no_show(connection, "sh-tue-pantry", "vol-015").is_err());
 }
 
+// Ruby's seeded driver credential begins after the October demo shift. The
+// successful-promotion tests explicitly model a coordinator verifying a renewal.
+fn verify_driver_for_demo_shift(database: &Database) {
+    assert_eq!(
+        database
+            .connection()
+            .execute(
+                "UPDATE volunteer_credentials
+                 SET issued_at = '2026-10-01', valid_from = '2026-10-01',
+                     verified_at = '2026-10-01'
+                 WHERE id = 'cred-vol-014-driver'",
+                [],
+            )
+            .unwrap(),
+        1
+    );
+}
+
 #[test]
 fn waitlist_promotion_registers_the_volunteer_once() {
     let database = seeded();
@@ -187,6 +205,25 @@ fn waitlist_promotion_registers_the_volunteer_once() {
         .find(|entry| entry.shift_id == "sh-sat-food")
         .unwrap();
 
+    assert_eq!(entry.volunteer_id, "vol-014");
+    assert_eq!(
+        rule_code(
+            promote_waitlist(database.connection(), &entry.shift_id, &entry.volunteer_id)
+                .unwrap_err()
+        ),
+        "CREDENTIAL_EXPIRED"
+    );
+    assert_eq!(
+        snapshot(database.connection())
+            .unwrap()
+            .waitlist
+            .iter()
+            .find(|row| row.id == entry.id)
+            .unwrap()
+            .status,
+        "waiting"
+    );
+    verify_driver_for_demo_shift(&database);
     let state =
         promote_waitlist(database.connection(), &entry.shift_id, &entry.volunteer_id).unwrap();
     let promoted = state
@@ -413,6 +450,7 @@ fn every_workflow_write_survives_reopen() {
             "Recorded at the door",
         )
         .unwrap();
+        verify_driver_for_demo_shift(&database);
         promote_waitlist(database.connection(), "sh-sat-food", "vol-014").unwrap();
         review_hours(
             database.connection(),
