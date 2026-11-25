@@ -2,14 +2,16 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import type { RosterOptions } from "../../../types/domain";
 import { demoWorkspace } from "../dataset";
-import { previewRepository } from "../previewRepository";
+import { createDefaultSnapshot, previewRepository } from "../previewRepository";
 
 /**
  * SHA-256 golden fixtures were captured by executing unmodified main and
  * refactored preview repositories side by side, comparing their complete
  * evaluations, plans, and selection explanations for fourteen shifts.
  * Final parity fingerprints reflect the deliberate age, availability, exact skill,
- * waitlist and workload policy corrections. The full response is still pinned;
+ * waitlist and workload policy corrections. Waitlist-enabled fingerprints now
+ * reflect shift-level promotion and the same base-load scoring as native.
+ * The full response is still pinned;
  * independent assignment invariants below guard against accepting invalid plans.
  */
 const cases: { options: RosterOptions; expected: string; score: number }[] = [
@@ -26,7 +28,7 @@ const cases: { options: RosterOptions; expected: string; score: number }[] = [
   {
     options: { preferSpanish: true, blockConflicts: true, capWeekly: true, includeWaitlist: true },
     score: 379,
-    expected: "c8d33144e7b9293f554b90b65ec2b9814b376740bbe71edb754315a131db2853",
+    expected: "3a36c327506f8597b4f0a1583ec0f45736e65d45f93f25cfe60450d96d9cd970",
   },
   {
     options: {
@@ -36,7 +38,7 @@ const cases: { options: RosterOptions; expected: string; score: number }[] = [
       includeWaitlist: true,
     },
     score: 379,
-    expected: "93364fb0f6010b51485017d0a9742325f666be6b8e6230034576ebf4314c5765",
+    expected: "9ba8b9859c31b9540da6eabc818c23844b68a41a13f64e41e6f55eef234d370a",
   },
 ];
 describe("preview AutoRoster deterministic credential-valid plan", () => {
@@ -61,22 +63,31 @@ describe("preview AutoRoster deterministic credential-valid plan", () => {
           one: { ...one, revision: 1, plan: { ...one.plan, revision: 1 } },
           onePlan: { ...onePlan, revision: 1 },
         };
-        expect(createHash("sha256").update(JSON.stringify(normalized)).digest("hex")).toBe(
-          expected,
-        );
         expect(one.plan).toEqual(onePlan);
         const registrations = new Set<string>();
+        const waitlist = createDefaultSnapshot().waitlist;
         for (const assignment of onePlan.assignments) {
           expect(assignment.explanation.eligible).toBe(true);
           expect(assignment.explanation.checks.every((check) => check.passed)).toBe(true);
           const key = JSON.stringify([assignment.shiftId, assignment.candidateId]);
           expect(registrations.has(key)).toBe(false);
           registrations.add(key);
+          expect(assignment.promoteWaitlist).toBe(
+            waitlist.some(
+              (entry) =>
+                entry.shiftId === assignment.shiftId &&
+                entry.volunteerId === assignment.candidateId &&
+                entry.status === "waiting",
+            ),
+          );
         }
         expect(onePlan.assignments).toHaveLength(4);
         expect(onePlan.totalScore).toBe(score);
         expect(onePlan.totalScore).toBe(
           onePlan.assignments.reduce((total, assignment) => total + assignment.score, 0),
+        );
+        expect(createHash("sha256").update(JSON.stringify(normalized)).digest("hex")).toBe(
+          expected,
         );
       },
     );
