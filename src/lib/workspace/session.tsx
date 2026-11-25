@@ -248,121 +248,109 @@ export function WorkspaceSessionProvider({ children }: { children: ReactNode }) 
   );
 
   const actions = useMemo<WorkspaceSessionValue["actions"]>(
-    () => ({
-      setSaved: (opportunityId, saved) => run(() => repository.setSaved(opportunityId, saved)),
-      setApplicationStage: (applicationId, stage) =>
-        run(() => repository.setApplicationStage(applicationId, stage)),
-      checkIn: (shiftId, volunteerId, code) =>
-        enqueue(() => runChecked(() => repository.checkIn(shiftId, volunteerId, code))),
-      manualCheckIn: (shiftId, volunteerId, reason) =>
-        enqueue(() => runChecked(() => repository.manualCheckIn(shiftId, volunteerId, reason))),
-      checkOut: (shiftId, volunteerId) =>
-        enqueue(() => runChecked(() => repository.checkOut(shiftId, volunteerId))),
-      markNoShow: (shiftId, volunteerId) =>
-        enqueue(() => runChecked(() => repository.markNoShow(shiftId, volunteerId))),
-      cancelRegistration: (shiftId, volunteerId, reason) =>
-        enqueue(() =>
-          runChecked(() => repository.cancelRegistration(shiftId, volunteerId, reason)),
-        ),
-      joinWaitlist: (shiftId, volunteerId, role, requestReview) =>
-        enqueue(() =>
-          runChecked(() => repository.joinWaitlist(shiftId, volunteerId, role, requestReview)),
-        ),
-      getCheckinCode: (shiftId) => repository.getCheckinCode(shiftId),
-      checkinWindow: (shiftId) => repository.checkinWindow(shiftId),
-      autoRoster: (shiftIds, options) => repository.autoRoster(shiftIds, options),
-      evaluateRoster: (shiftIds, options) => repository.evaluateRoster(shiftIds, options),
-      applyRosterWeek: (expectedRevision, expectedPolicyVersion, assignments) =>
-        enqueue(() =>
-          runChecked(() =>
-            repository.applyRosterWeek(expectedRevision, expectedPolicyVersion, assignments),
-          ),
-        ),
-      getRosterPolicy: () => repository.getRosterPolicy(),
-      updateRosterPolicy: (policy) => repository.updateRosterPolicy(policy),
-      explainRosterChoice: (shiftIds, options, candidateId, slotId) =>
-        repository.explainRosterChoice(shiftIds, options, candidateId, slotId),
-      applyRoster: (shiftId, assignments) =>
-        run(() => repository.applyRoster(shiftId, assignments)),
-      detectDisruptions: () => repository.detectDisruptions(),
-      planRecovery: (shiftIds, options) => repository.planRecovery(shiftIds, options),
-      applyRecovery: (shiftId, changes) => run(() => repository.applyRecovery(shiftId, changes)),
-      setAssignmentLock: (shiftId, volunteerId, locked) =>
-        run(() => repository.setAssignmentLock(shiftId, volunteerId, locked)),
-      createShiftSeries: (opportunityId, rule, roles) =>
-        enqueue(async () => {
-          const result = await repository.createShiftSeries(opportunityId, rule, roles);
-          apply(result.snapshot);
-          return result.series;
-        }),
-      listShiftSeries: (opportunityId) => repository.listShiftSeries(opportunityId),
-      generateSeriesInstances: (seriesId) =>
-        enqueue(async () => {
-          const result = await repository.generateSeriesInstances(seriesId);
-          apply(result.snapshot);
-          return result.shifts.length;
-        }),
-      retimeShiftSeries: (seriesId, startsLocalTime, durationMinutes, scope) =>
-        run(() => repository.retimeShiftSeries(seriesId, startsLocalTime, durationMinutes, scope)),
-      deleteShiftSeries: (seriesId) => run(() => repository.deleteShiftSeries(seriesId)),
-      recommendReplacement: (shiftId, role) => repository.recommendReplacement(shiftId, role),
-      listNotificationRules: () => repository.listNotificationRules(),
-      updateNotificationRule: (ruleId, patch) => repository.updateNotificationRule(ruleId, patch),
-      queueDueReminders: () => repository.queueDueReminders(),
-      retentionSignals: () => repository.retentionSignals(),
-      volunteerInsight: (volunteerId) => repository.volunteerInsight(volunteerId),
-      engagementMetrics: () => repository.engagementMetrics(),
-      credentialReadiness: () => repository.credentialReadiness(),
-      saveReportView: (name, scope, filtersJson) =>
-        run(() => repository.saveReportView(name, scope, filtersJson)),
-      promoteWaitlist: (shiftId, volunteerId) =>
-        enqueue(() => runChecked(() => repository.promoteWaitlist(shiftId, volunteerId))),
-      reviewHours: (entryId, decision) =>
-        enqueue(() => runChecked(() => repository.reviewHours(entryId, decision))),
-      updateSettings: (patch) => run(() => repository.updateSettings(patch)),
-      createOpportunity: (input) =>
-        enqueue(async () => {
-          const result = await repository.createOpportunity(input);
-          apply(result.snapshot);
-          return result.opportunity;
-        }),
-      registerForShift: (shiftId, volunteerId, role) =>
-        enqueue(() => runChecked(() => repository.registerForShift(shiftId, volunteerId, role))),
-      saveVolunteerProfile: (patch) => run(() => repository.saveVolunteerProfile(patch)),
-      resetDemo: () => run(() => repository.resetDemo()),
-      createBackup: (note) =>
-        enqueue(async () => {
-          const next = await repository.createBackup(note);
-          setBackups(next);
-          return next;
-        }),
-      restoreBackup: (id) =>
-        enqueue(async () => {
-          const result = await repository.restoreBackup(id);
-          setBackups(result.backups);
-          apply(result.snapshot);
-          return result;
-        }),
-      exportEncryptedBackup: (passphrase) => repository.exportEncryptedBackup(passphrase),
-      importEncryptedBackup: (passphrase) =>
-        enqueue(async () => {
-          const result = await repository.importEncryptedBackup(passphrase);
-          if (!result) return null;
-          setBackups(result.backups);
-          apply(result.snapshot);
-          return result;
-        }),
-      previewVolunteerImport: (text) => repository.previewVolunteerImport(text),
-      applyVolunteerImport: (text) =>
-        enqueue(async () => {
-          const summary = await repository.applyVolunteerImport(text);
-          // The refreshed snapshot carries the new roster, so the list a
-          // coordinator is looking at shows the people they just added.
-          apply(await repository.getSnapshot());
-          return summary;
-        }),
-      exportVolunteerRoster: () => repository.exportVolunteerRoster(),
-    }),
+    () => {
+      const reported =
+        <Args extends unknown[]>(method: (...args: Args) => Promise<SessionSnapshot>) =>
+        (...args: Args) =>
+          run(() => method.apply(repository, args));
+      const checked =
+        <Args extends unknown[]>(method: (...args: Args) => Promise<SessionSnapshot>) =>
+        (...args: Args) =>
+          enqueue(() => runChecked(() => method.apply(repository, args)));
+      const direct = <Args extends unknown[], Result>(method: (...args: Args) => Promise<Result>) =>
+        method.bind(repository);
+      return {
+        setSaved: reported(repository.setSaved),
+        setApplicationStage: reported(repository.setApplicationStage),
+        checkIn: checked(repository.checkIn),
+        manualCheckIn: checked(repository.manualCheckIn),
+        checkOut: checked(repository.checkOut),
+        markNoShow: checked(repository.markNoShow),
+        cancelRegistration: checked(repository.cancelRegistration),
+        joinWaitlist: checked(repository.joinWaitlist),
+        getCheckinCode: direct(repository.getCheckinCode),
+        checkinWindow: direct(repository.checkinWindow),
+        autoRoster: direct(repository.autoRoster),
+        evaluateRoster: direct(repository.evaluateRoster),
+        applyRosterWeek: checked(repository.applyRosterWeek),
+        getRosterPolicy: direct(repository.getRosterPolicy),
+        updateRosterPolicy: direct(repository.updateRosterPolicy),
+        explainRosterChoice: direct(repository.explainRosterChoice),
+        applyRoster: reported(repository.applyRoster),
+        detectDisruptions: direct(repository.detectDisruptions),
+        planRecovery: direct(repository.planRecovery),
+        applyRecovery: reported(repository.applyRecovery),
+        setAssignmentLock: reported(repository.setAssignmentLock),
+        createShiftSeries: (opportunityId, rule, roles) =>
+          enqueue(async () => {
+            const result = await repository.createShiftSeries(opportunityId, rule, roles);
+            apply(result.snapshot);
+            return result.series;
+          }),
+        listShiftSeries: direct(repository.listShiftSeries),
+        generateSeriesInstances: (seriesId) =>
+          enqueue(async () => {
+            const result = await repository.generateSeriesInstances(seriesId);
+            apply(result.snapshot);
+            return result.shifts.length;
+          }),
+        retimeShiftSeries: reported(repository.retimeShiftSeries),
+        deleteShiftSeries: reported(repository.deleteShiftSeries),
+        recommendReplacement: direct(repository.recommendReplacement),
+        listNotificationRules: direct(repository.listNotificationRules),
+        updateNotificationRule: direct(repository.updateNotificationRule),
+        queueDueReminders: direct(repository.queueDueReminders),
+        retentionSignals: direct(repository.retentionSignals),
+        volunteerInsight: direct(repository.volunteerInsight),
+        engagementMetrics: direct(repository.engagementMetrics),
+        credentialReadiness: direct(repository.credentialReadiness),
+        saveReportView: reported(repository.saveReportView),
+        promoteWaitlist: checked(repository.promoteWaitlist),
+        reviewHours: checked(repository.reviewHours),
+        updateSettings: reported(repository.updateSettings),
+        createOpportunity: (input) =>
+          enqueue(async () => {
+            const result = await repository.createOpportunity(input);
+            apply(result.snapshot);
+            return result.opportunity;
+          }),
+        registerForShift: checked(repository.registerForShift),
+        saveVolunteerProfile: reported(repository.saveVolunteerProfile),
+        resetDemo: reported(repository.resetDemo),
+        createBackup: (note) =>
+          enqueue(async () => {
+            const next = await repository.createBackup(note);
+            setBackups(next);
+            return next;
+          }),
+        restoreBackup: (id) =>
+          enqueue(async () => {
+            const result = await repository.restoreBackup(id);
+            setBackups(result.backups);
+            apply(result.snapshot);
+            return result;
+          }),
+        exportEncryptedBackup: direct(repository.exportEncryptedBackup),
+        importEncryptedBackup: (passphrase) =>
+          enqueue(async () => {
+            const result = await repository.importEncryptedBackup(passphrase);
+            if (!result) return null;
+            setBackups(result.backups);
+            apply(result.snapshot);
+            return result;
+          }),
+        previewVolunteerImport: direct(repository.previewVolunteerImport),
+        applyVolunteerImport: (text) =>
+          enqueue(async () => {
+            const summary = await repository.applyVolunteerImport(text);
+            // The refreshed snapshot carries the new roster, so the list a
+            // coordinator is looking at shows the people they just added.
+            apply(await repository.getSnapshot());
+            return summary;
+          }),
+        exportVolunteerRoster: direct(repository.exportVolunteerRoster),
+      };
+    },
     [apply, repository, run, runChecked],
   );
 
