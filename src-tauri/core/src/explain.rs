@@ -7,6 +7,8 @@
 //! are compared. That is why the answer can say "this would leave the Driver
 //! seat uncovered" instead of only quoting two scores.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::error::{CoreError, Result};
@@ -60,22 +62,6 @@ pub struct CandidateAnswer {
     pub comparison: Option<ForcedComparison>,
 }
 
-fn slot_key_raw(shift_id: &str, role: &str) -> String {
-    format!("{shift_id}\u{1}{role}")
-}
-
-fn held_seat(plan: &RosterPlan) -> Vec<(String, Option<String>)> {
-    plan.assignments
-        .iter()
-        .map(|assignment| {
-            (
-                slot_key_raw(&assignment.shift_id, &assignment.role),
-                Some(assignment.candidate_id.clone()),
-            )
-        })
-        .collect()
-}
-
 fn required_filled(plan: &RosterPlan, slots: &[Slot]) -> usize {
     plan.assignments
         .iter()
@@ -113,60 +99,57 @@ pub fn compare_forced(
         &[(candidate_id.to_string(), slot_id.to_string())],
     );
 
-    let before = held_seat(&base);
-    let after = held_seat(&forced);
+    Ok(compare_plans(candidate, slot, slots, &base, &forced))
+}
+
+fn compare_plans(
+    candidate: &Candidate,
+    slot: &Slot,
+    slots: &[Slot],
+    base: &RosterPlan,
+    forced: &RosterPlan,
+) -> ForcedComparison {
+    let before: BTreeMap<_, _> = base
+        .assignments
+        .iter()
+        .map(|assignment| (&assignment.explanation.slot_id, assignment))
+        .collect();
+    let after: BTreeMap<_, _> = forced
+        .assignments
+        .iter()
+        .map(|assignment| (&assignment.explanation.slot_id, assignment))
+        .collect();
     let mut changed = Vec::new();
     let mut becomes_uncovered = Vec::new();
-    for (key, owner) in &before {
-        let (shift_id, role) = key
-            .split_once('\u{1}')
-            .map(|(shift, role)| (shift.to_string(), role.to_string()))
-            .unwrap_or_default();
-        let now = after
-            .iter()
-            .find(|(other, _)| other == key)
-            .and_then(|(_, owner)| owner.clone());
-        if now == *owner {
+    // The concrete slot ID distinguishes multiple seats with the same role.
+    for (id, previous) in &before {
+        let next = after.get(id);
+        if next.is_some_and(|assignment| assignment.candidate_id == previous.candidate_id) {
             continue;
         }
-        let shift_title = slots
-            .iter()
-            .find(|slot| slot.shift_id == shift_id && slot.role == role)
-            .map(|slot| slot.shift_title.clone())
-            .unwrap_or_default();
-        if now.is_none() {
-            becomes_uncovered.push(format!("{role} on {shift_title}"));
+        if next.is_none() {
+            becomes_uncovered.push(format!("{} on {}", previous.role, previous.shift_title));
         }
         changed.push(AssignmentChange {
-            kind: if now.is_none() { "lost" } else { "moved" }.to_string(),
-            shift_id,
-            shift_title,
-            role,
-            from_candidate: owner.clone(),
-            to_candidate: now,
+            kind: if next.is_none() { "lost" } else { "moved" }.into(),
+            shift_id: previous.shift_id.clone(),
+            shift_title: previous.shift_title.clone(),
+            role: previous.role.clone(),
+            from_candidate: Some(previous.candidate_id.clone()),
+            to_candidate: next.map(|assignment| assignment.candidate_id.clone()),
         });
     }
-    for (key, owner) in &after {
-        if before.iter().any(|(other, _)| other == key) {
-            continue;
+    for (id, next) in after {
+        if !before.contains_key(id) {
+            changed.push(AssignmentChange {
+                kind: "gained".into(),
+                shift_id: next.shift_id.clone(),
+                shift_title: next.shift_title.clone(),
+                role: next.role.clone(),
+                from_candidate: None,
+                to_candidate: Some(next.candidate_id.clone()),
+            });
         }
-        let (shift_id, role) = key
-            .split_once('\u{1}')
-            .map(|(shift, role)| (shift.to_string(), role.to_string()))
-            .unwrap_or_default();
-        let shift_title = slots
-            .iter()
-            .find(|slot| slot.shift_id == shift_id && slot.role == role)
-            .map(|slot| slot.shift_title.clone())
-            .unwrap_or_default();
-        changed.push(AssignmentChange {
-            kind: "gained".into(),
-            shift_id,
-            shift_title,
-            role,
-            from_candidate: None,
-            to_candidate: owner.clone(),
-        });
     }
     changed.sort_by(|left, right| {
         left.shift_id
@@ -179,8 +162,8 @@ pub fn compare_forced(
         "Forcing {} into {}: required seats filled {} to {}",
         candidate.name,
         slot.role,
-        required_filled(&base, slots),
-        required_filled(&forced, slots)
+        required_filled(base, slots),
+        required_filled(forced, slots)
     )];
     if base.total_score != forced.total_score {
         summary.push(format!(
@@ -194,7 +177,7 @@ pub fn compare_forced(
         summary.push(format!("Uncovered: {}", becomes_uncovered.join(", ")));
     }
 
-    Ok(ForcedComparison {
+    ForcedComparison {
         candidate_id: candidate.id.clone(),
         candidate_name: candidate.name.clone(),
         slot_id: slot.id.clone(),
@@ -202,14 +185,14 @@ pub fn compare_forced(
         role: slot.role.clone(),
         filled_before: base.assignments.len(),
         filled_after: forced.assignments.len(),
-        required_filled_before: required_filled(&base, slots),
-        required_filled_after: required_filled(&forced, slots),
+        required_filled_before: required_filled(base, slots),
+        required_filled_after: required_filled(forced, slots),
         total_score_before: base.total_score,
         total_score_after: forced.total_score,
         changed_assignments: changed,
         becomes_uncovered,
         summary,
-    })
+    }
 }
 
 /// The full answer for one candidate and one seat: the checks, the score, and —
@@ -246,14 +229,14 @@ pub fn explain_candidate(
     };
 
     let comparison = if !selected && is_eligible_explained(candidate, slot, policy, options) {
-        Some(compare_forced(
+        let forced = plan_with_forced(
             candidates,
             slots,
             policy,
             options,
-            candidate_id,
-            slot_id,
-        )?)
+            &[(candidate_id.to_string(), slot_id.to_string())],
+        );
+        Some(compare_plans(candidate, slot, slots, &base, &forced))
     } else {
         None
     };
@@ -376,6 +359,49 @@ mod tests {
             .changed_assignments
             .iter()
             .any(|change| change.kind == "lost" && change.role == "Driver"));
+    }
+
+    #[test]
+    fn counterfactuals_distinguish_two_seats_for_the_same_role() {
+        let candidates =
+            ["a", "b", "c"].map(|id| candidate(id, &["Packing"], &["sat:morning"]));
+        let slots = [
+            slot("seat-1", "Packing", "Packing", "2026-10-17T09:00:00-04:00"),
+            slot("seat-2", "Packing", "Packing", "2026-10-17T09:00:00-04:00"),
+        ];
+        let policy = RosterPolicy::default();
+        let options = RosterOptions::default();
+        let base = plan(&candidates, &slots, &policy, &options);
+        let newcomer = candidates
+            .iter()
+            .find(|person| {
+                !base
+                    .assignments
+                    .iter()
+                    .any(|row| row.candidate_id == person.id)
+            })
+            .unwrap();
+        let previous = base
+            .assignments
+            .iter()
+            .find(|row| row.explanation.slot_id == "seat-2")
+            .unwrap();
+        let comparison = compare_forced(
+            &candidates,
+            &slots,
+            &policy,
+            &options,
+            &newcomer.id,
+            "seat-2",
+        )
+        .unwrap();
+        assert_eq!(comparison.filled_before, 2);
+        assert_eq!(comparison.filled_after, 2);
+        assert!(comparison.becomes_uncovered.is_empty());
+        assert!(comparison.changed_assignments.iter().any(|change| {
+            change.from_candidate.as_deref() == Some(previous.candidate_id.as_str())
+                && change.to_candidate.as_deref() == Some(newcomer.id.as_str())
+        }));
     }
 
     #[test]

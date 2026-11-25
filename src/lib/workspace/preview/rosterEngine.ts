@@ -111,7 +111,6 @@ export function createPreviewRosterEngine(context: {
   interface PreviewPlanShape {
     choices: PreviewChoice[];
     unfilled: { seat: PreviewSeat; reason: string }[];
-    beforeSeat: Map<string, PreviewLoad>;
   }
 
   /**
@@ -439,10 +438,8 @@ export function createPreviewRosterEngine(context: {
     const load = cloneLoad(baseLoad);
     const choices: PreviewChoice[] = [];
     const unfilled: { seat: PreviewSeat; reason: string }[] = [];
-    const beforeSeat = new Map<string, PreviewLoad>();
 
     for (const seat of seats) {
-      beforeSeat.set(seat.slotId, cloneLoad(load));
       const isForcedSeat = forced?.slotId === seat.slotId;
       const considered = isForcedSeat
         ? pool.filter((volunteer) => volunteer.id === forced?.candidateId)
@@ -496,7 +493,7 @@ export function createPreviewRosterEngine(context: {
       load.weekCount.set(best.volunteer.id, (load.weekCount.get(best.volunteer.id) ?? 0) + 1);
     }
 
-    return { choices, unfilled, beforeSeat };
+    return { choices, unfilled };
   }
 
   function previewExplanation(
@@ -508,9 +505,13 @@ export function createPreviewRosterEngine(context: {
     selected: boolean,
   ): MatchExplanation {
     const checks = previewChecks(volunteer, seat, options, policy, load);
-    const eligible = checks.every((check) => check.passed);
     const { components, total } = previewScore(volunteer, seat, options, policy);
-    const choice: PreviewChoice = { seat, volunteer, checks, components, score: total };
+    return choiceExplanation({ seat, volunteer, checks, components, score: total }, selected);
+  }
+
+  function choiceExplanation(choice: PreviewChoice, selected: boolean): MatchExplanation {
+    const { volunteer, seat, checks, components, score } = choice;
+    const eligible = checks.every((check) => check.passed);
     return {
       candidateId: volunteer.id,
       candidateName: volunteer.name,
@@ -521,7 +522,7 @@ export function createPreviewRosterEngine(context: {
       eligible,
       checks,
       components,
-      totalScore: eligible ? total : null,
+      totalScore: eligible ? score : null,
       selected,
       selectionReason: eligible
         ? previewReason(choice)
@@ -532,7 +533,8 @@ export function createPreviewRosterEngine(context: {
   }
 
   function previewRequiredFilled(shape: PreviewPlanShape): number {
-    return shape.choices.length;
+    return shape.choices.filter(({ seat }) => seat.requiredSkill || seat.requiredCredential)
+      .length;
   }
 
   function previewComparison(
@@ -640,14 +642,7 @@ export function createPreviewRosterEngine(context: {
           ),
         )
         .map((row) => row.role),
-      explanation: previewExplanation(
-        choice.volunteer,
-        choice.seat,
-        options,
-        policy,
-        shape.beforeSeat.get(choice.seat.slotId) ?? emptyLoad(),
-        true,
-      ),
+      explanation: choiceExplanation(choice, true),
     }));
 
     return {
@@ -768,14 +763,10 @@ export function createPreviewRosterEngine(context: {
     const base = previewPlanShape(shiftIds, options, policy);
     const held = base.choices.find((choice) => choice.seat.slotId === slotId);
     const selected = held?.volunteer.id === candidateId;
-    const explanation = previewExplanation(
-      volunteer,
-      seat,
-      options,
-      policy,
-      base.beforeSeat.get(slotId) ?? emptyLoad(),
-      Boolean(selected),
-    );
+    const explanation =
+      held && selected
+        ? choiceExplanation(held, true)
+        : previewExplanation(volunteer, seat, options, policy, baseLoad, false);
 
     const comparison =
       !selected && explanation.eligible
