@@ -13,15 +13,16 @@ version="$(node -p 'require("./package.json").version')"
 node scripts/check-release-version.mjs "v$version"
 bundle="$root/src-tauri/target/universal-apple-darwin/release/bundle"
 app="$bundle/macos/CivicFlow.app"
-binary="$app/Contents/MacOS/civicflow"
+plist="$app/Contents/Info.plist"
 output="$bundle/dmg/CivicFlow_${version}_universal_evaluation.dmg"
 
-if [ ! -f "$binary" ]; then
+if [ ! -f "$plist" ]; then
   echo "Build the universal application first with pnpm tauri build --target universal-apple-darwin --bundles app." >&2
   exit 1
 fi
 
-app_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
+binary="$app/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist")"
+app_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")"
 test "$app_version" = "$version"
 lipo -verify_arch arm64 x86_64 "$binary"
 codesign --verify --deep --strict "$app"

@@ -76,7 +76,7 @@ function run(command, args, cwd) {
 }
 
 function npmInventory() {
-  const expected = packageJson.packageManager.split("@")[1];
+  const expected = readFileSync(`${ROOT}/.pnpm-version`, "utf8").trim();
   const actual = run("pnpm", ["--version"], ROOT).trim();
   if (actual !== expected) {
     throw new Error(`Use pnpm ${expected} for the dependency inventory; found ${actual}.`);

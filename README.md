@@ -106,7 +106,7 @@ Before enrolling real organizations, complete the [deployment](docs/deployment.m
 
 ## Development
 
-Use the Node version in [`.node-version`](.node-version), the exact pnpm version in [`package.json`](package.json), stable Rust and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/). Different pnpm versions can report different dependency inventories; use the pinned version before regenerating notices.
+Use the Node version in [`.node-version`](.node-version), the exact pnpm version in [`.pnpm-version`](.pnpm-version), stable Rust and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/). Different pnpm versions can report different dependency inventories; use the pinned version before regenerating notices.
 
 ```sh
 pnpm install --frozen-lockfile

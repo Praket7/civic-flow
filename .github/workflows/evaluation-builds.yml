@@ -27,7 +27,7 @@ jobs:
           - os: macos-latest
             target: universal-apple-darwin
             rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
-            bundles: dmg
+            bundles: app
             artifact: evaluation-macos
           - os: windows-latest
             target: x86_64-pc-windows-msvc
@@ -67,12 +67,10 @@ jobs:
           pnpm test:hosted
       - name: Build evaluation installer
         run: pnpm tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
-      - name: Verify universal app and Finder-independent packaging
+      - name: Package and verify universal DMG without Finder
         if: matrix.os == 'macos-latest'
         shell: bash
-        run: |
-          bash scripts/package-macos-evaluation.sh
-          rm -- src-tauri/target/universal-apple-darwin/release/bundle/dmg/*_evaluation.dmg
+        run: bash scripts/package-macos-evaluation.sh
       - name: Collect installers and verify expected formats
         shell: bash
         run: |
