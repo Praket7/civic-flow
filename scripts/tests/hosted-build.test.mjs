@@ -81,7 +81,7 @@ test("hosted publishing leaves index untouched when PWA bundle is not verified",
 
 test("public judging page points at the actual application and labels its data", async () => {
   const html = await readFile(new URL("../../public/judge/index.html", import.meta.url), "utf8");
-  assert.match(html, /href="https:\/\/civic-flow\.vercel\.app\/"/);
+  assert.match(html, /href="https:\/\/civic-flow-demo\.vercel\.app\/"/);
   assert.match(html, /sample data/i);
   assert.match(html, /offline/i);
 });
@@ -163,7 +163,7 @@ test("retired sample hostname redirects to the requested app, without reverse re
       (entry) =>
         entry.source === source && entry.has.some((condition) => condition.value === sampleHost),
     );
-    assert.equal(redirect.destination, "https://civic-flow.vercel.app/");
+    assert.equal(redirect.destination, "https://civic-flow-demo.vercel.app/");
   }
   assert.ok(config.redirects.every((entry) => !entry.destination.includes(sampleHost)));
 });

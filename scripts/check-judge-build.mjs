@@ -22,7 +22,7 @@ assert.doesNotMatch(
   "browser-local demo must not replace the hosted PWA",
 );
 assert.match(sample, /\/assets\/main-[\w-]+\.js/, "judge demo must load the coordinator UI");
-assert.match(judge, /href="https:\/\/civic-flow\.vercel\.app\/"/, "judge page must link to the app");
+assert.match(judge, /href="https:\/\/civic-flow-demo\.vercel\.app\/"/, "judge page must link to the app");
 assert.match(judge, /sample data/i, "judge page must disclose local-only data");
 assert.match(judge, /id="evidence"/, "benchmark evidence section is required");
 assert.match(judge, /id="landscape"/, "sourced landscape section is required");

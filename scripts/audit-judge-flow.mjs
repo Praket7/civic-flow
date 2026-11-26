@@ -289,7 +289,7 @@ try {
   assert.equal(await evaluate('document.querySelector("#filled-count").textContent'), "2 / 2");
   const showcase = await evaluate(`(() => ({
     images: document.querySelectorAll('img[src^="/judge/screenshots/"]').length,
-    links: document.querySelectorAll('a[href="https://civic-flow.vercel.app/"]').length,
+    links: document.querySelectorAll('a[href="https://civic-flow-demo.vercel.app/"]').length,
     sections: ["workflow", "optimizer", "engineering"].every(id => document.getElementById(id)),
     disclosure: document.body.textContent.includes("Sample data only"),
     width: document.documentElement.scrollWidth <= innerWidth,
