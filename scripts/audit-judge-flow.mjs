@@ -246,6 +246,14 @@ try {
     await evaluate('document.querySelector("#optimizer details:nth-child(2)").open'),
     true,
   );
+  await evaluate(`document.querySelectorAll(".gallery img").forEach(img => img.loading = "eager")`);
+  await until(
+    () =>
+      evaluate(
+        '[...document.querySelectorAll(".gallery img")].every(img => img.complete && img.naturalWidth > 0)',
+      ),
+    "gallery images loaded",
+  );
   await send("Emulation.setEmulatedMedia", {
     features: [{ name: "prefers-reduced-motion", value: "reduce" }],
   });
@@ -271,6 +279,17 @@ try {
       };
     })()`);
     assert.ok(Object.values(layout).every(Boolean), JSON.stringify({ width, layout }));
+    await evaluate('document.querySelector(".phone-pair").scrollIntoView({ block: "start" })');
+    const showcaseShot = await send("Page.captureScreenshot", {
+      format: "png",
+      captureBeyondViewport: false,
+    });
+    const showcaseDir = path.join(root, "journey-review");
+    await mkdir(showcaseDir, { recursive: true });
+    await writeFile(
+      path.join(showcaseDir, "showcase-gallery-" + width + ".png"),
+      Buffer.from(showcaseShot.data, "base64"),
+    );
   }
   await send("Emulation.clearDeviceMetricsOverride");
   await send("Emulation.setEmulatedMedia", { features: [] });

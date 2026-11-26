@@ -159,3 +159,32 @@ test("authenticated replication can read the static catalog but not internal sta
     );
   }
 });
+
+test("reviewed signed-in RPCs are unavailable to anonymous callers", async () => {
+  const reviewed = [
+    "public.apply_command(uuid,uuid,uuid,text,bigint,jsonb,jsonb,timestamptz)",
+    "public.ensure_profile(text)",
+    "public.health_snapshot(uuid)",
+    "public.mark_all_notifications_read(uuid)",
+    "public.mark_notification_read(uuid)",
+    "public.my_workspaces()",
+    "public.register_device(uuid,uuid,text,text)",
+    "public.register_push_subscription(uuid,text,text,text,text)",
+    "public.report_device_state(uuid,uuid,bigint,integer,timestamptz,text)",
+    "public.revoke_push_subscription(text)",
+    "public.save_notification_preferences(uuid,boolean,boolean,boolean,boolean,time,time,integer)",
+  ];
+  for (const signature of reviewed) {
+    assert.equal(await permission("anon", signature), false, signature);
+    assert.equal(await permission("authenticated", signature), true, signature);
+    const [definition] = await query(
+      db,
+      "select proconfig from pg_proc where oid = $1::regprocedure",
+      [signature],
+    );
+    assert.ok(
+      definition.proconfig.some((setting) => setting === 'search_path=""'),
+      signature,
+    );
+  }
+});

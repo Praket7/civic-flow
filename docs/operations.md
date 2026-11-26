@@ -38,3 +38,9 @@ The foreign-key index migration covers the observed missing indexes. Check the p
 Review the Vercel runtime error view and the Supabase database and authentication logs. Do not include credentials, volunteer contact details, or request bodies in incident reports. A clean log window alone does not establish that the application is healthy.
 
 The isolated recovery job exercises a synthetic database with no production credentials. Its result does not certify the encrypted production backup or the hosted authentication service. For a real restore rehearsal, follow the restricted backup and restore procedure above.
+
+## Privileged client functions
+
+The signed-in RPCs for commands, profiles, health, notification reads, workspaces, device registration, push subscriptions and notification preferences deliberately retain their authenticated grants. Each uses an explicit request identity or membership check, and the permission suite verifies that anonymous callers cannot execute them and that their search paths are fixed. Revoking legitimate client grants would break synchronization and notification settings.
+
+Leaked-password protection is a managed Supabase Auth feature available on Pro and higher plans. The Free plan warning remains until an authorized owner upgrades and enables it. Client-side checks cannot substitute for enforcement by the authentication provider.

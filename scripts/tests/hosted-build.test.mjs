@@ -154,3 +154,21 @@ test("the judging response blocks direct connections to other origins", async ()
   const csp = judge.headers.find((entry) => entry.key === "Content-Security-Policy");
   assert.match(csp.value, /connect-src 'self' blob:;/);
 });
+
+test("public demo routes use a different browser origin from hosted accounts", async () => {
+  const config = JSON.parse(await readFile(new URL("../../vercel.json", import.meta.url), "utf8"));
+  const sampleHost = "civic-flow-sample-praket7.vercel.app";
+  const demoRedirect = config.redirects.find(
+    (entry) =>
+      entry.source === "/judge/demo" &&
+      entry.has.some((condition) => condition.value === "civic-flow-demo.vercel.app"),
+  );
+  assert.equal(new URL(demoRedirect.destination).hostname, sampleHost);
+  for (const source of ["/", "/index.html", "/pwa.html", "/sw.js"]) {
+    const redirect = config.redirects.find(
+      (entry) =>
+        entry.source === source && entry.has.some((condition) => condition.value === sampleHost),
+    );
+    assert.equal(new URL(redirect.destination).hostname, "civic-flow-demo.vercel.app");
+  }
+});

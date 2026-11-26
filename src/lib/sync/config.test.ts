@@ -21,5 +21,6 @@ describe("judging cloud boundary", () => {
     const config = await import("./config");
     expect(config.cloudConfigured()).toBe(true);
     expect(config.isJudgingSample("/judge-other")).toBe(false);
+    expect(config.isJudgingSample("/", "civic-flow-sample-praket7.vercel.app")).toBe(true);
   });
 });

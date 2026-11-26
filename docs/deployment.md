@@ -14,7 +14,7 @@ The first command builds the web assets used by the desktop shell. The native bu
 
 Use [the environment template](../.env.example) as a starting point. Never place a service-role key in a client build or a public repository.
 
-The hosted root is the authenticated PWA. The judging sample at `/judge` uses browser-local fictional data. Host the sample separately from an active customer's production origin because paths alone do not isolate browser storage.
+The hosted root is the authenticated PWA. The judging showcase is at `https://civic-flow-demo.vercel.app/judge/`. Its interactive sample redirects to the dedicated `civic-flow-sample-praket7.vercel.app` origin, where hosted credentials are disabled and hosted entrypoints redirect back to the showcase. Keep the sample domain assigned to the same reviewed deployment. Paths alone do not isolate browser storage.
 
 ## Production acceptance
 
