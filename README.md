@@ -98,11 +98,63 @@ For implementation details, see [architecture](docs/architecture.md).
 
 ## Install and releases
 
-[Evaluation installers](https://github.com/Praket7/civic-flow/releases) are available for macOS (universal) and Windows (x64), with SHA-256 checksums and GitHub build provenance. These are test builds, not notarized or publisher-signed production installers. The [legacy v0.1.2 release](https://github.com/Praket7/civicflow2/releases/tag/v0.1.2) belongs to the original repository and is not a build of this revision. Do not bypass operating-system security warnings for untrusted installers.
+### Download CivicFlow
 
-The interactive demo uses fictional, browser-local records and requires no account. The hosted app uses Supabase authentication and requires an authorized workspace invitation. Do not enter real volunteer data in the demo.
+**Version 0.1.2 · Evaluation edition** · [Release notes](https://github.com/Praket7/civic-flow/releases/tag/evaluation-0.1.2-9903b49e6b1c) · [SHA-256 checksums](https://github.com/Praket7/civic-flow/releases/download/evaluation-0.1.2-9903b49e6b1c/SHA256SUMS.txt) · [All releases](https://github.com/Praket7/civic-flow/releases)
 
-Before enrolling real organizations, complete the [deployment](docs/deployment.md) and [operations](docs/operations.md) checks, including hosted role isolation, restore rehearsal and signed release verification. A successful build alone does not establish production readiness.
+| Platform | Architecture | Download |
+| --- | --- | --- |
+| macOS | Apple silicon and Intel (universal) | [Download DMG](https://github.com/Praket7/civic-flow/releases/download/evaluation-0.1.2-9903b49e6b1c/CivicFlow_0.1.2_universal_evaluation.dmg) |
+| Windows | x64 | [Download EXE](https://github.com/Praket7/civic-flow/releases/download/evaluation-0.1.2-9903b49e6b1c/CivicFlow_0.1.2_x64-setup.exe) · [Download MSI](https://github.com/Praket7/civic-flow/releases/download/evaluation-0.1.2-9903b49e6b1c/CivicFlow_0.1.2_x64_en-US.msi) |
+| Linux | x86_64 (Ubuntu 24.04) | [.deb package build status](https://github.com/Praket7/civic-flow/actions/workflows/evaluation-builds.yml) · [Build from source](#development) |
+| Web | Modern browser | [Open CivicFlow](https://civic-flow-demo.vercel.app/) · [Project showcase](https://civic-flow-demo.vercel.app/judge/) |
+
+The linked macOS and Windows evaluation packages passed installation and startup tests on GitHub-hosted runners. The Linux package will be available in [Releases](https://github.com/Praket7/civic-flow/releases) after its build and installation checks pass. Evaluation builds are not notarized or signed by a trusted publisher. They are intended for evaluation with fictional data.
+
+### macOS
+
+1. Download the DMG and verify its checksum against the release's SHA256SUMS.txt.
+2. Open the disk image and drag CivicFlow into Applications.
+3. Open CivicFlow from Applications. If macOS blocks the app solely because the developer is unidentified or the app is not notarized, and you have independently verified and trust the download, use the per-app **Open Anyway** option under System Settings → Privacy & Security after attempting to launch it.
+4. Follow the confirmation prompt. If macOS reports malware, tampering, or a managed-device restriction, stop and use the web version instead.
+
+See [Apple's guidance for opening apps safely](https://support.apple.com/en-us/102445). Do not disable Gatekeeper or remove security attributes globally.
+
+### Windows
+
+1. Download the EXE (recommended for interactive installation) or MSI (alternative package).
+2. Verify the checksum and scan the file with Windows Security.
+3. Open the installer and follow the setup wizard. If SmartScreen displays an unfamiliar-publisher warning, only use its **More info → Run anyway** option when available and when you have verified and trust the installer.
+4. Launch CivicFlow from the Start menu. Do not disable Defender, Smart App Control, or organization-managed security policies. If installation is blocked, use the web version or ask your administrator.
+
+### Linux
+
+For the Ubuntu 24.04 x86_64 package, download the `.deb` from the evaluation release when available, verify its checksum, and install it with:
+
+```sh
+sudo apt install ./CivicFlow_0.1.2_amd64.deb
+```
+
+Use the actual downloaded filename if it differs. Launch CivicFlow from the applications menu. Other distributions may require a source build; see the [Tauri Linux prerequisites](https://v2.tauri.app/start/prerequisites/).
+
+### Verify your download
+
+Download the matching [SHA256SUMS.txt](https://github.com/Praket7/civic-flow/releases/download/evaluation-0.1.2-9903b49e6b1c/SHA256SUMS.txt) from the same release as the installer. Compare the complete hash for your file:
+
+```sh
+# macOS
+shasum -a 256 CivicFlow_0.1.2_universal_evaluation.dmg
+# Linux (use the actual downloaded filename)
+sha256sum CivicFlow_0.1.2_amd64.deb
+```
+
+```powershell
+Get-FileHash .\CivicFlow_0.1.2_x64-setup.exe -Algorithm SHA256
+```
+
+GitHub CLI users can additionally verify build provenance with `gh attestation verify <installer-path> --repo Praket7/civic-flow`. A checksum confirms file integrity against the published manifest; it does not replace publisher signing.
+
+The hosted app requires authentication and an authorized workspace invitation. The browser-local sample and evaluation workspaces are intended for fictional records. For real organization enrollment, see [deployment](docs/deployment.md) and [operations](docs/operations.md).
 
 ## Development
 
