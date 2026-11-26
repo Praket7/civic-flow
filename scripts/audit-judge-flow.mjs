@@ -230,8 +230,47 @@ try {
     "sign-in escape must open the sample welcome, not another password form",
   );
   await heading("Service, organized.");
+  await send("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-reduced-motion", value: "no-preference" }],
+  });
   await open("/judge/");
   await heading("More time for service");
+  await until(
+    () =>
+      evaluate('document.querySelector("#engineering .section-intro")?.dataset.reveal === "pending"'),
+    "below-fold content starts ready to reveal",
+  );
+  await evaluate(
+    'document.querySelector("#engineering .section-intro").scrollIntoView({ block: "center", behavior: "instant" })',
+  );
+  await until(
+    () =>
+      evaluate(
+        'document.querySelector("#engineering .section-intro").dataset.reveal === "shown" && Number(getComputedStyle(document.querySelector("#engineering .section-intro")).opacity) > .99',
+      ),
+    "engineering section fades into view",
+  );
+  await evaluate(
+    'document.querySelector("#workflow .feature").scrollIntoView({ block: "center", behavior: "instant" })',
+  );
+  await until(
+    () => evaluate('document.querySelector("#workflow .feature").dataset.reveal === "shown"'),
+    "feature reveal before hover",
+  );
+  const hoverPoint = await evaluate(`(() => {
+    const rect = document.querySelector("#workflow .feature").getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  })()`);
+  await send("Input.dispatchMouseEvent", { type: "mouseMoved", ...hoverPoint });
+  await until(
+    () =>
+      evaluate(`(() => {
+        const style = getComputedStyle(document.querySelector("#workflow .feature"));
+        return style.transform !== "none" && style.outlineColor !== "rgba(0, 0, 0, 0)";
+      })()`),
+    "hover lift and colored outline",
+  );
+  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 1, y: 1 });
   const showcase = await evaluate(`(() => ({
     images: document.querySelectorAll('img[src^="/judge/screenshots/"]').length,
     links: document.querySelectorAll('a[href="/judge/demo/#/welcome"]').length,
@@ -257,6 +296,13 @@ try {
   await send("Emulation.setEmulatedMedia", {
     features: [{ name: "prefers-reduced-motion", value: "reduce" }],
   });
+  await until(
+    () =>
+      evaluate(
+        '[...document.querySelectorAll(".reveal")].every(el => Number(getComputedStyle(el).opacity) === 1)',
+      ),
+    "reduced motion keeps all content visible",
+  );
   for (const [width, height] of [
     [1280, 850],
     [390, 844],
