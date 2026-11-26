@@ -108,6 +108,9 @@ test("public judging page points at the actual application and labels its data",
   assert.match(html, /href="https:\/\/civic-flow-demo\.vercel\.app\/"/);
   assert.match(html, /sample data/i);
   assert.match(html, /offline/i);
+  assert.doesNotMatch(html, /id="present-start"|id="present-bar"|data-stage=/);
+  assert.match(html, /id="compare-greedy"/);
+  assert.match(html, /id="compare-opt"/);
 });
 
 test("judging copy is product-led rather than instructions or scoring claims", async () => {

@@ -318,20 +318,17 @@ try {
   assert.equal(await evaluate('document.querySelector("#report-count").textContent'), "4");
   await evaluate('document.querySelector("[data-arch=flow]").click()');
   assert.match(await evaluate('document.querySelector("#arch-code").textContent'), /add_edge/);
-  await evaluate('document.querySelector("#present-start").click()');
-  assert.equal(await evaluate('document.body.classList.contains("presenting")'), true);
-  const presentationVisible = await evaluate(`(() => {
-    const bar = document.querySelector("#present-bar").getBoundingClientRect();
-    return bar.height > 0 && bar.top >= 0 && bar.bottom <= innerHeight + 1;
-  })()`);
-  assert.equal(presentationVisible, true, "Presentation controls stay visible");
-  await evaluate('document.querySelector("#present-next").click()');
-  assert.equal(await evaluate('document.querySelector(".active-stage").dataset.stage'), "workflow");
-  await evaluate('document.querySelector("#present-exit").click()');
-  assert.equal(await evaluate('document.body.classList.contains("presenting")'), false);
+  assert.equal(await evaluate('document.querySelector("#present-start, #present-bar")'), null);
+  assert.equal(await evaluate('document.querySelector("#compare-greedy").textContent'), "1 / 2");
+  assert.equal(await evaluate('document.querySelector("#compare-opt").textContent'), "2 / 2");
+  assert.equal(await evaluate('document.querySelectorAll("#lab-graph .chosen").length'), 2);
+  assert.equal(await evaluate('document.querySelectorAll(".arch-lane").length'), 2);
+  assert.match(await evaluate('document.querySelector("#arch-code").textContent'), /add_edge/);
   const offline = await fetch(base + "/judge/offline.html");
   assert.equal(offline.status, 200);
-  assert.match(await offline.text(), /data:image\/png;base64,/);
+  const offlineHtml = await offline.text();
+  assert.match(offlineHtml, /data:image\/png;base64,/);
+  assert.doesNotMatch(offlineHtml, /id="present-start"|id="present-bar"/);
   const showcase = await evaluate(`(() => ({
     images: document.querySelectorAll('img[src^="/judge/screenshots/"]').length,
     links: document.querySelectorAll('a[href="https://civic-flow-demo.vercel.app/"]').length,
@@ -386,6 +383,23 @@ try {
       };
     })()`);
     assert.ok(Object.values(layout).every(Boolean), JSON.stringify({ width, layout }));
+    for (const [section, selector] of [
+      ["hero", ".hero-copy"],
+      ["matching", "#evidence"],
+      ["engineering", "#engineering"],
+    ]) {
+      await evaluate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({ block: "start" })`);
+      const screenshot = await send("Page.captureScreenshot", {
+        format: "png",
+        captureBeyondViewport: false,
+      });
+      const dir = path.join(root, "journey-review");
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        path.join(dir, "showcase-" + section + "-" + width + ".png"),
+        Buffer.from(screenshot.data, "base64"),
+      );
+    }
     await evaluate('document.querySelector(".phone-pair").scrollIntoView({ block: "start" })');
     const showcaseShot = await send("Page.captureScreenshot", {
       format: "png",
