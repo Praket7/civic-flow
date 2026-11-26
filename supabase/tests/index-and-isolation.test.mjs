@@ -33,9 +33,11 @@ test("public tables keep RLS and foreign key lookups have covering indexes", asy
       const profiles = await asUser(db, user, () => query(db, "select id from public.profiles"));
       assert.ok(profiles.every((row) => row.id === user));
       const membership = await asUser(db, user, () =>
-        query(db, "select user_id from public.organization_memberships where organization_id = $1", [
-          ids.orgB,
-        ]),
+        query(
+          db,
+          "select user_id from public.organization_memberships where organization_id = $1",
+          [ids.orgB],
+        ),
       );
       assert.deepEqual(membership, []);
     }
