@@ -121,3 +121,36 @@ test("volunteer service worker leaves judging pages outside its PWA shell cache"
     assert.equal(intercepted, false, route + " must bypass the PWA service worker");
   }
 });
+
+test("the worker does not turn unrelated navigation or private requests into offline assets", async () => {
+  const source = await readFile(new URL("../../public/sw.js", import.meta.url), "utf8");
+  const listeners = new Map();
+  const sw = {
+    location: { origin: "https://civicflow.example.org" },
+    addEventListener: (type, handler) => listeners.set(type, handler),
+  };
+  runInNewContext(source, { self: sw, URL });
+  const handleFetch = listeners.get("fetch");
+  for (const [route, mode] of [
+    ["/unrelated", "navigate"],
+    ["/account.json", "cors"],
+    ["/api/private", "cors"],
+    ["/judge/demo/", "navigate"],
+  ]) {
+    let intercepted = false;
+    handleFetch({
+      request: { method: "GET", url: sw.location.origin + route, mode },
+      respondWith: () => {
+        intercepted = true;
+      },
+    });
+    assert.equal(intercepted, false, route);
+  }
+});
+
+test("the judging response blocks direct connections to other origins", async () => {
+  const config = JSON.parse(await readFile(new URL("../../vercel.json", import.meta.url), "utf8"));
+  const judge = config.headers.find((entry) => entry.source === "/judge/(.*)");
+  const csp = judge.headers.find((entry) => entry.key === "Content-Security-Policy");
+  assert.match(csp.value, /connect-src 'self' blob:;/);
+});

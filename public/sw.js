@@ -4,7 +4,7 @@
  * responses: the replica in IndexedDB is the offline source of truth, and a
  * cached command result would outlive the membership that allowed it.
  */
-const VERSION = "civicflow-volunteer-v2";
+const VERSION = "civicflow-volunteer-v3";
 const SHELL = ["/pwa.html", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -20,7 +20,11 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(keys.filter((key) => key !== VERSION).map((key) => caches.delete(key)));
+      await Promise.all(
+        keys
+          .filter((key) => key.startsWith("civicflow-volunteer-") && key !== VERSION)
+          .map((key) => caches.delete(key)),
+      );
       await self.clients.claim();
     })(),
   );
@@ -89,12 +93,19 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname === "/judge" || url.pathname.startsWith("/judge/")) return;
 
   if (request.mode === "navigate") {
+    if (url.pathname !== "/" && url.pathname !== "/pwa.html") return;
     event.respondWith(
       (async () => {
         try {
           const fresh = await fetch(request);
-          const cache = await caches.open(VERSION);
-          cache.put("/pwa.html", fresh.clone());
+          if (fresh.ok && fresh.headers.get("content-type")?.includes("text/html")) {
+            try {
+              const cache = await caches.open(VERSION);
+              await cache.put("/pwa.html", fresh.clone());
+            } catch {
+              // A full cache must not replace a successful online response.
+            }
+          }
           return fresh;
         } catch {
           const cached = await caches.match("/pwa.html");
@@ -105,6 +116,14 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Cache only public application assets, never arbitrary same-origin data.
+  if (
+    !url.pathname.startsWith("/assets/") &&
+    !url.pathname.startsWith("/icons/") &&
+    url.pathname !== "/manifest.webmanifest"
+  ) {
+    return;
+  }
   event.respondWith(
     (async () => {
       const cached = await caches.match(request);
