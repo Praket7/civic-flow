@@ -1,4 +1,4 @@
-import { supabase } from "./auth";
+import { currentSession, supabase } from "./auth";
 import { providerError } from "../errors";
 import { supabaseAnonKey, supabaseUrl } from "./config";
 
@@ -38,16 +38,18 @@ function dispatcherUrl(): string {
   return `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/dispatch-reminders`;
 }
 
-/** The key is public by design; email and SMS support are capabilities. */
+/** The gateway needs the user JWT; the project key belongs only in apikey. */
 export async function loadPushConfig(): Promise<PushConfig> {
   if (!supabaseAnonKey) return NO_CONFIG;
   try {
+    const session = await currentSession();
+    if (!session?.access_token) return NO_CONFIG;
     const response = await fetch(dispatcherUrl(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         apikey: supabaseAnonKey,
-        Authorization: `Bearer ${supabaseAnonKey}`,
+        Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({ action: "config" }),
     });
