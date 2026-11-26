@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/evaluation-builds.yml"
+      - "scripts/package-macos-evaluation.sh"
 
 permissions:
   contents: read
