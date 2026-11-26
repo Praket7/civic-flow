@@ -88,7 +88,10 @@ test("public judging page points at the isolated sample and labels its data", as
 
 test("judging copy is product-led rather than instructions or scoring claims", async () => {
   const html = await readFile(new URL("../../public/judge/index.html", import.meta.url), "utf8");
-  assert.match(html, /Every open shift has a clear path to being filled/);
+  assert.match(html, /Find the right volunteers for each shift/);
+  assert.match(html, /separate TypeScript implementation with shared policy scenarios/);
+  assert.match(html, /pending until server acceptance/);
+  assert.match(html, /not measured savings for a real nonprofit/);
   assert.match(html, /Thoughtful details\. Dependable decisions/);
   assert.doesNotMatch(
     html,
