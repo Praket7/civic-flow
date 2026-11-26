@@ -232,6 +232,17 @@ try {
   await heading("Service, organized.");
   await open("/judge/");
   await heading("More time for service");
+  const showcase = await evaluate(`(() => ({
+    images: document.querySelectorAll('img[src^="/judge/screenshots/"]').length,
+    links: document.querySelectorAll('a[href="/judge/demo/#/welcome"]').length,
+    sections: ["workflow", "optimizer", "engineering"].every(id => document.getElementById(id)),
+    disclosure: document.body.textContent.includes("Sample data only"),
+    width: document.documentElement.scrollWidth <= innerWidth,
+  }))()`);
+  assert.equal(showcase.images, 5, "showcase retains every real product screenshot");
+  assert.ok(showcase.links >= 2 && showcase.sections && showcase.disclosure && showcase.width);
+  await evaluate('document.querySelector("#optimizer details:nth-child(2) summary").click()');
+  assert.equal(await evaluate('document.querySelector("#optimizer details:nth-child(2)").open'), true);
   await open("/judge/demo/#/welcome");
   await heading("Service, organized");
   await until(
