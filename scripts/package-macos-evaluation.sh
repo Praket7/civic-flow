@@ -32,8 +32,14 @@ trap 'rm -rf "$scratch"' EXIT
 mkdir -p "$scratch/payload" "$(dirname "$output")"
 ditto "$app" "$scratch/payload/CivicFlow.app"
 ln -s /Applications "$scratch/payload/Applications"
-hdiutil create -format UDZO -volname "CivicFlow Evaluation" \
-  -srcfolder "$scratch/payload" "$scratch/CivicFlow.dmg"
+# Reserve filesystem metadata and allocation overhead explicitly; automatic sizing
+# can underestimate the space needed for a large universal executable.
+payload_kib="$(du -sk "$scratch/payload" | awk '{print $1}')"
+image_mib=$(( (payload_kib + 1023) / 1024 * 2 + 128 ))
+df -h "$scratch"
+hdiutil create -size "${image_mib}m" -fs HFS+ -format UDRW \
+  -volname "CivicFlow Evaluation" -srcfolder "$scratch/payload" "$scratch/staging.dmg"
+hdiutil convert "$scratch/staging.dmg" -format UDZO -o "$scratch/CivicFlow.dmg"
 hdiutil verify "$scratch/CivicFlow.dmg"
 mv -f "$scratch/CivicFlow.dmg" "$output"
 shasum -a 256 "$output"
