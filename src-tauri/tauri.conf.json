@@ -31,12 +31,16 @@
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": ["civicflow"]
+        "schemes": [
+          "civicflow"
+        ]
       }
     },
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc3NkU3M0Y3MTk5MzUzMDgKUldRSVU1TVo5M051ZDNvOXovYkViWElja0RoZnB5ejdtUlpWVW11NEJKVFVncjB3QnVNbGIvUnMK",
-      "endpoints": ["https://github.com/Praket7/civic-flow/releases/latest/download/latest.json"]
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ2MzA4NDhCMDE0RjYwODcKUldTSFlFOEJpNFF3Um1pbDN1SmZCQ0xHZTE3b0JNd2ZSOVJHWmRNUUFqc3hLNGdRcG1tQzBuUG4K",
+      "endpoints": [
+        "https://github.com/Praket7/civic-flow/releases/latest/download/latest.json"
+      ]
     }
   },
   "bundle": {
