@@ -101,6 +101,39 @@
   ],
   "redirects": [
     {
+      "source": "/judge/demo/",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-demo.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow-sample-praket7.vercel.app/judge/demo/",
+      "permanent": false
+    },
+    {
+      "source": "/judge/demo/",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-ten.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow-sample-praket7.vercel.app/judge/demo/",
+      "permanent": false
+    },
+    {
+      "source": "/judge/",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-sample-praket7.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow-demo.vercel.app/judge/",
+      "permanent": false
+    },
+    {
       "source": "/judge/demo",
       "has": [
         {
