@@ -79,17 +79,17 @@ test("hosted publishing leaves index untouched when PWA bundle is not verified",
   }
 });
 
-test("public judging page points at the isolated sample and labels its data", async () => {
+test("public judging page points at the actual application and labels its data", async () => {
   const html = await readFile(new URL("../../public/judge/index.html", import.meta.url), "utf8");
-  assert.match(html, /\/judge\/demo\/#\/welcome/);
+  assert.match(html, /href="https:\/\/civic-flow\.vercel\.app\/"/);
   assert.match(html, /sample data/i);
   assert.match(html, /offline/i);
 });
 
 test("judging copy is product-led rather than instructions or scoring claims", async () => {
   const html = await readFile(new URL("../../public/judge/index.html", import.meta.url), "utf8");
-  assert.match(html, /Every open shift has a clear path to being filled/);
-  assert.match(html, /Thoughtful details\. Dependable decisions/);
+  assert.match(html, /From scheduling to reporting/);
+  assert.match(html, /Built to be inspected/);
   assert.doesNotMatch(
     html,
     /Judge the working program|Try a bad value|Verify stored records|Change the analysis|New York prejudging · 200 points|How to evaluate the program/,
@@ -155,23 +155,13 @@ test("the judging response blocks direct connections to other origins", async ()
   assert.match(csp.value, /connect-src 'self' blob:;/);
 });
 
-test("public demo routes use a different browser origin from hosted accounts", async () => {
+test("retired sample hostname redirects to the requested app, without reverse redirects", async () => {
   const config = JSON.parse(await readFile(new URL("../../vercel.json", import.meta.url), "utf8"));
   const sampleHost = "civic-flow-sample-praket7.vercel.app";
-  for (const host of ["civic-flow-demo.vercel.app", "civic-flow-ten.vercel.app"]) {
-    for (const source of ["/judge/demo", "/judge/demo/"]) {
-      const demoRedirect = config.redirects.find(
-        (entry) =>
-          entry.source === source && entry.has.some((condition) => condition.value === host),
-      );
-      assert.equal(new URL(demoRedirect.destination).hostname, sampleHost);
-    }
-  }
-  for (const source of ["/", "/index.html", "/pwa.html", "/sw.js", "/judge", "/judge/"]) {
-    const redirect = config.redirects.find(
-      (entry) =>
-        entry.source === source && entry.has.some((condition) => condition.value === sampleHost),
-    );
-    assert.equal(new URL(redirect.destination).hostname, "civic-flow-demo.vercel.app");
-  }
+  const redirect = config.redirects.find(
+    (entry) =>
+      entry.source === "/(.*)" && entry.has.some((condition) => condition.value === sampleHost),
+  );
+  assert.equal(redirect.destination, "https://civic-flow.vercel.app/");
+  assert.ok(config.redirects.every((entry) => !entry.destination.includes(sampleHost)));
 });
