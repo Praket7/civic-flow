@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { axe } from "jest-axe";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
@@ -78,10 +78,13 @@ describe("route accessibility", () => {
         // The hosted workspace is an iframe around the volunteer client, a
         // separate document jsdom cannot frame-scan. The framed client has its
         // own axe pass in the PWA suite.
-        const results = await axe(
-          container,
-          route.id === "shared-workspace" ? { iframes: false } : undefined,
-        );
+        let results!: Awaited<ReturnType<typeof axe>>;
+        await act(async () => {
+          results = await axe(
+            container,
+            route.id === "shared-workspace" ? { iframes: false } : undefined,
+          );
+        });
         const blocking = results.violations.filter(
           (violation) => violation.impact === "serious" || violation.impact === "critical",
         );

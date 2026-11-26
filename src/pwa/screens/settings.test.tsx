@@ -1,20 +1,32 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
+import { loadPreferences } from "../../lib/sync/notifications";
 import { useCloud } from "../../lib/sync/provider";
 import { SettingsScreen } from "./settings";
 
 vi.mock("../../lib/sync/provider", () => ({ useCloud: vi.fn() }));
 vi.mock("../../lib/sync/notifications", () => ({
-  loadPreferences: vi.fn(async () => ({ push: false })),
-  loadPushConfig: vi.fn(async () => ({ push: { configured: false, publicKey: "" } })),
+  loadPreferences: vi.fn(async () => ({
+    inApp: true,
+    push: false,
+    email: false,
+    sms: false,
+    quietHoursStart: null,
+    quietHoursEnd: null,
+    reminderMinutes: 1440,
+  })),
+  loadPushConfig: vi.fn(async () => ({
+    push: { configured: false, publicKey: "" },
+    channels: { email: false, sms: false },
+  })),
   pushState: vi.fn(async () => "unsupported"),
   savePreferences: vi.fn(),
   enablePush: vi.fn(),
   disablePush: vi.fn(),
 }));
 
-function renderWithPending(pending: number, signOut: () => Promise<void>) {
+async function renderWithPending(pending: number, signOut: () => Promise<void>) {
   vi.mocked(useCloud).mockReturnValue({
     workspace: { organizationId: "org-test", organization: { name: "Test organization" } },
     workspaces: [],
@@ -37,17 +49,19 @@ function renderWithPending(pending: number, signOut: () => Promise<void>) {
     retryConflict: vi.fn(),
   } as unknown as ReturnType<typeof useCloud>);
 
-  render(
-    <MemoryRouter>
-      <SettingsScreen />
-    </MemoryRouter>,
-  );
+  await act(async () => {
+    render(
+      <MemoryRouter>
+        <SettingsScreen />
+      </MemoryRouter>,
+    );
+  });
 }
 
 describe("volunteer sign-out and offline work", () => {
-  it("asks for confirmation before leaving unsynced changes on a device", () => {
+  it("asks for confirmation before leaving unsynced changes on a device", async () => {
     const signOut = vi.fn().mockResolvedValue(undefined);
-    renderWithPending(2, signOut);
+    await renderWithPending(2, signOut);
 
     fireEvent.click(screen.getByRole("button", { name: /^Sign out$/ }));
     expect(signOut).not.toHaveBeenCalled();
@@ -61,12 +75,19 @@ describe("volunteer sign-out and offline work", () => {
     expect(signOut).toHaveBeenCalledOnce();
   });
 
-  it("signs out normally when there is no queued work", () => {
+  it("signs out normally when there is no queued work", async () => {
     const signOut = vi.fn().mockResolvedValue(undefined);
-    renderWithPending(0, signOut);
+    await renderWithPending(0, signOut);
 
     fireEvent.click(screen.getByRole("button", { name: /^Sign out$/ }));
     expect(signOut).toHaveBeenCalledOnce();
     expect(screen.queryByText(/changes waiting to sync/i)).not.toBeInTheDocument();
+  });
+
+  it("shows a preferences loading failure instead of an endless loading state", async () => {
+    vi.mocked(loadPreferences).mockRejectedValueOnce(new Error("Preferences unavailable"));
+    await renderWithPending(0, vi.fn().mockResolvedValue(undefined));
+    expect(screen.getByRole("alert")).toHaveTextContent("Preferences unavailable");
+    expect(screen.queryByText(/Loading how this organization reaches you/)).not.toBeInTheDocument();
   });
 });

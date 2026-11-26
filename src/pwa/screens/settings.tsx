@@ -209,7 +209,13 @@ function NotificationSettings() {
     return (
       <Card>
         <h2 className={styles.cardTitle}>Reminders</h2>
-        <p className={styles.muted}>Loading how this organization reaches you…</p>
+        {problem ? (
+          <p className={styles.error} role="alert">
+            {problem}
+          </p>
+        ) : (
+          <p className={styles.muted}>Loading how this organization reaches you…</p>
+        )}
       </Card>
     );
   }
