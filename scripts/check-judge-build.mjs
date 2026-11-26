@@ -24,6 +24,8 @@ assert.doesNotMatch(
 assert.match(sample, /\/assets\/main-[\w-]+\.js/, "judge demo must load the coordinator UI");
 assert.match(judge, /\/judge\/demo\/#\/welcome/, "judge page must link to the demo");
 assert.match(judge, /sample data/i, "judge page must disclose local-only data");
+assert.match(judge, /id="evidence"/, "benchmark evidence section is required");
+assert.match(judge, /id="landscape"/, "sourced landscape section is required");
 for (const name of [
   "mission-control",
   "autoroster",

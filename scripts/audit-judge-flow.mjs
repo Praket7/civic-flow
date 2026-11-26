@@ -259,11 +259,17 @@ try {
     () => evaluate('document.querySelector("#workflow .feature").dataset.reveal === "shown"'),
     "feature reveal before hover",
   );
-  const hoverPoint = await evaluate(`(() => {
-    const rect = document.querySelector("#workflow .feature").getBoundingClientRect();
-    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-  })()`);
-  await send("Input.dispatchMouseEvent", { type: "mouseMoved", ...hoverPoint });
+  // Headless Chromium can report a non-hover pointer even on desktop.
+  // Force only the CSS pseudo-state to verify the actual hover presentation.
+  await send("DOM.enable");
+  await send("CSS.enable");
+  const { root: documentNode } = await send("DOM.getDocument");
+  const { nodeId: featureNode } = await send("DOM.querySelector", {
+    nodeId: documentNode.nodeId,
+    selector: "#workflow .feature",
+  });
+  assert.ok(featureNode);
+  await send("CSS.forcePseudoState", { nodeId: featureNode, forcedPseudoClasses: ["hover"] });
   await until(
     () =>
       evaluate(`(() => {
@@ -272,7 +278,15 @@ try {
       })()`),
     "hover lift and colored outline",
   );
-  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 1, y: 1 });
+  await send("CSS.forcePseudoState", { nodeId: featureNode, forcedPseudoClasses: [] });
+  await evaluate('document.querySelector("[data-method=greedy]").click()');
+  assert.equal(await evaluate('document.querySelector("#filled-count").textContent'), "1 / 2");
+  assert.equal(
+    await evaluate('document.querySelector("#assignment-map .unused span").textContent'),
+    "Unfilled",
+  );
+  await evaluate('document.querySelector("[data-method=optimized]").click()');
+  assert.equal(await evaluate('document.querySelector("#filled-count").textContent'), "2 / 2");
   const showcase = await evaluate(`(() => ({
     images: document.querySelectorAll('img[src^="/judge/screenshots/"]').length,
     links: document.querySelectorAll('a[href="/judge/demo/#/welcome"]').length,
