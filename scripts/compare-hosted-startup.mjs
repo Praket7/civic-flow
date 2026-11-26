@@ -21,7 +21,11 @@ assert.ok(chromeBin, "Chrome is required for a same-runner comparison");
 
 const pages = [
   { name: "hosted welcome", route: "/", heading: "Service, organized" },
-  { name: "judging showcase", route: "/judge/", heading: "More time for service" },
+  {
+    name: "judging showcase",
+    route: "/judge/",
+    heading: ["More time for service", "Manage volunteers"],
+  },
   { name: "interactive sample", route: "/judge/demo/", heading: "Service, organized" },
 ];
 const mime = {
@@ -156,7 +160,7 @@ async function measure(root) {
         );
         if (
           value.path !== page.route ||
-          !value.heading.includes(page.heading) ||
+          ![].concat(page.heading).some((heading) => value.heading.includes(heading)) ||
           !value.fcp ||
           !value.load
         ) {

@@ -158,10 +158,12 @@ test("the judging response blocks direct connections to other origins", async ()
 test("retired sample hostname redirects to the requested app, without reverse redirects", async () => {
   const config = JSON.parse(await readFile(new URL("../../vercel.json", import.meta.url), "utf8"));
   const sampleHost = "civic-flow-sample-praket7.vercel.app";
-  const redirect = config.redirects.find(
-    (entry) =>
-      entry.source === "/(.*)" && entry.has.some((condition) => condition.value === sampleHost),
-  );
-  assert.equal(redirect.destination, "https://civic-flow.vercel.app/");
+  for (const source of ["/", "/judge/demo", "/judge/demo/", "/(.*)"]) {
+    const redirect = config.redirects.find(
+      (entry) =>
+        entry.source === source && entry.has.some((condition) => condition.value === sampleHost),
+    );
+    assert.equal(redirect.destination, "https://civic-flow.vercel.app/");
+  }
   assert.ok(config.redirects.every((entry) => !entry.destination.includes(sampleHost)));
 });

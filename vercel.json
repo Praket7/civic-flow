@@ -101,6 +101,72 @@
   ],
   "redirects": [
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-sample-praket7.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow.vercel.app/",
+      "permanent": false
+    },
+    {
+      "source": "/judge",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-sample-praket7.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow.vercel.app/",
+      "permanent": false
+    },
+    {
+      "source": "/judge/",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-sample-praket7.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow.vercel.app/",
+      "permanent": false
+    },
+    {
+      "source": "/judge/demo",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-sample-praket7.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow.vercel.app/",
+      "permanent": false
+    },
+    {
+      "source": "/judge/demo/",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-sample-praket7.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow.vercel.app/",
+      "permanent": false
+    },
+    {
+      "source": "/judge/demo/index.html",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-sample-praket7.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow.vercel.app/",
+      "permanent": false
+    },
+    {
       "source": "/(.*)",
       "has": [
         {
