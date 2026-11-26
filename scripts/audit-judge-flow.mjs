@@ -388,7 +388,9 @@ try {
       ["matching", "#evidence"],
       ["engineering", "#engineering"],
     ]) {
-      await evaluate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({ block: "start" })`);
+      await evaluate(
+        `document.querySelector(${JSON.stringify(selector)}).scrollIntoView({ block: "start" })`,
+      );
       const screenshot = await send("Page.captureScreenshot", {
         format: "png",
         captureBeyondViewport: false,
