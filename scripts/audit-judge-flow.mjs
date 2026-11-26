@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Independent smoke of the compiled FBLA judging build in a fresh Chromium
+ * Independent smoke of the compiled judging build in a fresh Chromium
  * profile. Unlike HTML asset checks, this verifies the actual React router,
  * seeded sign-in, and navigation through the coordinator UI.
  *
@@ -410,7 +410,7 @@ try {
       "hash navigation must stay within the isolated judging app",
     );
   }
-  // Stage 5: exercise focus boundaries with real keyboard events and a narrow viewport.
+  // exercise focus boundaries with real keyboard events and a narrow viewport.
   await send("Emulation.setDeviceMetricsOverride", {
     width: 390,
     height: 844,
@@ -494,10 +494,10 @@ try {
   );
   await send("Emulation.clearDeviceMetricsOverride");
   console.log(
-    "Stage 5: mobile drawer focus containment, Escape, return focus, and route focus passed.",
+    "mobile drawer focus containment, Escape, return focus, and route focus passed.",
   );
 
-  // Stage 4: changing a real date filter must recalculate the displayed report.
+  // changing a real date filter must recalculate the displayed report.
   await open("/judge/demo/#/coordinator/reports/custom");
   await heading("Custom report builder");
   await until(
@@ -624,7 +624,7 @@ try {
     }
   }
   await evaluate("window.__reportPrint.close()");
-  console.log("Stage 4: real CSV payload and printable export match the visible table.");
+  console.log("real CSV payload and printable export match the visible table.");
 
   assert.equal(
     await evaluate(
@@ -651,8 +651,8 @@ try {
       ),
     "future-only report must contain zero source rows",
   );
-  console.log("Stage 4: live report filters and future period passed.");
-  // Stage 6: public sample role switching and actual UI writes.
+  console.log("live report filters and future period passed.");
+  // public sample role switching and actual UI writes.
   const evidenceDir = path.join(root, "journey-review");
   await mkdir(evidenceDir, { recursive: true });
   async function capture(name) {
@@ -903,10 +903,10 @@ try {
   );
   await capture("12-new-shift-on-schedule");
   console.log(
-    "Stage 6: created opportunity, scheduled shift, discovered and applied, verified eligibility, applied AutoRoster, notification and schedule passed.",
+    "created opportunity, scheduled shift, discovered and applied, verified eligibility, applied AutoRoster, notification and schedule passed.",
   );
   console.log(
-    "Stage 6: invalid code, check-in, checkout, pending record, coordinator approval, volunteer verified history passed.",
+    "invalid code, check-in, checkout, pending record, coordinator approval, volunteer verified history passed.",
   );
 
   console.log(

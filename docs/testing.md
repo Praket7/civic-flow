@@ -2,14 +2,14 @@
 
 Tests are organized by the system they exercise rather than by when they were written. Unit tests stay close to their implementation; integration tests and acceptance checks have their own directories.
 
-| Location | Scope |
-| --- | --- |
-| `src/**/*.test.ts(x)` | React, domain helpers and browser adapters |
-| `src/test/` | Shared frontend test setup |
-| `src-tauri/core/tests/` | Rust and SQLite integration |
-| `supabase/tests/` | SQL policies, RPC, synchronization and delivery |
-| `scripts/tests/` | Build, backup and release utilities |
-| `tests/e2e/` | Native desktop journeys |
+| Location                | Scope                                           |
+| ----------------------- | ----------------------------------------------- |
+| `src/**/*.test.ts(x)`   | React, domain helpers and browser adapters      |
+| `src/test/`             | Shared frontend test setup                      |
+| `src-tauri/core/tests/` | Rust and SQLite integration                     |
+| `supabase/tests/`       | SQL policies, RPC, synchronization and delivery |
+| `scripts/tests/`        | Build, backup and release utilities             |
+| `tests/e2e/`            | Native desktop journeys                         |
 
 ## Commands
 

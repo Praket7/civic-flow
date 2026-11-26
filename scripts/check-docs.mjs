@@ -30,6 +30,29 @@ for (const path of required) {
   if (!existsSync(join(root, path))) problems.push(`Missing documentation: ${path}`);
 }
 
+const readme = join(root, "README.md");
+if (existsSync(readme)) {
+  const source = readFileSync(readme, "utf8");
+  const headings = [
+    "## Screenshots",
+    "## Core capabilities",
+    "## AutoRoster",
+    "## Architecture",
+    "## Install and releases",
+    "## Development",
+    "## Testing and quality",
+    "## License and acknowledgements",
+  ];
+  for (const heading of headings) {
+    if (!source.includes(heading)) problems.push(`README is missing section: ${heading}`);
+  }
+  for (const line of source.split("\n")) {
+    if (/\b\d+\s+(?:registered\s+)?(?:routes|frontend tests|Rust tests|tables)\b/i.test(line)) {
+      problems.push(`README hard-codes a volatile count: ${line.trim()}`);
+    }
+  }
+}
+
 for (const path of markdown(root)) {
   const source = readFileSync(path, "utf8").replace(/\x60{3}[\s\S]*?\x60{3}/g, "");
   for (const match of source.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
