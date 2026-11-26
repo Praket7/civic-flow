@@ -83,7 +83,10 @@ export async function promoteHostedPwa(dist) {
     .transpileModule(validatorSource, {
       compilerOptions: { target: ts.ScriptTarget.ES2021, module: ts.ModuleKind.ESNext },
     })
-    .outputText.replace("export function validateOpportunityDraft", "function validateOpportunityDraft");
+    .outputText.replace(
+      "export function validateOpportunityDraft",
+      "function validateOpportunityDraft",
+    );
   const marker = "/* BUILT_VALIDATOR */";
   if (!judgeHtml.includes(marker) || !validator.includes("function validateOpportunityDraft")) {
     throw new Error("Judging validator integration is missing.");
@@ -92,7 +95,30 @@ export async function promoteHostedPwa(dist) {
     "window.civicflowValidateOpportunity = (() => {\n" +
     validator +
     "\nreturn validateOpportunityDraft;\n})();";
-  await writeFile(judgePath, judgeHtml.replace(marker, () => inlineValidator), "utf8");
+  const compiledJudge = judgeHtml.replace(marker, () => inlineValidator);
+  await writeFile(judgePath, compiledJudge, "utf8");
+
+  // The offline showcase is a single file. It embeds the same tested validator,
+  // screenshots, and interactive labs; no workspace credentials or data.
+  let offlineJudge = compiledJudge.replace('<html lang="en">', '<html lang="en" data-offline>');
+  for (const name of [
+    "mission-control",
+    "autoroster",
+    "schedule",
+    "volunteer-home",
+    "volunteer-schedule",
+  ]) {
+    const image = await readFile(path.join(judgeScreenshots, name + ".png"));
+    const source = 'src="/judge/screenshots/' + name + '.png"';
+    if (!offlineJudge.includes(source)) {
+      throw new Error("Missing showcase screenshot: " + name);
+    }
+    offlineJudge = offlineJudge.replace(
+      source,
+      'src="data:image/png;base64,' + image.toString("base64") + '"',
+    );
+  }
+  await writeFile(path.join(dist, "judge", "offline.html"), offlineJudge, "utf8");
 
   // The built entry document is replaced only AFTER all validation succeeds.
   // The source index.html and Tauri's build:web output are never modified.

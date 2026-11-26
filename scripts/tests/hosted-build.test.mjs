@@ -73,6 +73,11 @@ test("hosted publishing replaces only the built index, keeping desktop sources i
     };
     assert.equal(window.civicflowValidateOpportunity(draft).valid, true);
     assert.equal(window.civicflowValidateOpportunity({ ...draft, capacity: "0" }).valid, false);
+    const offline = await readFile(path.join(dir, "judge", "offline.html"), "utf8");
+    assert.match(offline, /<html lang="en" data-offline>/);
+    assert.equal((offline.match(/src="data:image\/png;base64,/g) || []).length, 5);
+    assert.doesNotMatch(offline, /src="\/judge\/screenshots\//);
+    assert.match(offline, /window\.civicflowValidateOpportunity =/);
     assert.equal(await readFile(path.join(dir, "index.html"), "utf8"), hosted);
     assert.equal(await readFile(path.join(dir, "pwa.html"), "utf8"), hosted);
     assert.equal(await readFile(path.join(dir, "judge", "demo", "index.html"), "utf8"), demo);
@@ -194,8 +199,12 @@ test("showcase matching fills the most eligible seats before maximizing score", 
   const context = {};
   runInNewContext(source[1], context);
   const solve = context.solveMatching;
-  assert.equal(solve([[92, 98], [76, null]], "greedy").filled, 1);
-  assert.equal(solve([[92, 98], [76, null]], "optimized").filled, 2);
+  const simple = [
+    [92, 98],
+    [76, null],
+  ];
+  assert.equal(solve(simple, "greedy").filled, 1);
+  assert.equal(solve(simple, "optimized").filled, 2);
   for (let mask = 0; mask < 512; mask++) {
     const matrix = Array.from({ length: 3 }, (_, i) =>
       Array.from({ length: 3 }, (_, j) =>

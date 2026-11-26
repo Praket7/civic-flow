@@ -296,13 +296,19 @@ try {
   assert.equal(await evaluate('document.querySelector("#filled-count").textContent'), "3 / 3");
   await evaluate('document.querySelector("#lab-reset").click()');
   await evaluate('document.querySelector("#validation-example").click()');
-  assert.equal(await evaluate('document.querySelector("#validation-output").dataset.valid'), "false");
+  assert.equal(
+    await evaluate('document.querySelector("#validation-output").dataset.valid'),
+    "false",
+  );
   await evaluate(`(() => {
     const input = document.querySelector("#validation-capacity");
     input.value = "12";
     input.dispatchEvent(new Event("input"));
   })()`);
-  assert.equal(await evaluate('document.querySelector("#validation-output").dataset.valid'), "true");
+  assert.equal(
+    await evaluate('document.querySelector("#validation-output").dataset.valid'),
+    "true",
+  );
   await evaluate(`(() => {
     const select = document.querySelector("#report-program");
     select.value = "Food pantry";
@@ -314,10 +320,18 @@ try {
   assert.match(await evaluate('document.querySelector("#arch-code").textContent'), /add_edge/);
   await evaluate('document.querySelector("#present-start").click()');
   assert.equal(await evaluate('document.body.classList.contains("presenting")'), true);
+  const presentationVisible = await evaluate(`(() => {
+    const bar = document.querySelector("#present-bar").getBoundingClientRect();
+    return bar.height > 0 && bar.top >= 0 && bar.bottom <= innerHeight + 1;
+  })()`);
+  assert.equal(presentationVisible, true, "Presentation controls stay visible");
   await evaluate('document.querySelector("#present-next").click()');
   assert.equal(await evaluate('document.querySelector(".active-stage").dataset.stage'), "workflow");
   await evaluate('document.querySelector("#present-exit").click()');
   assert.equal(await evaluate('document.body.classList.contains("presenting")'), false);
+  const offline = await fetch(base + "/judge/offline.html");
+  assert.equal(offline.status, 200);
+  assert.match(await offline.text(), /data:image\/png;base64,/);
   const showcase = await evaluate(`(() => ({
     images: document.querySelectorAll('img[src^="/judge/screenshots/"]').length,
     links: document.querySelectorAll('a[href="https://civic-flow-demo.vercel.app/"]').length,
