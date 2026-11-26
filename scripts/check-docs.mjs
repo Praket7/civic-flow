@@ -88,6 +88,7 @@ const OPERATIONAL_DOCUMENTS = new Set([
   "docs/FBLA-STAGE7-RELIABILITY.md",
   "docs/FBLA-STAGE8-COMPETITION.md",
   "docs/FBLA-FINAL-POLISH.md",
+  "docs/PRODUCTION-ONBOARDING-HARDENING.md",
 ]);
 const extra = [...markdown(".")].filter(
   (path) => path !== "README.md" && !LEGAL_DOCUMENTS.has(path) && !OPERATIONAL_DOCUMENTS.has(path),

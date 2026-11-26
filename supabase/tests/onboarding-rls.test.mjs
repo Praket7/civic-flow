@@ -79,7 +79,10 @@ test("global diagnostic tables remain closed even if SELECT is accidentally gran
   try {
     await seed(db);
     await query(db, "insert into public.backup_runs (status) values ('succeeded')");
-    await query(db, "insert into public.server_job_runs (job, status) values ('test', 'succeeded')");
+    await query(
+      db,
+      "insert into public.server_job_runs (job, status) values ('test', 'succeeded')",
+    );
     for (const table of ["backup_runs", "server_job_runs"]) {
       await assert.rejects(
         asUser(db, ids.ownerA, () => query(db, `select id from public.${table}`)),
