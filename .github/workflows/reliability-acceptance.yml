@@ -1,4 +1,4 @@
-name: Stage 7 reliability acceptance
+name: Reliability acceptance
 
 on:
   pull_request:

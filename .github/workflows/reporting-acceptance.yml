@@ -1,4 +1,4 @@
-name: Stage 4 Reporting Acceptance
+name: Reporting acceptance
 
 on:
   pull_request:
@@ -12,7 +12,7 @@ on:
       - "scripts/audit-judge-flow.mjs"
 
 concurrency:
-  group: stage4-reporting-${{ github.event.pull_request.number }}
+  group: reporting-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:

@@ -1,8 +1,88 @@
 # CivicFlow
 
-CivicFlow is a volunteer coordination platform for small nonprofits. Coordinators publish opportunities and shifts, staff open roles, track attendance and service hours, manage volunteer records, and report outcomes. Volunteers find service, register, check in, and keep a record of their contributions.
+**Good volunteer programs deserve better than a spreadsheet.**
 
-The desktop application is local-first: its workspace, scheduling, reporting, check-in, and AutoRoster features work without a network connection. An optional shared workspace connects the desktop and an installable volunteer PWA through Supabase for organizations that need multiple devices.
+CivicFlow helps small nonprofits coordinate the people who make their work possible. A coordinator can publish an opportunity, schedule a shift, find qualified volunteers, track attendance, and report the hours served without juggling separate tools.
+
+The desktop application works offline. Organizations that need to coordinate across devices can use a shared workspace with an installable volunteer web app.
+
+[Open the interactive demo](https://civic-flow-demo.vercel.app/judge/demo/#/welcome) · [Project showcase](https://civic-flow-demo.vercel.app/judge/) · [Hosted volunteer app](https://civic-flow-demo.vercel.app/)
+
+[![CI](https://github.com/Praket7/civic-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/Praket7/civic-flow/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+## Screenshots
+
+| Coordinator home | AutoRoster |
+| :---: | :---: |
+| ![Coordinator home](docs/screenshots/mission-control.png) | ![AutoRoster assignment planning](docs/screenshots/autoroster.png) |
+
+![Coordinator schedule with opportunities and shifts](docs/screenshots/schedule.png)
+
+| Volunteer schedule | Volunteer home |
+| :---: | :---: |
+| ![Volunteer schedule](docs/screenshots/volunteer-schedule.png) | ![Volunteer home](docs/screenshots/volunteer-home.png) |
+
+## Core capabilities
+
+| For coordinators | For volunteers |
+| --- | --- |
+| Publish opportunities, shifts and recurring schedules | Find opportunities and register for shifts |
+| Manage skills, credentials and availability | Review upcoming service and notifications |
+| Fill open roles with AutoRoster | Check in and out of scheduled service |
+| Review attendance, service hours and records | Submit hours and see verified service history |
+| Export reports and printable funder packets | Use the installable shared-workspace web app |
+
+## AutoRoster
+
+Finding the right volunteer is not simply a matter of filling the next empty slot. A role may require a credential, a volunteer may already have a conflicting shift, and an organization may need to distribute work fairly.
+
+AutoRoster models staffing as a deterministic min-cost max-flow problem. It excludes ineligible assignments, ranks the remaining choices using the configured policy, and returns a proposed roster with explanations. Coordinators review the proposal before applying it.
+
+```mermaid
+flowchart LR
+    A["Open roles"] --> C["Eligibility checks"]
+    B["Volunteer records"] --> C
+    C --> D["Costed assignment graph"]
+    D --> E["Min-cost max-flow"]
+    E --> F["Proposed roster"]
+    F --> G["Coordinator review"]
+    G --> H["Apply assignments"]
+    C --> I["Explain exclusions"]
+    F --> J["Explain scores and alternatives"]
+    classDef input fill:#e8efff,stroke:#4972b8,color:#172b4d
+    classDef compute fill:#e6f5ee,stroke:#328065,color:#14392d
+    classDef output fill:#fff2db,stroke:#b68436,color:#49320c
+    class A,B input
+    class C,D,E compute
+    class F,G,H,I,J output
+```
+
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Desktop["Desktop · offline-first"]
+        UI["React / TypeScript"] --> Tauri["Tauri command boundary"]
+        Tauri --> Core["Rust domain core"]
+        Core --> DB[("Encrypted SQLite")]
+    end
+    subgraph Shared["Shared workspace"]
+        PWA["Volunteer and coordinator PWA"] --> API["Supabase RPC"]
+        API --> PG[("Postgres · RLS")]
+        PG --> Log["Versioned change log"]
+    end
+    UI --> Sync["Desktop shared-workspace adapter"]
+    Sync <-->|"Commands and revisions"| API
+    Log --> Sync
+    classDef client fill:#e8efff,stroke:#4972b8,color:#172b4d
+    classDef domain fill:#e6f5ee,stroke:#328065,color:#14392d
+    classDef storage fill:#fff2db,stroke:#b68436,color:#49320c
+    class UI,PWA client
+    class Tauri,Core,Sync,API domain
+    class DB,PG,Log storage
+```
+
+The Rust core owns local authorization, scheduling, matching, reporting and migrations. Shared workspaces use server-authoritative commands, stable operation IDs and revision checks. The hosted interface supports volunteer workflows and a narrower set of coordinator tools than the desktop application.
 
 <!-- CIVICFLOW_FACTS_START -->
 | Fact | Value |
@@ -14,172 +94,49 @@ The desktop application is local-first: its workspace, scheduling, reporting, ch
 | Application tables | 51 |
 <!-- CIVICFLOW_FACTS_END -->
 
-## Screenshots
-
-| Coordinator home | AutoRoster |
-| --- | --- |
-| ![Coordinator home](docs/screenshots/mission-control.png) | ![AutoRoster](docs/screenshots/autoroster.png) |
-| **Volunteer schedule** | **Volunteer home** |
-| ![Volunteer schedule](docs/screenshots/volunteer-schedule.png) | ![Volunteer home](docs/screenshots/volunteer-home.png) |
-
-![Schedule](docs/screenshots/schedule.png)
-
-## Core capabilities
-
-- Opportunities, shifts, roles, weekly series, and capacity.
-- Volunteer records, skills, availability, credentials, and applications.
-- AutoRoster planning with an explanation for every assignment.
-- Check-in, attendance, no-shows, and a check-in kiosk.
-- Service-hour submission, review, approval, and records.
-- Reports, CSV export, and a printable funder packet.
-- An encrypted local SQLite workspace that works offline.
-- An optional shared workspace and installable volunteer PWA.
-
-## AutoRoster
-
-AutoRoster assigns volunteers to open roles while respecting availability, conflicts, credentials, skills, age rules, rest requirements, and workload limits. It can fill one shift or review every upcoming gap.
-
-The planner uses deterministic min-cost max-flow optimization. For every proposed assignment it reports the hard checks and score components, and it can compare an assigned volunteer with an eligible alternative.
-
-## Architecture
-
-```text
-Desktop                                   Shared workspace
-React 19 + TypeScript                     Volunteer PWA
-        |                                        |
-        v                                        v
-Tauri 2 commands                          Supabase RPC
-        |                                        |
-        v                                        v
-civicflow-core (Rust)                     Postgres
-        |                                        |
-        v                                        v
-SQLite workspace                          change log + commands
-```
-
-- `src-tauri/core` owns the schema, migrations, authorization, workflow rules, matching, reporting, backups, and audit events. It has no Tauri dependency and is tested with `cargo test`.
-- The desktop writes to local SQLite first. React reads one snapshot through the repository boundary; screens do not keep private copies of records.
-- The shared workspace uses the server as the authority. Writes are queued locally, retried with stable operation IDs, and refused rather than silently merged when the server has newer data.
-- The volunteer PWA and the desktop's shared view use the same Rust planner and the same synchronized data model.
-
-For an exit-gate-by-exit-gate review, see the [public release readiness audit](docs/PUBLIC-RELEASE-READINESS.md). The current source is not approved for unrestricted public launch.
-
-## Web surfaces and data boundaries
-
-**Build targets are intentionally different.** The native Tauri build runs
-`pnpm build:web`, keeping `index.html` as the local demonstration and
-`pwa.html` as the separately embedded real Supabase client. The browser
-preview cannot sign in to local browser-only accounts in production and must
-not hold real volunteer information.
-
-For an independently hosted website, `pnpm build:hosted` first validates
-the **publishable/anon** `VITE_SUPABASE_ANON_KEY` (never a service-role key),
-builds the same source, then replaces the compiled root `dist/index.html`
-with the real `pwa.html` entrypoint. `vercel.json` uses this dedicated
-hosted build. It fails rather than silently deploying a localStorage demo
-when configuration is absent. The original source files and Tauri build
-remain unchanged.
-
-The hosted PWA supports authenticated volunteers and a narrower coordinator
-view with live workspace health, reminder history, and RLS-scoped upcoming
-shifts. **This is not the full desktop coordinator interface.** Browser
-AutoRoster editing, full service-hour approval and full reporting still need
-server-backed UI development and real multi-account acceptance testing.
-
-The preview is never a substitute for an organization database. A successful
-`build:hosted` proves the correct entrypoint was compiled, not that
-production authentication, SMTP, backups or permissions were tested.
-
-## Development
-
-Use the Node version in `.node-version`, pnpm 12.9.1, stable Rust, and the platform's Tauri prerequisites.
-
-```bash
-pnpm install --frozen-lockfile
-pnpm dev              # browser preview at http://localhost:5173
-pnpm tauri dev        # native desktop window
-pnpm verify           # local quality gate
-pnpm test:hosted      # fail-closed production entrypoint tests
-pnpm test:ops         # encrypted backup / restore script syntax
-pnpm tauri build      # installers for this platform
-```
-
-The seeded demo workspace is available from the welcome screen and needs no account or network.
-
-### Production operations before live enrollment
-
-The Supabase Free plan does not automatically preserve daily project
-backups. `scripts/backup-cloud.sh` streams a custom PostgreSQL dump
-through **age encryption** directly into a private S3 bucket and requires
-bucket-level public-access blocking. Its manual
-`.github/workflows/backup-cloud.yml` workflow is deliberately restricted
-to `main` and a GitHub `backup-production` environment: enable required
-environment reviewers and protect `main` before configuring
-`CIVICFLOW_DATABASE_URL`, `CIVICFLOW_BACKUP_AGE_RECIPIENT`,
-`CIVICFLOW_BACKUP_S3_URI`, and the OIDC
-`CIVICFLOW_BACKUP_ROLE_ARN`. An upload **is not a verified restore**.
-
-`scripts/verify-cloud-restore.sh` decrypts an archived object through a
-pipe to an explicitly authorized disposable **localhost**
-`civicflow_restore_*` PostgreSQL database. Keep the age private identity
-off the repository and GitHub logs. Rehearse a real restore and separately
-validate membership, authentication and application records before approving
-release. No test or workflow invents successful `backup_runs` records.
-
-`.github/workflows/hosted-auth-smoke.yml` is an opt-in, read-only test
-against three actual staging accounts in two organizations; provide the
-account credentials through the protected `hosted-staging` environment.
-Until it runs successfully, synthetic SQL role tests are not equivalent to
-a live hosted-account acceptance test.
-
-## Testing and quality
-
-`pnpm verify` runs the TypeScript typecheck, ESLint, Prettier, generated-file checks, unit tests, SQL protocol tests, the web build, browser accessibility and print audits, Rust formatting, Clippy, and the Rust test suite.
-
-CI additionally runs the macOS native end-to-end test with WebdriverIO, dependency audits in both Cargo workspaces, a production pnpm audit, and a gitleaks secret scan. The SQL suite applies every Supabase migration to PGlite and exercises row-level security, commands, sync, check-in, and reminders.
+For implementation details, see [architecture](docs/architecture.md).
 
 ## Install and releases
 
-**Release status:** This repository contains the reviewed CivicFlow source and Phase 1 authorization changes, but it has not published a verified installer release. The links below point to **legacy v0.1.2 installers** in the original repository, not new builds from `civic-flow`.
+The current repository has not yet published a verified signed installer. The [legacy v0.1.2 release](https://github.com/Praket7/civicflow2/releases/tag/v0.1.2) belongs to the original repository and is not a build of this revision. Do not bypass operating-system security warnings for untrusted installers.
 
-[Download the previous CivicFlow release](https://github.com/Praket7/civicflow2/releases/latest) for macOS, Windows, or Linux. The macOS asset is one universal DMG for Apple silicon and Intel Macs; the Windows and Linux releases contain the x64 installers for those platforms.
+The interactive demo uses fictional, browser-local records and requires no account. The hosted app uses Supabase authentication and requires an authorized workspace invitation. Do not enter real volunteer data in the demo.
 
-| Platform | Direct download |
-| --- | --- |
-| macOS | [Universal DMG](https://github.com/Praket7/civicflow2/releases/download/v0.1.2/CivicFlow_0.1.2_universal.dmg) (Apple silicon and Intel) |
-| Windows 10/11 | [x64 installer](https://github.com/Praket7/civicflow2/releases/download/v0.1.2/CivicFlow_0.1.2_x64-setup.exe) or [MSI](https://github.com/Praket7/civicflow2/releases/download/v0.1.2/CivicFlow_0.1.2_x64_en-US.msi) |
-| Linux | [AppImage](https://github.com/Praket7/civicflow2/releases/download/v0.1.2/CivicFlow_0.1.2_amd64.AppImage), [deb](https://github.com/Praket7/civicflow2/releases/download/v0.1.2/CivicFlow_0.1.2_amd64.deb), or [rpm](https://github.com/Praket7/civicflow2/releases/download/v0.1.2/CivicFlow-0.1.2-1.x86_64.rpm) |
+Before enrolling real organizations, complete the [deployment](docs/deployment.md) and [operations](docs/operations.md) checks, including hosted role isolation, restore rehearsal and signed release verification. A successful build alone does not establish production readiness.
 
-[Download `SHA256SUMS.txt`](https://github.com/Praket7/civicflow2/releases/download/v0.1.2/SHA256SUMS.txt) before running an installer.
+## Development
 
-Installers are built by `.github/workflows/release.yml` when a `v*` tag is pushed. The workflow verifies the exact tagged commit and builds draft release assets with SHA-256 checksums and GitHub build provenance. The draft must pass signed installer, migration, and clean-install verification before a maintainer publishes it. Verify a download with `shasum -a 256 -c SHA256SUMS.txt` (macOS/Linux) or `Get-FileHash <file> -Algorithm SHA256` (Windows), and verify provenance with `gh attestation verify <installer> --repo Praket7/civicflow2`.
+Use the Node version in [`.node-version`](.node-version), pnpm 12.9.1, stable Rust and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
 
-Previously published installers may lack signing or notarization. Verify provenance and publisher identity before using them; do not bypass Gatekeeper or SmartScreen warnings for an untrusted binary. New public releases are blocked unless signing credentials are configured. Follow [`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md) for versioning, signing, and the clean-install matrix. The legacy installers continue to use the original repository's updater feed. New builds from `civic-flow` use this repository's releases; do not assume the old 0.1.2 installers will discover a release here automatically. The first new release must include a verified signing key and signed `latest.json` feed.
+```sh
+pnpm install --frozen-lockfile
+pnpm dev
+pnpm tauri dev
+```
+
+The browser preview opens at http://localhost:5173. The desktop app includes a fictional workspace that works without a network connection.
+
+See [contributing](CONTRIBUTING.md) for conventions and review expectations.
+
+## Testing and quality
+
+```sh
+pnpm verify
+pnpm test:sql
+pnpm test:hosted
+pnpm test:ops
+```
+
+Tests cover React interactions, Rust business rules, shared database authorization, synchronization, report reconciliation, accessibility, printing and native desktop journeys. CI also checks dependency advisories, secrets, build budgets and platform compilation.
+
+See [test organization](docs/testing.md) for the test matrix and individual commands.
+
+## Maintainers
+
+Praket Gauri, Samanyu Mergu and Yash Vepuri.
 
 ## License and acknowledgements
 
-CivicFlow is released under the [MIT License](LICENSE). The generated [third-party notices](THIRD_PARTY_NOTICES.md) list the direct dependencies and licenses. Bundled photography and fonts are credited in the in-app credits screen and in [`public/media/LICENSE.md`](public/media/LICENSE.md).
+Source code is available under the [MIT License](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md) and [media licenses](public/media/LICENSE.md) for bundled dependencies, photography and other assets.
 
-
-## Stage 2: software quality and competition evidence
-
-**Stage 2 engineering is complete.** The [Stage 2 quality and 110-point rubric evidence guide](docs/FBLA-STAGE2-QUALITY.md) covers modular preview repositories, validation, error recovery, benchmarks, tests, and the seven-minute demonstration. [PR #13](https://github.com/Praket7/civic-flow/pull/13) merged the engineering closeout. Real multi-account production acceptance, restore rehearsal, and signed installers remain separate release requirements; automated checks do not certify them.
-
-## Stage 3: explainable AutoRoster and verified demo
-
-**Stage 3 engineering is complete.** [PR #14](https://github.com/Praket7/civic-flow/pull/14) and [PR #16](https://github.com/Praket7/civic-flow/pull/16) delivered independently audited staffing proposals, role/candidate eligibility and cross-shift overlap validation, understandable alternative recommendations, deterministic scarcity tests, and before/after workload evidence. The [Stage 3 verification guide](docs/FBLA-STAGE3-AUTOROSTER.md) documents research, reproduction, limitations and exact acceptance evidence.
-
-The verified public domain is **[civic-flow-demo.vercel.app](https://civic-flow-demo.vercel.app/)**. To see the full coordinator example without an account, open **[the interactive judging demo](https://civic-flow-demo.vercel.app/judge/demo/#/welcome)**. The sample uses browser-local data and is not a hosted organization. The public root is the real Supabase-backed volunteer PWA, which requires an authorized organization invitation for shared records.
-
-## FBLA judging review
-
-The **[FBLA competition review](https://civic-flow-demo.vercel.app/judge/)** links to
-the **[no-account coordinator demo](https://civic-flow-demo.vercel.app/judge/demo/#/welcome)**,
-which runs against **browser-local sample data**. This is not a real hosted nonprofit workspace. The production root continues to serve
-the authenticated Supabase-backed PWA. Never host the judging sample on an active nonprofit's production origin: paths do not isolate
-browser storage. The desktop release remains the complete offline app.
-
-See [FBLA Stage 1 release and judging requirements](docs/FBLA-STAGE1-JUDGING.md) before
-publishing an installer or sharing a program URL for state prejudging.
-
-**Stage 8 competition verification:** See [the evidence and acceptance guide](docs/FBLA-STAGE8-COMPETITION.md) for exact-source reproducibility, real PDF export evidence, the national rating-sheet map and remaining human/device checks. An engineering merge is not production approval.
+[Security policy](SECURITY.md) · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md)

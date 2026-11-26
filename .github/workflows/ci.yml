@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, "feat/fbla-stage1-*"]
+    branches: [main]
   pull_request:
-    branches: [main, "hardening/auth-and-release-gates-2026-11-22"]
+    branches: [main]
 
 # A new PR commit supersedes its earlier validation run. Keep main-branch
 # checks uninterrupted so release evidence remains tied to the exact SHA.
@@ -85,7 +85,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: stage6-journey-screenshots
+          name: journey-screenshots
           path: journey-review/
           if-no-files-found: ignore
           retention-days: 14

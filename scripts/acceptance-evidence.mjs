@@ -1,5 +1,5 @@
 /**
- * Competition evidence, not a public installer or production attestation.
+ * Synthetic acceptance evidence, not a public installer or production attestation.
  * Read the actual exported PDF, reconcile its text to the captured source
  * table, then bind the evidence to the exact checked-out source and version.
  */
@@ -117,7 +117,7 @@ function run() {
   });
   writeFileSync(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
   verifyManifest(dir, JSON.parse(readFileSync(path.join(dir, "manifest.json"), "utf8")));
-  console.log("Competition evidence verified:", sourceSha, version, pageCount, "PDF pages");
+  console.log("Acceptance evidence verified:", sourceSha, version, pageCount, "PDF pages");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

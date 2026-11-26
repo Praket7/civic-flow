@@ -1,8 +1,6 @@
-name: FBLA evaluation installers (unsigned, internal QA only)
+name: Evaluation installers (unsigned, internal QA only)
 
 on:
-  push:
-    branches: ["feat/fbla-stage1-*", "stage8-competition-freeze"]
   workflow_dispatch:
 
 # This workflow never tags, drafts, or publishes a GitHub release.
@@ -11,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: fbla-evaluation-${{ github.ref }}
+  group: internal-evaluation-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -24,10 +22,10 @@ jobs:
         include:
           - os: macos-latest
             bundles: dmg
-            artifact: fbla-eval-macos-unsigned
+            artifact: internal-eval-macos-unsigned
           - os: windows-latest
             bundles: nsis
-            artifact: fbla-eval-windows-unsigned
+            artifact: internal-eval-windows-unsigned
 
     steps:
       - uses: actions/checkout@v4

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { buildManifest, verifyManifest, verifyRenderedRows } from "../competition-evidence.mjs";
+import { buildManifest, verifyManifest, verifyRenderedRows } from "../acceptance-evidence.mjs";
 
 test("rendered PDF extraction must contain every source cell", () => {
   const rows = [

@@ -1,4 +1,4 @@
-name: Stage 8 competition evidence
+name: Product acceptance evidence
 
 on:
   pull_request:
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   evidence:
-    name: Competition evidence freeze
+    name: Product acceptance evidence
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -37,7 +37,7 @@ jobs:
           workspaces: src-tauri/core -> target
       - run: sudo apt-get update && sudo apt-get install -y poppler-utils
       - run: pnpm install --frozen-lockfile
-      - run: node --test scripts/tests/competition-evidence.test.mjs
+      - run: node --test scripts/tests/acceptance-evidence.test.mjs
       - name: Prepare evidence and record toolchain
         run: |
           mkdir -p competition-evidence
@@ -74,7 +74,7 @@ jobs:
           node scripts/audit-judge-flow.mjs 2>&1 | tee competition-evidence/browser-journey.txt
           cp journey-review/*.png competition-evidence/
       - name: Verify rendered PDF and hash all evidence
-        run: node scripts/competition-evidence.mjs
+        run: node scripts/acceptance-evidence.mjs
       - name: Archive frozen evidence
         uses: actions/upload-artifact@v4
         with:

@@ -1,102 +1,59 @@
-/**
- * Documentation gate.
- *
- * README.md is the only project-state document. LICENSE, the generated
- * third-party notice, and the media license are legal artifacts, not a second
- * description of the product. The release checklist, foundation baseline, security audit, and release-readiness audit are
- * operational references rather than competing product descriptions; allow
- * them explicitly by filename. This checks that README links resolve, that the generated facts block
- * is current, and that no other project document has crept back into the tree.
- */
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = resolve(new URL("..", import.meta.url).pathname);
-const README = join(ROOT, "README.md");
+const root = fileURLToPath(new URL("..", import.meta.url));
 const problems = [];
-
-if (!existsSync(README)) {
-  console.error("README.md is missing.");
-  process.exit(1);
-}
-const text = readFileSync(README, "utf8");
-
 const required = [
-  "## Screenshots",
-  "## Core capabilities",
-  "## AutoRoster",
-  "## Architecture",
-  "## Development",
-  "## Testing and quality",
-  "## Install and releases",
-  "## License and acknowledgements",
+  "README.md",
+  "SECURITY.md",
+  "CONTRIBUTING.md",
+  "CHANGELOG.md",
+  "docs/architecture.md",
+  "docs/deployment.md",
+  "docs/operations.md",
+  "docs/testing.md",
 ];
-for (const heading of required) {
-  if (!text.includes(heading)) problems.push(`README is missing section "${heading}"`);
-}
-
-if (!text.includes("<!-- CIVICFLOW_FACTS_START -->")) {
-  problems.push("README is missing the generated facts block");
-} else {
-  try {
-    execFileSync(process.execPath, [join(ROOT, "scripts/update-readme-facts.mjs"), "--check"], {
-      stdio: "pipe",
-    });
-  } catch {
-    problems.push("README facts block is stale; run `pnpm docs:update`");
-  }
-}
-
-const links = [...text.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)].map((match) => match[1]);
-for (const link of links) {
-  if (/^(?:https?:|mailto:|#)/.test(link)) continue;
-  const target = link.split("#")[0];
-  if (!existsSync(resolve(dirname(README), decodeURI(target)))) {
-    problems.push(`README links to a missing file: ${link}`);
-  }
-}
-
-for (const line of text.split("\n")) {
-  if (/\b\d+\s+(?:registered\s+)?(?:routes|frontend tests|Rust tests|tables)\b/i.test(line)) {
-    problems.push(`README hard-codes a volatile count: ${line.trim()}`);
-  }
-}
+const ignored = new Set([".git", "node_modules", "target", "dist", ".secrets", "gen"]);
 
 function* markdown(dir) {
-  for (const entry of readdirSync(join(ROOT, dir))) {
-    if (entry === "node_modules" || entry === "target" || entry === "dist") continue;
-    const path = join(dir, entry);
-    if (statSync(join(ROOT, path)).isDirectory()) yield* markdown(path);
-    else if (entry.endsWith(".md")) yield path;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (ignored.has(entry.name)) continue;
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) yield* markdown(path);
+    else if (entry.isFile() && entry.name.endsWith(".md")) yield path;
   }
 }
 
-const LEGAL_DOCUMENTS = new Set(["THIRD_PARTY_NOTICES.md", "public/media/LICENSE.md"]);
-const OPERATIONAL_DOCUMENTS = new Set([
-  "docs/RELEASE-CHECKLIST.md",
-  "docs/FOUNDATION-BASELINE.md",
-  "docs/SECURITY-AUDIT.md",
-  "docs/PUBLIC-RELEASE-READINESS.md",
-  "docs/FBLA-STAGE1-JUDGING.md",
-  "docs/FBLA-STAGE2-QUALITY.md",
-  "docs/FBLA-STAGE2-RUBRIC-TRACEABILITY.md",
-  "docs/FBLA-STAGE3-AUTOROSTER.md",
-  "docs/FBLA-STAGE4-REPORTING.md",
-  "docs/FBLA-STAGE5-INTERACTION.md",
-  "docs/FBLA-STAGE6-JOURNEYS.md",
-  "docs/FBLA-STAGE7-RELIABILITY.md",
-  "docs/FBLA-STAGE8-COMPETITION.md",
-  "docs/FBLA-FINAL-POLISH.md",
-]);
-const extra = [...markdown(".")].filter(
-  (path) => path !== "README.md" && !LEGAL_DOCUMENTS.has(path) && !OPERATIONAL_DOCUMENTS.has(path),
-);
-for (const path of extra) problems.push(`Second project document found: ${path}`);
+for (const path of required) {
+  if (!existsSync(join(root, path))) problems.push(`Missing documentation: ${path}`);
+}
 
-if (problems.length > 0) {
-  console.error("Documentation check failed:\n");
-  for (const problem of problems) console.error(`  - ${problem}`);
+for (const path of markdown(root)) {
+  const source = readFileSync(path, "utf8").replace(/\x60{3}[\s\S]*?\x60{3}/g, "");
+  for (const match of source.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
+    const link = match[1];
+    if (/^(?:[a-z][a-z\d+.-]*:|#)/i.test(link)) continue;
+    try {
+      const target = resolve(dirname(path), decodeURI(link.split("#")[0]));
+      if (!existsSync(target)) problems.push(`${relative(root, path)}: missing link ${link}`);
+    } catch {
+      problems.push(`${relative(root, path)}: invalid link ${link}`);
+    }
+  }
+}
+
+try {
+  execFileSync(process.execPath, [join(root, "scripts/update-readme-facts.mjs"), "--check"], {
+    stdio: "inherit",
+  });
+} catch {
+  problems.push("README facts are stale; run pnpm docs:update.");
+}
+
+if (problems.length) {
+  console.error(problems.join("\n"));
   process.exit(1);
 }
-console.log("Documentation check passed.");
+console.log("Documentation checks passed.");

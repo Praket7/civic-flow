@@ -15,6 +15,3 @@ src/data/thirdParty.json
 
 # The independent judging page deliberately embeds its small stylesheet.
 public/judge/index.html
-
-# Local competition gate documentation is maintained for judge verification.
-docs/FBLA-STAGE1-JUDGING.md
