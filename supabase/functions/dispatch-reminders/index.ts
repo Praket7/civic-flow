@@ -11,6 +11,7 @@
 
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.58.0";
 import { schedulerAuthorized } from "../_shared/scheduler-auth.mjs";
+import { approvedPushEndpoint } from "../_shared/push-endpoint.mjs";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -139,10 +140,15 @@ async function sendPush(client: SupabaseClient, job: DeliveryJob): Promise<Outco
   const errors: string[] = [];
 
   for (const subscription of job.push) {
+    const endpoint = approvedPushEndpoint(subscription.endpoint);
+    if (!endpoint) {
+      errors.push("unsupported_push_endpoint");
+      continue;
+    }
     try {
       await push.sendNotification(
         {
-          endpoint: subscription.endpoint,
+          endpoint,
           keys: { p256dh: subscription.p256dh, auth: subscription.auth },
         },
         payload,
