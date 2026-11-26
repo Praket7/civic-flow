@@ -100,16 +100,16 @@ For implementation details, see [architecture](docs/architecture.md).
 
 ### Download CivicFlow
 
-**Version 0.1.2 · Evaluation edition** · [Release notes](https://github.com/Praket7/civic-flow/releases/tag/evaluation-0.1.2-9903b49e6b1c) · [SHA-256 checksums](https://github.com/Praket7/civic-flow/releases/download/evaluation-0.1.2-9903b49e6b1c/SHA256SUMS.txt) · [All releases](https://github.com/Praket7/civic-flow/releases)
+**Version 0.1.2 · Evaluation edition** · [Release notes](https://github.com/Praket7/civic-flow/releases/tag/evaluation-0.1.2-33c6cedcdbbe) · [SHA-256 checksums](https://github.com/Praket7/civic-flow/releases/download/evaluation-0.1.2-33c6cedcdbbe/SHA256SUMS.txt) · [All releases](https://github.com/Praket7/civic-flow/releases)
 
 | Platform | Architecture | Download |
 | --- | --- | --- |
-| macOS | Apple silicon and Intel (universal) | [Download DMG](https://github.com/Praket7/civic-flow/releases/download/evaluation-0.1.2-9903b49e6b1c/CivicFlow_0.1.2_universal_evaluation.dmg) |
-| Windows | x64 | [Download EXE](https://github.com/Praket7/civic-flow/releases/download/evaluation-0.1.2-9903b49e6b1c/CivicFlow_0.1.2_x64-setup.exe) · [Download MSI](https://github.com/Praket7/civic-flow/releases/download/evaluation-0.1.2-9903b49e6b1c/CivicFlow_0.1.2_x64_en-US.msi) |
-| Linux | x86_64 (Ubuntu 24.04) | [.deb package build status](https://github.com/Praket7/civic-flow/actions/workflows/evaluation-builds.yml) · [Build from source](#development) |
+| macOS | Apple silicon and Intel (universal) | [Download DMG](https://github.com/Praket7/civic-flow/releases/download/evaluation-0.1.2-33c6cedcdbbe/CivicFlow_0.1.2_universal_evaluation.dmg) |
+| Windows | x64 | [Download EXE](https://github.com/Praket7/civic-flow/releases/download/evaluation-0.1.2-33c6cedcdbbe/CivicFlow_0.1.2_x64-setup.exe) · [Download MSI](https://github.com/Praket7/civic-flow/releases/download/evaluation-0.1.2-33c6cedcdbbe/CivicFlow_0.1.2_x64_en-US.msi) |
+| Linux | x86_64 (Ubuntu 24.04) | [Download DEB](https://github.com/Praket7/civic-flow/releases/download/evaluation-0.1.2-33c6cedcdbbe/CivicFlow_0.1.2_amd64.deb) |
 | Web | Modern browser | [Open CivicFlow](https://civic-flow-demo.vercel.app/) · [Project showcase](https://civic-flow-demo.vercel.app/judge/) |
 
-The linked macOS and Windows evaluation packages passed installation and startup tests on GitHub-hosted runners. The Linux package will be available in [Releases](https://github.com/Praket7/civic-flow/releases) after its build and installation checks pass. Evaluation builds are not notarized or signed by a trusted publisher. They are intended for evaluation with fictional data.
+All three platform evaluation packages passed installation and startup tests on GitHub-hosted runners. [View the verified installer workflow](https://github.com/Praket7/civic-flow/actions/runs/45883144704). Evaluation builds are not notarized or signed by a trusted publisher. They are intended for evaluation with fictional data.
 
 ### macOS
 
@@ -129,7 +129,7 @@ See [Apple's guidance for opening apps safely](https://support.apple.com/en-us/1
 
 ### Linux
 
-For the Ubuntu 24.04 x86_64 package, download the `.deb` from the evaluation release when available, verify its checksum, and install it with:
+For the Ubuntu 24.04 x86_64 package, download the `.deb` from the evaluation release, verify its checksum, and install it with:
 
 ```sh
 sudo apt install ./CivicFlow_0.1.2_amd64.deb
@@ -139,7 +139,7 @@ Use the actual downloaded filename if it differs. Launch CivicFlow from the appl
 
 ### Verify your download
 
-Download the matching [SHA256SUMS.txt](https://github.com/Praket7/civic-flow/releases/download/evaluation-0.1.2-9903b49e6b1c/SHA256SUMS.txt) from the same release as the installer. Compare the complete hash for your file:
+Download the matching [SHA256SUMS.txt](https://github.com/Praket7/civic-flow/releases/download/evaluation-0.1.2-33c6cedcdbbe/SHA256SUMS.txt) from the same release as the installer. Compare the complete hash for your file:
 
 ```sh
 # macOS
