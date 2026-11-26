@@ -9,6 +9,7 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import ts from "typescript";
 
 export const DEFAULT_URL = "https://imzdblvljdcbnxtwbmbw.supabase.co";
 
@@ -71,6 +72,27 @@ export async function promoteHostedPwa(dist) {
     const source = fileURLToPath(new URL(`../docs/screenshots/${name}.png`, import.meta.url));
     await copyFile(source, path.join(judgeScreenshots, `${name}.png`));
   }
+
+  const judgePath = path.join(dist, "judge", "index.html");
+  const judgeHtml = await readFile(judgePath, "utf8");
+  const validatorSource = await readFile(
+    new URL("../src/lib/workspace/opportunityValidation.ts", import.meta.url),
+    "utf8",
+  );
+  const validator = ts
+    .transpileModule(validatorSource, {
+      compilerOptions: { target: ts.ScriptTarget.ES2021, module: ts.ModuleKind.ESNext },
+    })
+    .outputText.replace("export function validateOpportunityDraft", "function validateOpportunityDraft");
+  const marker = "/* BUILT_VALIDATOR */";
+  if (!judgeHtml.includes(marker) || !validator.includes("function validateOpportunityDraft")) {
+    throw new Error("Judging validator integration is missing.");
+  }
+  const inlineValidator =
+    "window.civicflowValidateOpportunity = (() => {\n" +
+    validator +
+    "\nreturn validateOpportunityDraft;\n})();";
+  await writeFile(judgePath, judgeHtml.replace(marker, () => inlineValidator), "utf8");
 
   // The built entry document is replaced only AFTER all validation succeeds.
   // The source index.html and Tauri's build:web output are never modified.

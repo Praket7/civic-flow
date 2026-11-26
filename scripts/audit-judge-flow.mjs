@@ -287,6 +287,37 @@ try {
   );
   await evaluate('document.querySelector("[data-method=optimized]").click()');
   assert.equal(await evaluate('document.querySelector("#filled-count").textContent'), "2 / 2");
+  // The workbench must compute rather than replay a scripted answer.
+  await evaluate('document.querySelector("#lab-specialist").click()');
+  assert.equal(await evaluate('document.querySelector("#filled-count").textContent'), "1 / 2");
+  await evaluate('document.querySelector("#lab-reset").click()');
+  await evaluate('document.querySelector("#lab-extra").click()');
+  await evaluate('document.querySelector("#lab-floater").click()');
+  assert.equal(await evaluate('document.querySelector("#filled-count").textContent'), "3 / 3");
+  await evaluate('document.querySelector("#lab-reset").click()');
+  await evaluate('document.querySelector("#validation-example").click()');
+  assert.equal(await evaluate('document.querySelector("#validation-output").dataset.valid'), "false");
+  await evaluate(`(() => {
+    const input = document.querySelector("#validation-capacity");
+    input.value = "12";
+    input.dispatchEvent(new Event("input"));
+  })()`);
+  assert.equal(await evaluate('document.querySelector("#validation-output").dataset.valid'), "true");
+  await evaluate(`(() => {
+    const select = document.querySelector("#report-program");
+    select.value = "Food pantry";
+    select.dispatchEvent(new Event("change"));
+  })()`);
+  assert.equal(await evaluate('document.querySelector("#report-hours").textContent'), "7.0");
+  assert.equal(await evaluate('document.querySelector("#report-count").textContent'), "4");
+  await evaluate('document.querySelector("[data-arch=flow]").click()');
+  assert.match(await evaluate('document.querySelector("#arch-code").textContent'), /add_edge/);
+  await evaluate('document.querySelector("#present-start").click()');
+  assert.equal(await evaluate('document.body.classList.contains("presenting")'), true);
+  await evaluate('document.querySelector("#present-next").click()');
+  assert.equal(await evaluate('document.querySelector(".active-stage").dataset.stage'), "workflow");
+  await evaluate('document.querySelector("#present-exit").click()');
+  assert.equal(await evaluate('document.body.classList.contains("presenting")'), false);
   const showcase = await evaluate(`(() => ({
     images: document.querySelectorAll('img[src^="/judge/screenshots/"]').length,
     links: document.querySelectorAll('a[href="https://civic-flow-demo.vercel.app/"]').length,

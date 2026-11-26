@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -53,7 +53,26 @@ test("hosted publishing replaces only the built index, keeping desktop sources i
   try {
     await writeFile(path.join(dir, "index.html"), demo);
     await writeFile(path.join(dir, "pwa.html"), hosted);
+    await mkdir(path.join(dir, "judge"));
+    const page = await readFile(new URL("../../public/judge/index.html", import.meta.url), "utf8");
+    await writeFile(path.join(dir, "judge", "index.html"), page);
     await promoteHostedPwa(dir);
+    const compiled = await readFile(path.join(dir, "judge", "index.html"), "utf8");
+    const validator = compiled.match(/<script id="application-validator">([\s\S]*?)<\/script>/);
+    assert.ok(validator, "hosted showcase includes the actual application validator");
+    const window = {};
+    runInNewContext(validator[1], { window });
+    const draft = {
+      title: "Food pantry shift",
+      cause: "food",
+      description: "Pack groceries and prepare food boxes for distribution.",
+      address: "100 Sample Street",
+      capacity: "12",
+      duration: "2 hours",
+      requirements: "",
+    };
+    assert.equal(window.civicflowValidateOpportunity(draft).valid, true);
+    assert.equal(window.civicflowValidateOpportunity({ ...draft, capacity: "0" }).valid, false);
     assert.equal(await readFile(path.join(dir, "index.html"), "utf8"), hosted);
     assert.equal(await readFile(path.join(dir, "pwa.html"), "utf8"), hosted);
     assert.equal(await readFile(path.join(dir, "judge", "demo", "index.html"), "utf8"), demo);
@@ -166,4 +185,43 @@ test("retired sample hostname redirects to the requested app, without reverse re
     assert.equal(redirect.destination, "https://civic-flow-demo.vercel.app/");
   }
   assert.ok(config.redirects.every((entry) => !entry.destination.includes(sampleHost)));
+});
+
+test("showcase matching fills the most eligible seats before maximizing score", async () => {
+  const page = await readFile(new URL("../../public/judge/index.html", import.meta.url), "utf8");
+  const source = page.match(/<script id="showcase-model">([\s\S]*?)<\/script>/);
+  assert.ok(source);
+  const context = {};
+  runInNewContext(source[1], context);
+  const solve = context.solveMatching;
+  assert.equal(solve([[92, 98], [76, null]], "greedy").filled, 1);
+  assert.equal(solve([[92, 98], [76, null]], "optimized").filled, 2);
+  for (let mask = 0; mask < 512; mask++) {
+    const matrix = Array.from({ length: 3 }, (_, i) =>
+      Array.from({ length: 3 }, (_, j) =>
+        mask & (1 << (i * 3 + j)) ? (i * 17 + j * 29 + mask) % 101 : null,
+      ),
+    );
+    let bestFilled = -1;
+    let bestScore = -1;
+    function visit(seat, used, filled, score) {
+      if (seat === 3) {
+        if (filled > bestFilled || (filled === bestFilled && score > bestScore)) {
+          bestFilled = filled;
+          bestScore = score;
+        }
+        return;
+      }
+      visit(seat + 1, used, filled, score);
+      for (let i = 0; i < 3; i++) {
+        if (!(used & (1 << i)) && matrix[i][seat] !== null) {
+          visit(seat + 1, used | (1 << i), filled + 1, score + matrix[i][seat]);
+        }
+      }
+    }
+    visit(0, 0, 0, 0);
+    const result = solve(matrix, "optimized");
+    assert.equal(result.filled, bestFilled, "coverage " + mask);
+    assert.equal(result.score, bestScore, "score " + mask);
+  }
 });
