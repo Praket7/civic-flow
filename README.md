@@ -98,7 +98,7 @@ For implementation details, see [architecture](docs/architecture.md).
 
 ## Install and releases
 
-The current repository has not yet published a verified signed installer. The [legacy v0.1.2 release](https://github.com/Praket7/civicflow2/releases/tag/v0.1.2) belongs to the original repository and is not a build of this revision. Do not bypass operating-system security warnings for untrusted installers.
+[Evaluation installers](https://github.com/Praket7/civic-flow/releases) are available for macOS (universal) and Windows (x64), with SHA-256 checksums and GitHub build provenance. These are test builds, not notarized or publisher-signed production installers. The [legacy v0.1.2 release](https://github.com/Praket7/civicflow2/releases/tag/v0.1.2) belongs to the original repository and is not a build of this revision. Do not bypass operating-system security warnings for untrusted installers.
 
 The interactive demo uses fictional, browser-local records and requires no account. The hosted app uses Supabase authentication and requires an authorized workspace invitation. Do not enter real volunteer data in the demo.
 
@@ -106,7 +106,7 @@ Before enrolling real organizations, complete the [deployment](docs/deployment.m
 
 ## Development
 
-Use the Node version in [`.node-version`](.node-version), pnpm 12.9.1, stable Rust and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
+Use the Node version in [`.node-version`](.node-version), the exact pnpm version in [`package.json`](package.json), stable Rust and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/). Different pnpm versions can report different dependency inventories; use the pinned version before regenerating notices.
 
 ```sh
 pnpm install --frozen-lockfile

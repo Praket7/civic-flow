@@ -91,7 +91,7 @@ Applications* (1993), Chapter 9.
 
 ## Generated inventory
 
-### JavaScript (64 packages)
+### JavaScript (61 packages)
 
 | Package | Version | License | Direct |
 | --- | --- | --- | --- |
@@ -112,10 +112,8 @@ Applications* (1993), Chapter 9.
 | `@tauri-apps/plugin-dialog` | 2.8.3 | MIT OR Apache-2.0 | yes |
 | `@tauri-apps/plugin-process` | 2.4.0 | MIT OR Apache-2.0 | yes |
 | `@tauri-apps/plugin-updater` | 2.14.1 | MIT OR Apache-2.0 | yes |
-| `@types/react` | 19.3.0 | MIT | no |
 | `@zxing/browser` | 0.2.1 | MIT | yes |
 | `@zxing/library` | 0.23.0 | Apache-2.0 | no |
-| `@zxing/text-encoding` | 0.9.0 | (Unlicense OR Apache-2.0) | no |
 | `ansi-regex` | 5.0.1 | MIT | no |
 | `ansi-styles` | 4.3.0 | MIT | no |
 | `camelcase` | 5.3.1 | MIT | no |
@@ -123,7 +121,6 @@ Applications* (1993), Chapter 9.
 | `color-convert` | 2.0.1 | MIT | no |
 | `color-name` | 1.1.4 | MIT | no |
 | `cookie` | 1.1.1 | MIT | no |
-| `csstype` | 3.2.3 | MIT | no |
 | `date-fns` | 4.4.0 | MIT | yes |
 | `decamelize` | 1.2.0 | MIT | no |
 | `dexie` | 4.4.7 | Apache-2.0 | yes |

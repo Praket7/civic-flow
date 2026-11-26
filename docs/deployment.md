@@ -32,6 +32,16 @@ Use [the release workflow](../.github/workflows/release.yml) to build a draft fr
 
 Configure platform signing and updater signing before publication. Verify the installer on a clean supported system, check migration behavior against a disposable prior-version workspace, and review checksums and build provenance. Do not publish the draft until those checks pass.
 
-Unsigned evaluation installers are internal test artifacts, not production releases.
+Evaluation installers are published separately as prereleases after CI passes. They are intended for testing with fictional records, not production enrollment. The macOS application uses ad-hoc signing; the Windows packages are unsigned.
+
+If the macOS DMG bundler times out while communicating with Finder, build the universal application and package it without Finder automation:
+
+```sh
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+pnpm tauri build --target universal-apple-darwin --bundles app
+bash scripts/package-macos-evaluation.sh
+```
+
+The script checks the application version, universal architecture and existing code signature before creating and verifying the disk image. It prints the resulting SHA-256 checksum. This does not perform notarization or establish publisher trust.
 
 See [operations](operations.md) for backup and recovery requirements.

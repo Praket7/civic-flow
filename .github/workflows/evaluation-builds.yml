@@ -55,6 +55,9 @@ jobs:
             src-tauri/core -> target
             src-tauri -> target
       - run: pnpm install --frozen-lockfile
+      - name: Verify dependency inventory on this platform
+        if: matrix.os == 'macos-latest'
+        run: pnpm check:third-party
       - name: Validate version and local demo
         shell: bash
         run: |
@@ -64,6 +67,12 @@ jobs:
           pnpm test:hosted
       - name: Build evaluation installer
         run: pnpm tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+      - name: Verify universal app and Finder-independent packaging
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          bash scripts/package-macos-evaluation.sh
+          rm -- src-tauri/target/universal-apple-darwin/release/bundle/dmg/*_evaluation.dmg
       - name: Collect installers and verify expected formats
         shell: bash
         run: |

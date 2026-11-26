@@ -1610,7 +1610,7 @@ fn list_backups(
     state: State<'_, AppState>,
     token: String,
 ) -> Result<Vec<BackupSnapshot>, AppError> {
-    let (database, _) = state.steward(&token)?;
+    let (_database, _) = state.steward(&token)?;
     backups::list(&state.backup_dir).map_err(AppError::from)
 }
 

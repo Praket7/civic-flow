@@ -104,12 +104,6 @@
       "direct": true
     },
     {
-      "name": "@types/react",
-      "version": "19.3.0",
-      "license": "MIT",
-      "direct": false
-    },
-    {
       "name": "@zxing/browser",
       "version": "0.2.1",
       "license": "MIT",
@@ -119,12 +113,6 @@
       "name": "@zxing/library",
       "version": "0.23.0",
       "license": "Apache-2.0",
-      "direct": false
-    },
-    {
-      "name": "@zxing/text-encoding",
-      "version": "0.9.0",
-      "license": "(Unlicense OR Apache-2.0)",
       "direct": false
     },
     {
@@ -166,12 +154,6 @@
     {
       "name": "cookie",
       "version": "1.1.1",
-      "license": "MIT",
-      "direct": false
-    },
-    {
-      "name": "csstype",
-      "version": "3.2.3",
       "license": "MIT",
       "direct": false
     },

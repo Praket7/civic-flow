@@ -17,9 +17,9 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = resolve(new URL("..", import.meta.url).pathname);
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const generatedAt = null;
 const checkOnly = process.argv.includes("--check");
 const packageJson = JSON.parse(readFileSync(`${ROOT}/package.json`, "utf8"));
@@ -76,6 +76,11 @@ function run(command, args, cwd) {
 }
 
 function npmInventory() {
+  const expected = packageJson.packageManager.split("@")[1];
+  const actual = run("pnpm", ["--version"], ROOT).trim();
+  if (actual !== expected) {
+    throw new Error(`Use pnpm ${expected} for the dependency inventory; found ${actual}.`);
+  }
   const raw = JSON.parse(run("pnpm", ["licenses", "list", "--prod", "--json"], ROOT));
   const direct = new Set(Object.keys(packageJson.dependencies ?? {}));
   const rows = [];

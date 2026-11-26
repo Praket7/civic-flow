@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+expected_pnpm="$(node -p 'require("./package.json").packageManager.split("@")[1]')"
+actual_pnpm="$(pnpm --version)"
+if [ "$actual_pnpm" != "$expected_pnpm" ]; then
+  printf 'Expected pnpm %s, found %s. Use the version in package.json.\n' "$expected_pnpm" "$actual_pnpm" >&2
+  exit 1
+fi
+
 pnpm typecheck
 pnpm lint
 pnpm format
