@@ -18,21 +18,87 @@
     @media(max-width:860px){.wrap{width:calc(100% - 36px)}.nav{gap:12px}.nav a:not(.btn){display:none}.hero{padding-top:55px}.section{padding:60px 0}.section-intro,.tech-grid{grid-template-columns:1fr;gap:16px}.features,.system{grid-template-columns:1fr}.hero-visual{padding:16px 16px 0}.closing{display:block;padding:28px}.closing .actions{margin-top:20px}}
     @media(max-width:540px){.top .wrap{min-height:65px}.nav .btn{font-size:12px;padding:8px 12px;min-height:44px}.logo{font-size:20px}.hero h1{font-size:3rem}.strip{grid-template-columns:1fr;gap:12px}.gallery{grid-template-columns:1fr}.hero-visual{padding:9px 9px 0}.bar{height:28px}.bar span:last-child{font-size:9px}.closing .btn{width:100%}}
     @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none!important;transition:none!important}}
+      /* The phone screens share a row; the desktop screenshot never inherits their height. */
+    .gallery{display:flex;flex-direction:column;gap:24px;align-items:stretch}.phone-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;width:min(100%,780px);margin-inline:auto;align-items:start}.phone{min-width:0}.phone img{width:100%;height:auto;object-fit:contain;background:#ece8dd}.desktop-shot{width:100%;min-width:0}.desktop-shot img{width:100%;height:auto;object-fit:contain}.launch-card{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:26px 30px}.launch-card .number{margin-bottom:10px}.launch-card p{max-width:650px}.launch-card .btn{flex-shrink:0}
+    .tech-grid{grid-template-columns:minmax(0,1.18fr) minmax(0,.82fr);gap:24px;align-items:start}.explain{padding:22px}.explain>p{margin-bottom:16px}.path details{padding:11px 14px}.path details p{margin-top:7px}.spotlight .explain .btn{min-height:44px;font-size:.9rem}
+    .reading-progress{position:absolute;bottom:0;left:0;height:2px;width:100%;background:#a6c858;transform:scaleX(0);transform-origin:left;pointer-events:none}.hero-visual{--glow-x:76%;--glow-y:14%;background:radial-gradient(ellipse at var(--glow-x) var(--glow-y),#44866a,transparent 60%),var(--dark)}.btn{position:relative;overflow:hidden;isolation:isolate}.btn:active{transform:scale(.98)}.btn .ripple{position:absolute;width:12px;height:12px;border-radius:50%;background:currentColor;opacity:.22;pointer-events:none}.shot{--tilt-x:0deg;--tilt-y:0deg}.shot img{transition:transform .3s cubic-bezier(.2,.75,.2,1)}.shot:hover img{transform:scale(1.012)}
+    @media(max-width:860px){.tech-grid{grid-template-columns:1fr}.launch-card{align-items:flex-start}.phone-pair{gap:14px}}
+    @media(max-width:540px){.gallery{gap:16px}.phone-pair{gap:10px}.phone figcaption{padding:9px 10px;font-size:.73rem}.phone figcaption h3{font-size:.85rem}.launch-card{display:block;padding:20px}.launch-card .btn{margin-top:16px;width:100%}}
+    @media(prefers-reduced-motion:reduce){.btn:active,.shot:hover img{transform:none}.reading-progress{display:none}}
   </style>
 </head>
 <body>
   <a class="skip" href="#main">Skip to the project</a>
-  <header class="top"><div class="wrap"><a class="logo" href="/judge/"><span class="mark" aria-hidden="true">✳</span>CivicFlow</a><nav class="nav" aria-label="Project sections"><a href="#workflow">Product</a><a href="#optimizer">AutoRoster</a><a href="#engineering">Engineering</a><a class="btn main" href="/judge/demo/#/welcome">Open demo <span aria-hidden="true">↗</span></a></nav></div></header>
+  <header class="top"><div class="wrap"><a class="logo" href="/judge/"><span class="mark" aria-hidden="true">✳</span>CivicFlow</a><nav class="nav" aria-label="Project sections"><a href="#workflow">Product</a><a href="#optimizer">AutoRoster</a><a href="#engineering">Engineering</a><a class="btn main" href="/judge/demo/#/welcome">Open demo <span aria-hidden="true">↗</span></a></nav></div><div class="reading-progress" aria-hidden="true"></div></header>
   <main id="main">
     <div class="wrap hero"><div class="hero-copy"><p class="eyebrow">FBLA · Coding &amp; Programming</p><h1>More time for service.<br><em>Less time managing it.</em></h1><p class="lead">A volunteer coordinator has to fill shifts, keep track of attendance and prove what the organization accomplished. CivicFlow puts that work in one place, with an offline desktop workspace and a connected volunteer app.</p><div class="actions"><a class="btn main" href="/judge/demo/#/welcome">Try the working demo <span aria-hidden="true">↗</span></a><a class="btn alt" href="https://github.com/Praket7/civic-flow">View source code</a></div><p class="note"><strong>Sample data only.</strong> The interactive demo runs in your browser with fictional records. It does not create hosted accounts or synchronize real records. The installed desktop application and hosted volunteer app have separate capabilities.</p></div>
     <figure class="hero-visual"><div class="window"><div class="bar" aria-hidden="true"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span>CivicFlow / Mission Control</span></div><img src="/judge/screenshots/mission-control.png" alt="CivicFlow coordinator dashboard with staffing coverage and upcoming work" width="1200" height="760" fetchpriority="high" decoding="async"></div><figcaption class="hero-caption">Actual product screenshot · Fictional coordinator workspace</figcaption></figure>
     <div class="strip"><div><strong>Desktop</strong><span>React, Tauri and Rust</span></div><div><strong>Volunteer app</strong><span>Browser and installable PWA</span></div><div><strong>AutoRoster</strong><span>Constraint-based staffing</span></div></div></div>
     <section id="workflow" class="section"><div class="wrap"><div class="section-intro reveal"><div><p class="overline">01 / The daily work</p><h2>Every open shift has a clear path to being filled.</h2></div><p>From the first staffing request to the final hours report, coordinators can follow the same records instead of copying them between spreadsheets.</p></div><div class="features"><article class="feature reveal"><span class="number">01 — Plan</span><h3>See where help is needed.</h3><p>Build opportunities and shifts, check staffing gaps, and track registrations and waitlists.</p></article><article class="feature reveal"><span class="number">02 — Match</span><h3>Find someone who fits.</h3><p>Compare eligible volunteers against role requirements, availability and existing commitments before accepting a roster.</p></article><article class="feature reveal"><span class="number">03 — Verify</span><h3>Account for the work.</h3><p>Check attendance, review service hours and export reports from the underlying records.</p></article></div></div></section>
     <section id="optimizer" class="section spotlight"><div class="wrap"><div class="section-intro reveal"><div><p class="overline">02 / Inside the optimizer</p><h2>Staffing is a constraint problem.</h2></div><p>A person can be willing to help and still be a poor fit for a particular shift. AutoRoster separates eligibility from ranking, then leaves the decision with the coordinator.</p></div><div class="tech-grid"><figure class="shot"><img loading="lazy" decoding="async" src="/judge/screenshots/autoroster.png" alt="AutoRoster staffing plan and eligible volunteer comparison" width="1200" height="760"><figcaption>AutoRoster in the working coordinator application.</figcaption></figure><div class="explain"><h3>Follow a proposed assignment</h3><p>Open each step to see how a staffing recommendation is built. This is an explanation of the algorithm, not a live benchmark.</p><div class="path"><details open><summary>01 · Establish eligibility</summary><p>Check role skills, credential validity on the shift date, age rules and availability. Reject candidates who fail required constraints.</p></details><details><summary>02 · Evaluate the remaining candidates</summary><p>Consider workload, preferences, existing commitments and policy settings. The ranking is only meaningful after eligibility is established.</p></details><details><summary>03 · Build a plan</summary><p>Fill open seats while respecting the selected scheduling constraints. Track unfilled seats and explain why a candidate was chosen.</p></details><details><summary>04 · Review before applying</summary><p>The coordinator reviews the assignments and their explanations. A proposal is not an automatic change to the roster.</p></details></div><a class="btn alt" style="margin-top:20px" href="/judge/demo/#/welcome">Explore the full application ↗</a></div></div></div></section>
-    <section class="section"><div class="wrap"><div class="section-intro reveal"><div><p class="overline">03 / Product tour</p><h2>Two sides of the same schedule.</h2></div><p>These are screenshots from the checked-in product, not mockups. The coordinator and volunteer experiences serve different jobs.</p></div><div class="gallery"><figure class="shot reveal"><img loading="lazy" decoding="async" src="/judge/screenshots/schedule.png" alt="Coordinator shift schedule" width="1200" height="760"><figcaption><h3>Coordinator schedule</h3>See the week, staffing requirements and shift coverage.</figcaption></figure><figure class="shot reveal"><img loading="lazy" decoding="async" src="/judge/screenshots/volunteer-home.png" alt="Volunteer dashboard with recommended opportunities" width="1200" height="760"><figcaption><h3>Volunteer home</h3>Find opportunities and upcoming commitments.</figcaption></figure><figure class="shot reveal"><img loading="lazy" decoding="async" src="/judge/screenshots/volunteer-schedule.png" alt="Personal calendar and upcoming volunteer shifts" width="1200" height="760"><figcaption><h3>Personal schedule</h3>Keep track of registered shifts.</figcaption></figure><article class="feature reveal"><span class="number">Try it yourself</span><h3>Start with a fictional workspace.</h3><p>Open the sample without an account, explore the coordinator interface and see how its records connect. Your changes stay in your browser.</p><div class="actions"><a class="btn main" href="/judge/demo/#/welcome">Launch sample ↗</a></div></article></div></div></section>
+    <section class="section"><div class="wrap"><div class="section-intro reveal"><div><p class="overline">03 / Product tour</p><h2>Two sides of the same schedule.</h2></div><p>These are screenshots from the checked-in product, not mockups. The coordinator and volunteer experiences serve different jobs.</p></div><div class="gallery" id="product-gallery">
+      <div class="phone-pair">
+        <figure class="shot phone reveal"><img loading="lazy" decoding="async" src="/judge/screenshots/volunteer-home.png" alt="Volunteer dashboard with recommended opportunities" width="390" height="844"><figcaption><h3>Volunteer home</h3>Find opportunities and upcoming commitments.</figcaption></figure>
+        <figure class="shot phone reveal"><img loading="lazy" decoding="async" src="/judge/screenshots/volunteer-schedule.png" alt="Personal calendar and upcoming volunteer shifts" width="390" height="844"><figcaption><h3>Personal schedule</h3>Keep track of registered shifts.</figcaption></figure>
+      </div>
+      <figure class="shot desktop-shot reveal"><div class="bar" aria-hidden="true"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span>CivicFlow / Schedule</span></div><img loading="lazy" decoding="async" src="/judge/screenshots/schedule.png" alt="Coordinator shift schedule" width="1200" height="760"><figcaption><h3>Coordinator schedule</h3>See the week, staffing requirements and shift coverage.</figcaption></figure>
+      <article class="feature launch-card reveal"><div><span class="number">Try it yourself</span><h3>Start with a fictional workspace.</h3><p>Open the sample without an account and see how the records connect. Your changes stay in your browser.</p></div><a class="btn main" href="/judge/demo/#/welcome">Launch sample <span aria-hidden="true">↗</span></a></article>
+    </div></div></section>
     <section id="engineering" class="section"><div class="wrap"><div class="section-intro reveal"><div><p class="overline">04 / Engineering</p><h2>Thoughtful details. Dependable decisions.</h2></div><p>The project is open source. Its implementation, test suites and release workflows are available for inspection.</p></div><div class="system"><article class="reveal"><span class="overline">Local execution</span><h3>Desktop workspace</h3><p>React presents the interface; Tauri connects it to the Rust core and local SQLite storage. The browser demo uses a separate fixture-backed implementation.</p><a href="https://github.com/Praket7/civic-flow/blob/main/docs/architecture.md">Architecture ↗</a></article><article class="reveal"><span class="overline">Access control</span><h3>Hosted workspace</h3><p>Supabase authentication identifies users, while database policies and command checks limit access by organization and role.</p><a href="https://github.com/Praket7/civic-flow/blob/main/SECURITY.md">Security policy ↗</a></article><article class="reveal"><span class="overline">Verification</span><h3>Reproducible tests</h3><p>Frontend, Rust and SQL tests cover behavior, staffing constraints and permissions. Review the actual CI runs for their results.</p><a href="https://github.com/Praket7/civic-flow/actions">Build and test history ↗</a></article></div></div></section>
     <section class="section"><div class="wrap closing"><div><p class="overline">CivicFlow</p><h2>Explore the product.</h2><p>Built by Praket Gauri, Samanyu Mergu and Yash Vepuri.</p></div><div class="actions"><a class="btn main" href="/judge/demo/#/welcome">Open interactive demo ↗</a><a class="btn alt" href="https://github.com/Praket7/civic-flow">Source code</a></div></div></section>
   </main>
   <footer class="foot"><div class="wrap"><span>FBLA Coding &amp; Programming · Fictional sample workspace</span><span><a href="https://github.com/Praket7/civic-flow/blob/main/README.md">Documentation</a><a href="https://github.com/Praket7/civic-flow/blob/main/THIRD_PARTY_NOTICES.md">Credits</a></span></div></footer>
+  <script>
+    (() => {
+      const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+      const fine = matchMedia("(pointer: fine)");
+      const progress = document.querySelector(".reading-progress");
+      const hero = document.querySelector(".hero-visual");
+      let queued = false;
+      function updateProgress() {
+        queued = false;
+        const range = document.documentElement.scrollHeight - innerHeight;
+        progress.style.transform = "scaleX(" + (range > 0 ? Math.min(1, Math.max(0, scrollY / range)) : 0) + ")";
+      }
+      addEventListener("scroll", () => {
+        if (!queued) {
+          queued = true;
+          requestAnimationFrame(updateProgress);
+        }
+      }, { passive: true });
+      addEventListener("resize", updateProgress, { passive: true });
+      updateProgress();
+      hero.addEventListener("pointermove", event => {
+        if (reduced.matches || !fine.matches) return;
+        const rect = hero.getBoundingClientRect();
+        hero.style.setProperty("--glow-x", ((event.clientX - rect.left) / rect.width * 100) + "%");
+        hero.style.setProperty("--glow-y", ((event.clientY - rect.top) / rect.height * 100) + "%");
+      }, { passive: true });
+      hero.addEventListener("pointerleave", () => {
+        hero.style.removeProperty("--glow-x");
+        hero.style.removeProperty("--glow-y");
+      });
+      for (const button of document.querySelectorAll(".btn")) {
+        button.addEventListener("pointerdown", event => {
+          if (reduced.matches || event.button !== 0 || !Element.prototype.animate) return;
+          const rect = button.getBoundingClientRect();
+          const ripple = document.createElement("span");
+          ripple.className = "ripple";
+          ripple.setAttribute("aria-hidden", "true");
+          ripple.style.left = (event.clientX - rect.left - 6) + "px";
+          ripple.style.top = (event.clientY - rect.top - 6) + "px";
+          button.append(ripple);
+          const animation = ripple.animate([{ transform: "scale(1)", opacity: .24 }, { transform: "scale(28)", opacity: 0 }], { duration: 420, easing: "ease-out" });
+          animation.finished.then(() => ripple.remove(), () => ripple.remove());
+        });
+      }
+      for (const detail of document.querySelectorAll(".path details")) {
+        detail.addEventListener("toggle", () => {
+          if (!detail.open || reduced.matches || !Element.prototype.animate) return;
+          detail.querySelector("p").animate([{ opacity: .65, transform: "translateY(-4px)" }, { opacity: 1, transform: "translateY(0)" }], { duration: 200, easing: "ease-out" });
+        });
+      }
+    })();
+  </script>
 </body>
 </html>

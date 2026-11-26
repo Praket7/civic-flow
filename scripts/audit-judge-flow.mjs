@@ -246,6 +246,34 @@ try {
     await evaluate('document.querySelector("#optimizer details:nth-child(2)").open'),
     true,
   );
+  await send("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-reduced-motion", value: "reduce" }],
+  });
+  for (const [width, height] of [
+    [1280, 850],
+    [390, 844],
+  ]) {
+    await send("Emulation.setDeviceMetricsOverride", {
+      width,
+      height,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    const layout = await evaluate(`(() => {
+      const [a, b] = [...document.querySelectorAll(".phone-pair .phone")].map(el => el.getBoundingClientRect());
+      const desktop = document.querySelector(".desktop-shot").getBoundingClientRect();
+      const launch = document.querySelector(".launch-card").getBoundingClientRect();
+      return {
+        paired: Math.abs(a.top - b.top) < 2 && a.right <= b.left,
+        desktopBelow: desktop.top >= Math.max(a.bottom, b.bottom),
+        launchBelow: launch.top >= desktop.bottom,
+        noOverflow: document.documentElement.scrollWidth <= innerWidth,
+      };
+    })()`);
+    assert.ok(Object.values(layout).every(Boolean), JSON.stringify({ width, layout }));
+  }
+  await send("Emulation.clearDeviceMetricsOverride");
+  await send("Emulation.setEmulatedMedia", { features: [] });
   await open("/judge/demo/#/welcome");
   await heading("Service, organized");
   await until(
