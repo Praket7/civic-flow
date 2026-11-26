@@ -34,3 +34,9 @@ The SQL suite runs migrations against PGlite using synthetic accounts. Hosted st
 - Release checks verify asset manifests and version consistency.
 
 Keep generated screenshots, reports, logs and benchmark output out of Git unless they are deliberately maintained product documentation. CI archives temporary evidence with the source revision.
+
+## Hosted startup comparison
+
+The [same-runner browser comparison](../.github/workflows/frontend-performance.yml) builds the exact base and candidate commits with synthetic public configuration. It alternates six runs using fresh Chrome profiles and disabled browser caching. Only loopback network traffic is allowed. It compares median first-contentful paint and observed document readiness for the hosted welcome, judging showcase and interactive sample, plus compressed entrypoint sizes.
+
+The timing guard allows 35% plus 200 ms of variation; the bundle guard allows 2% plus 1 KiB. These are regression thresholds, not a promise of identical results on all devices. Keep the raw observations with the commit when reporting performance.

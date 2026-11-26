@@ -12,7 +12,20 @@ const rawKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.t
 export const DEFAULT_SUPABASE_URL = "https://imzdblvljdcbnxtwbmbw.supabase.co";
 
 export const supabaseUrl = rawUrl || DEFAULT_SUPABASE_URL;
-export const supabaseAnonKey = rawKey ?? "";
+/** The judging sample must never initialize a real hosted session. */
+export function isJudgingSample(pathname: string, hostname = ""): boolean {
+  return (
+    hostname === "civic-flow-sample-praket7.vercel.app" ||
+    pathname === "/judge" ||
+    pathname.startsWith("/judge/")
+  );
+}
+
+export const supabaseAnonKey =
+  typeof window !== "undefined" &&
+  isJudgingSample(window.location.pathname, window.location.hostname)
+    ? ""
+    : (rawKey ?? "");
 
 export class MissingCloudConfigError extends Error {
   readonly code = "missing_cloud_config";

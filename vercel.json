@@ -45,6 +45,10 @@
         {
           "key": "Cache-Control",
           "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "connect-src 'self' blob:; form-action 'self'; base-uri 'self'; object-src 'none'"
         }
       ]
     },
@@ -54,6 +58,25 @@
         {
           "key": "Cache-Control",
           "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-sample-praket7.vercel.app"
+        }
+      ],
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "connect-src 'self' blob:; form-action 'self'; base-uri 'self'; object-src 'none'"
         }
       ]
     }
@@ -74,6 +97,129 @@
     {
       "source": "/judge/demo/",
       "destination": "/judge/demo/index.html"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/judge/demo",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-demo.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow-sample-praket7.vercel.app/judge/demo/",
+      "permanent": false
+    },
+    {
+      "source": "/judge/demo/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-demo.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow-sample-praket7.vercel.app/judge/demo/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/judge/demo",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-ten.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow-sample-praket7.vercel.app/judge/demo/",
+      "permanent": false
+    },
+    {
+      "source": "/judge/demo/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-ten.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow-sample-praket7.vercel.app/judge/demo/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-sample-praket7.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow-demo.vercel.app/judge/",
+      "permanent": false
+    },
+    {
+      "source": "/index.html",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-sample-praket7.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow-demo.vercel.app/judge/",
+      "permanent": false
+    },
+    {
+      "source": "/pwa.html",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-sample-praket7.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow-demo.vercel.app/judge/",
+      "permanent": false
+    },
+    {
+      "source": "/judge",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-sample-praket7.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow-demo.vercel.app/judge/",
+      "permanent": false
+    },
+    {
+      "source": "/judge/index.html",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-sample-praket7.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow-demo.vercel.app/judge/",
+      "permanent": false
+    },
+    {
+      "source": "/sw.js",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-sample-praket7.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow-demo.vercel.app/judge/",
+      "permanent": false
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "has": [
+        {
+          "type": "host",
+          "value": "civic-flow-sample-praket7.vercel.app"
+        }
+      ],
+      "destination": "https://civic-flow-demo.vercel.app/judge/",
+      "permanent": false
     }
   ]
 }

@@ -232,6 +232,67 @@ try {
   await heading("Service, organized.");
   await open("/judge/");
   await heading("More time for service");
+  const showcase = await evaluate(`(() => ({
+    images: document.querySelectorAll('img[src^="/judge/screenshots/"]').length,
+    links: document.querySelectorAll('a[href="/judge/demo/#/welcome"]').length,
+    sections: ["workflow", "optimizer", "engineering"].every(id => document.getElementById(id)),
+    disclosure: document.body.textContent.includes("Sample data only"),
+    width: document.documentElement.scrollWidth <= innerWidth,
+  }))()`);
+  assert.equal(showcase.images, 5, "showcase retains every real product screenshot");
+  assert.ok(showcase.links >= 2 && showcase.sections && showcase.disclosure && showcase.width);
+  await evaluate('document.querySelector("#optimizer details:nth-child(2) summary").click()');
+  assert.equal(
+    await evaluate('document.querySelector("#optimizer details:nth-child(2)").open'),
+    true,
+  );
+  await evaluate(`document.querySelectorAll(".gallery img").forEach(img => img.loading = "eager")`);
+  await until(
+    () =>
+      evaluate(
+        '[...document.querySelectorAll(".gallery img")].every(img => img.complete && img.naturalWidth > 0)',
+      ),
+    "gallery images loaded",
+  );
+  await send("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-reduced-motion", value: "reduce" }],
+  });
+  for (const [width, height] of [
+    [1280, 850],
+    [390, 844],
+  ]) {
+    await send("Emulation.setDeviceMetricsOverride", {
+      width,
+      height,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    const layout = await evaluate(`(() => {
+      const [a, b] = [...document.querySelectorAll(".phone-pair .phone")].map(el => el.getBoundingClientRect());
+      const desktop = document.querySelector(".desktop-shot").getBoundingClientRect();
+      const launch = document.querySelector(".launch-card").getBoundingClientRect();
+      return {
+        paired: Math.abs(a.top - b.top) < 2 && a.right <= b.left,
+        desktopBelow: desktop.top >= Math.max(a.bottom, b.bottom),
+        launchBelow: launch.top >= desktop.bottom,
+        noOverflow: document.documentElement.scrollWidth <= innerWidth,
+      };
+    })()`);
+    assert.ok(Object.values(layout).every(Boolean), JSON.stringify({ width, layout }));
+    await evaluate('document.querySelector(".phone-pair").scrollIntoView({ block: "start" })');
+    const showcaseShot = await send("Page.captureScreenshot", {
+      format: "png",
+      captureBeyondViewport: false,
+    });
+    const showcaseDir = path.join(root, "journey-review");
+    await mkdir(showcaseDir, { recursive: true });
+    await writeFile(
+      path.join(showcaseDir, "showcase-gallery-" + width + ".png"),
+      Buffer.from(showcaseShot.data, "base64"),
+    );
+  }
+  await send("Emulation.clearDeviceMetricsOverride");
+  await send("Emulation.setEmulatedMedia", { features: [] });
   await open("/judge/demo/#/welcome");
   await heading("Service, organized");
   await until(

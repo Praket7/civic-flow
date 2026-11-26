@@ -11,6 +11,7 @@
 
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.58.0";
 import { schedulerAuthorized } from "../_shared/scheduler-auth.mjs";
+import { approvedPushEndpoint } from "../_shared/push-endpoint.mjs";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -139,10 +140,15 @@ async function sendPush(client: SupabaseClient, job: DeliveryJob): Promise<Outco
   const errors: string[] = [];
 
   for (const subscription of job.push) {
+    const endpoint = approvedPushEndpoint(subscription.endpoint);
+    if (!endpoint) {
+      errors.push("unsupported_push_endpoint");
+      continue;
+    }
     try {
       await push.sendNotification(
         {
-          endpoint: subscription.endpoint,
+          endpoint,
           keys: { p256dh: subscription.p256dh, auth: subscription.auth },
         },
         payload,
@@ -276,12 +282,20 @@ Deno.serve(async (request: Request) => {
   }
   // A scheduler credential can invoke this operation, not the database API.
   // The service-role key remains inside the Edge Function runtime.
-  if (
-    !schedulerAuthorized(
-      Deno.env.get("CIVICFLOW_REMINDER_SCHEDULER_TOKEN"),
-      request.headers.get("x-civicflow-scheduler"),
-    )
-  ) {
+  let authorized = schedulerAuthorized(
+    Deno.env.get("CIVICFLOW_REMINDER_SCHEDULER_TOKEN"),
+    request.headers.get("x-civicflow-scheduler"),
+  );
+  if (!authorized) {
+    // The database scheduler sends a fresh one-time credential. Only the
+    // service client can consume it, and an expired or replayed value fails.
+    const nonce = request.headers.get("x-civicflow-cron");
+    if (nonce && /^[0-9a-f]{64}$/.test(nonce)) {
+      const verified = await client.rpc("consume_reminder_scheduler_nonce", { p_nonce: nonce });
+      authorized = !verified.error && verified.data === true;
+    }
+  }
+  if (!authorized) {
     return json({ status: "forbidden", message: "This endpoint is for the scheduler." }, 401);
   }
 
