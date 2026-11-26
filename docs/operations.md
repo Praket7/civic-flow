@@ -28,3 +28,13 @@ If a credential is exposed, revoke or rotate it promptly and review its use. If 
 Run the [hosted authentication smoke workflow](../.github/workflows/hosted-auth-smoke.yml) with authorized staging accounts in separate organizations. Keep test credentials in the protected staging environment.
 
 Synthetic SQL tests are useful regression checks, but they do not replace live staging acceptance. Record actual results before approving enrollment.
+
+## Routine checks
+
+The hosted database advisor reports are a starting point, not a security certification. Review each privileged RPC before changing its grants; authenticated access may be intentional when the function checks organization membership and role.
+
+The foreign-key index migration covers the observed missing indexes. Check the performance advisor again after applying it, and use query plans on representative staging data before claiming a speed improvement.
+
+Review the Vercel runtime error view and the Supabase database and authentication logs. Do not include credentials, volunteer contact details, or request bodies in incident reports. A clean log window alone does not establish that the application is healthy.
+
+The isolated recovery job exercises a synthetic database with no production credentials. Its result does not certify the encrypted production backup or the hosted authentication service. For a real restore rehearsal, follow the restricted backup and restore procedure above.

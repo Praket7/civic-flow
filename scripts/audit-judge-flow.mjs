@@ -242,7 +242,10 @@ try {
   assert.equal(showcase.images, 5, "showcase retains every real product screenshot");
   assert.ok(showcase.links >= 2 && showcase.sections && showcase.disclosure && showcase.width);
   await evaluate('document.querySelector("#optimizer details:nth-child(2) summary").click()');
-  assert.equal(await evaluate('document.querySelector("#optimizer details:nth-child(2)").open'), true);
+  assert.equal(
+    await evaluate('document.querySelector("#optimizer details:nth-child(2)").open'),
+    true,
+  );
   await open("/judge/demo/#/welcome");
   await heading("Service, organized");
   await until(
