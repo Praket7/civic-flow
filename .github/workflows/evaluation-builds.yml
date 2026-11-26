@@ -10,6 +10,7 @@ on:
       - "scripts/test-evaluation-macos.sh"
       - "scripts/test-evaluation-windows.ps1"
       - "scripts/test-evaluation-linux.sh"
+      - "scripts/check-judge-build.mjs"
 
 permissions:
   contents: read
