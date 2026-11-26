@@ -44,3 +44,11 @@ The isolated recovery job exercises a synthetic database with no production cred
 The signed-in RPCs for commands, profiles, health, notification reads, workspaces, device registration, push subscriptions and notification preferences deliberately retain their authenticated grants. Each uses an explicit request identity or membership check, and the permission suite verifies that anonymous callers cannot execute them and that their search paths are fixed. Revoking legitimate client grants would break synchronization and notification settings.
 
 Leaked-password protection is a managed Supabase Auth feature available on Pro and higher plans. The Free plan warning remains until an authorized owner upgrades and enables it. Client-side checks cannot substitute for enforcement by the authentication provider.
+
+## Reminder scheduling
+
+The [database scheduler provisioning script](../supabase/operations/enable-reminder-cron.sql) installs a hosted-only cron job at minutes 7, 22, 37 and 52 of each hour. It reads the public gateway JWT and project URL from Vault, then issues a five-minute, single-use credential for each request. The dispatcher retains the independent GitHub scheduler token as a fallback. Neither path requires a service-role key in the scheduler.
+
+Verify the actual reminder job record and the cron history; a successful HTTP enqueue does not prove delivery. Revoke or disable the cron job before using a managed production snapshot in another project. The ordinary local migrations and synthetic restore do not activate the hosted scheduler.
+
+For the offsite backup on the Free plan, provide an authorized PostgreSQL connection, a private storage destination, the public encryption recipient and the restricted OIDC role. Do not record a verified backup until the encrypted production archive has been restored and checked separately.
