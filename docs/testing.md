@@ -40,3 +40,9 @@ Keep generated screenshots, reports, logs and benchmark output out of Git unless
 The [same-runner browser comparison](../.github/workflows/frontend-performance.yml) builds the exact base and candidate commits with synthetic public configuration. It alternates six runs using fresh Chrome profiles and disabled browser caching. Only loopback network traffic is allowed. It compares median first-contentful paint and observed document readiness for the hosted welcome, judging showcase and interactive sample, plus compressed entrypoint sizes.
 
 The timing guard allows 35% plus 200 ms of variation; the bundle guard allows 2% plus 1 KiB. These are regression thresholds, not a promise of identical results on all devices. Keep the raw observations with the commit when reporting performance.
+
+## Installed evaluation packages
+
+The [evaluation workflow](../.github/workflows/evaluation-builds.yml) tests the packages it actually produces. On macOS it verifies and mounts the DMG, copies the app, verifies its bundle and universal executable, and launches it with a disposable encrypted workspace. On Windows it installs the MSI and NSIS packages sequentially on a clean runner, launches the installed binary, checks encrypted workspace initialization and removes each installation. Publication still depends on successful CI for the exact revision.
+
+These are installer and startup smoke tests, not a claim of full GUI automation of the release binary or trusted publisher signing. The native end-to-end suite and the browser volunteer/coordinator journey separately exercise interaction. Test the actual download on a physical Mac and Windows PC before distributing it to judges.

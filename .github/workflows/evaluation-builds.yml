@@ -7,6 +7,8 @@ on:
     paths:
       - ".github/workflows/evaluation-builds.yml"
       - "scripts/package-macos-evaluation.sh"
+      - "scripts/test-evaluation-macos.sh"
+      - "scripts/test-evaluation-windows.ps1"
 
 permissions:
   contents: read
@@ -88,6 +90,14 @@ jobs:
           for file in evaluation/*; do test -s "$file"; done
           printf 'commit=%s\nplatform=%s\nstatus=EVALUATION_NOT_PRODUCTION_SIGNED\n' \
             "$GITHUB_SHA" "${{ matrix.os }}" > "evaluation/${{ matrix.artifact }}-BUILD-INFO.txt"
+      - name: Smoke-test the actual macOS installer
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: bash scripts/test-evaluation-macos.sh evaluation/*.dmg
+      - name: Install and smoke-test MSI and NSIS packages
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: ./scripts/test-evaluation-windows.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
