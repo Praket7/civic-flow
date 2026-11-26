@@ -493,9 +493,7 @@ try {
     "Navigation dismisses the drawer",
   );
   await send("Emulation.clearDeviceMetricsOverride");
-  console.log(
-    "mobile drawer focus containment, Escape, return focus, and route focus passed.",
-  );
+  console.log("mobile drawer focus containment, Escape, return focus, and route focus passed.");
 
   // changing a real date filter must recalculate the displayed report.
   await open("/judge/demo/#/coordinator/reports/custom");

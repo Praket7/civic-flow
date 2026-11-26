@@ -16,6 +16,47 @@ permissions:
   contents: read
 
 jobs:
+  documentation:
+    name: Render documentation diagrams
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Extract Mermaid diagrams
+        run: |
+          mkdir -p "$RUNNER_TEMP/diagrams" "$RUNNER_TEMP/rendered-diagrams"
+          python - <<'PY'
+          import pathlib
+          import re
+          import os
+          target = pathlib.Path(os.environ["RUNNER_TEMP"]) / "diagrams"
+          for source in [pathlib.Path("README.md"), *pathlib.Path("docs").rglob("*.md")]:
+              for index, diagram in enumerate(re.findall(r"```mermaid\n(.*?)\n```", source.read_text(), re.S), 1):
+                  (target / f"{source.stem}-{index}.mmd").write_text(diagram + "\n")
+          assert len(list(target.glob("*.mmd"))) >= 4, "Expected all four documentation diagrams"
+          PY
+      - name: Render diagrams to SVG
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: "true"
+        run: |
+          printf '{"executablePath":"/usr/bin/google-chrome","args":["--no-sandbox"]}\n' > "$RUNNER_TEMP/puppeteer.json"
+          npm install --prefix "$RUNNER_TEMP/mermaid" --no-audit --no-fund @mermaid-js/mermaid-cli@11.12.0
+          for input in "$RUNNER_TEMP"/diagrams/*.mmd; do
+            output="$RUNNER_TEMP/rendered-diagrams/$(basename "$input" .mmd).svg"
+            "$RUNNER_TEMP/mermaid/node_modules/.bin/mmdc" -p "$RUNNER_TEMP/puppeteer.json" -i "$input" -o "$output"
+            test -s "$output"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: documentation-diagrams
+          path: ${{ runner.temp }}/rendered-diagrams/
+          if-no-files-found: error
+          retention-days: 14
+
   frontend:
     name: Frontend checks
     runs-on: ubuntu-latest
