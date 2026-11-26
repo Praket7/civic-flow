@@ -220,7 +220,9 @@ for (const page of pages) {
 
 const bundles = {};
 for (const name of ["baseline", "candidate"]) {
-  const data = JSON.parse(await readFile(path.join(roots[name], "bundle-budget-report.json"), "utf8"));
+  const data = JSON.parse(
+    await readFile(path.join(roots[name], "bundle-budget-report.json"), "utf8"),
+  );
   bundles[name] = Object.fromEntries(data.results.map((row) => [row.name, row.gzipBytes]));
 }
 report.bundles = bundles;

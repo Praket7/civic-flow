@@ -4,6 +4,11 @@
 create extension if not exists pg_cron with schema pg_catalog;
 create extension if not exists pg_net with schema extensions;
 
+grant usage on schema cron to postgres;
+grant all privileges on all tables in schema cron to postgres;
+-- Untrusted Data API roles must not be able to inspect queued credentials.
+revoke usage on schema net from public, anon, authenticated;
+
 create or replace function private.enqueue_reminder_dispatch()
 returns void
 language plpgsql
