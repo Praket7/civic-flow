@@ -1,11 +1,7 @@
-name: Release preflight
+name: Production signing preflight
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/release-preflight.yml"
 
 permissions:
   contents: read
