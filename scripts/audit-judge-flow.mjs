@@ -237,7 +237,9 @@ try {
   await heading("More time for service");
   await until(
     () =>
-      evaluate('document.querySelector("#engineering .section-intro")?.dataset.reveal === "pending"'),
+      evaluate(
+        'document.querySelector("#engineering .section-intro")?.dataset.reveal === "pending"',
+      ),
     "below-fold content starts ready to reveal",
   );
   await evaluate(
