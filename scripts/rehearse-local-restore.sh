@@ -2,13 +2,14 @@
 # Synthetic recovery exercise only. Never use a hosted connection.
 set -euo pipefail
 umask 077
-if [[ "${PGHOST:-}" != "127.0.0.1" || "${PGPORT:-}" != "5432" || "${PGUSER:-}" != "postgres" ]]; then
-  echo "Recovery drill requires the local CI PostgreSQL service." >&2
+if [[ "${CIVICFLOW_RECOVERY_CONTAINER:-}" != "1" || "$(id -un)" != "postgres" ]]; then
+  echo "Recovery drill requires the disposable CI PostgreSQL service container." >&2
   exit 2
 fi
-unset PGHOSTADDR PGSERVICE PGSERVICEFILE PGDATABASE PGOPTIONS
-if [[ "$(psql -XAt -d postgres -c "select inet_server_addr() = '127.0.0.1'::inet")" != "t" ]]; then
-  echo "Recovery drill did not establish a local connection." >&2
+unset PGHOSTADDR PGSERVICE PGSERVICEFILE PGDATABASE PGOPTIONS PGPASSWORD PGPASSFILE
+export PGHOST=/var/run/postgresql PGPORT=5432 PGUSER=postgres
+if [[ "$(psql -XAt -d postgres -c "select inet_server_addr() is null and current_user = 'postgres'")" != "t" ]]; then
+  echo "Recovery drill did not establish a local Unix socket connection." >&2
   exit 2
 fi
 source_db=civicflow_fixture_${BASHPID}
