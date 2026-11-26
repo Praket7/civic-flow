@@ -1,0 +1,66 @@
+name: Hosted startup comparison
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "scripts/**"
+      - "vercel.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/frontend-performance.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      VITE_SUPABASE_URL: https://imzdblvljdcbnxtwbmbw.supabase.co
+      VITE_SUPABASE_ANON_KEY: sb_publishable_ci_only_dummy_key
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: baseline
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: candidate/.node-version
+          cache: pnpm
+          cache-dependency-path: candidate/pnpm-lock.yaml
+      - name: Build both revisions with identical public configuration
+        run: |
+          set -euo pipefail
+          for variant in baseline candidate; do
+            (
+              cd "$variant"
+              pnpm install --frozen-lockfile
+              pnpm build:hosted
+              node scripts/check-bundle-budget.mjs
+            )
+          done
+      - name: Interleave cold-cache browser startup measurements
+        run: node candidate/scripts/compare-hosted-startup.mjs baseline/dist candidate/dist
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-comparison
+          path: frontend-comparison.json
+          if-no-files-found: error
